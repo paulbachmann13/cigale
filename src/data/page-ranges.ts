@@ -64,10 +64,9 @@ export function sanitizeFileName(name: string, fallback = 'document'): string {
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/^[.\s]+|[.\s]+$/g, '')
     .slice(0, 80)
-    .trim();
-  return cleaned || fallback;
+    .replace(/^[.\s]+|[.\s]+$/g, '');
+  return !cleaned || /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(cleaned) ? fallback : cleaned;
 }
 
 /** Rend des noms uniques en ajoutant « (2) », « (3) »… (comparaison sans tenir compte de la casse, comme le Mac). */

@@ -68,6 +68,10 @@ describe('fusion', () => {
     await expect(mergeSources([{ name: 'x.webp', bytes: new Uint8Array([1, 2, 3, 4, 5, 6]) }], { keepBookmarks: false })).rejects.toMatchObject({ name: 'unsupportedImage' });
   });
 
+  it('refuse un fichier que pdf-lib et pdf.js comptent différemment', async () => {
+    await expect(mergeSources([{ name: 'a.pdf', bytes: await makePdf(3), expectedPages: 4 }], { keepBookmarks: false })).rejects.toMatchObject({ name: 'structure' });
+  });
+
   it('document chiffré avec mot de passe', async () => {
     const doc = await PDFDocument.create();
     doc.addPage();

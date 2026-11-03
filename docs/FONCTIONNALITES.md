@@ -51,6 +51,7 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Pas d'annotation | Annotations existantes affichées seulement | Étape 4 |
 | Fusion : formulaires | Les champs de formulaire des fichiers combinés ne sont pas repris (le contenu affiché l'est) | Étape 5 |
 | Découpe : signets | Les parties ne reprennent pas les signets | Étape 5 |
+| Fichier ajouté à « Combiner » | Le garde-fou de structure (pdf-lib / pdf.js comptent autant de pages) ne s'applique qu'au document déjà ouvert | Étape 5 |
 | Images HEIC, TIFF | Acceptées seulement si le navigateur sait les décoder (Safari : HEIC ; Chrome : non) ; sinon message clair | — |
 | Combiner : glisser-déposer | Réordonner avec ↑ ↓ (pas de glisser) ; pas de dépôt de fichiers dans la boîte | Étape 5 |
 | « .bak » à côté du fichier | Un navigateur ne peut pas créer de fichier voisin : l'ancienne version est gardée dans Cigale (Accueil → Versions précédentes). L'application Mac pourra écrire un vrai .bak | App Mac |

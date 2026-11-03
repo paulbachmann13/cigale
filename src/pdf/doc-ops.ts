@@ -20,6 +20,8 @@ export interface MergeSource {
   password?: string;
   /** Pages à prendre (indices à partir de 0, dans l'ordre voulu) ; toutes si absent. Sans effet pour une image. */
   pages?: number[];
+  /** Nombre de pages vu par pdf.js : s'il diffère de celui de pdf-lib, on refuse (voir page-ops.checkStructure). */
+  expectedPages?: number;
 }
 
 export interface MergeOptions {
@@ -181,7 +183,12 @@ export function jpegOrientation(b: Uint8Array): number {
   while (i + 4 < b.length && b[i] === 0xff) {
     const marker = b[i + 1];
     const len = (b[i + 2] << 8) | b[i + 3];
-    if (marker === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78 && b[i + 6] === 0x69 && b[i + 7] === 0x66) {
+    if (marker === 0xff) {
+      i++; // octet de bourrage
+      continue;
+    }
+    if (len < 2) break;
+    if (marker === 0xe1 && len >= 16 && i + 2 + len <= b.length && b[i + 4] === 0x45 && b[i + 5] === 0x78 && b[i + 6] === 0x69 && b[i + 7] === 0x66) {
       const t = i + 10; // début de l'en-tête TIFF
       const le = b[t] === 0x49;
       const u16 = (o: number) => (le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1]);
@@ -263,6 +270,7 @@ export async function mergeSources(sources: MergeSource[], opts: MergeOptions, p
       outline.push({ title: stem, page: page.ref, children: [] });
     } else {
       const doc = await loadForEdit(src.bytes, src.password);
+      if (src.expectedPages !== undefined && doc.getPageCount() !== src.expectedPages) throw new DocOpError('structure', src.name);
       const indices = src.pages ?? Array.from({ length: doc.getPageCount() }, (_, i) => i);
       const originals = doc.getPages().map((p) => p.ref);
       const copies = await out.copyPages(doc, indices);

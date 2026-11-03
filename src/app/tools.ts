@@ -30,6 +30,8 @@ interface Row {
   /** null : image. */
   pageCount: number | null;
   range: string;
+  /** Document ouvert : pdf.js a compté ses pages, on s'en sert pour vérifier la structure. */
+  fromViewer?: boolean;
 }
 
 async function readFile(file: File): Promise<Row | null> {
@@ -67,7 +69,7 @@ async function readFile(file: File): Promise<Row | null> {
 }
 
 export function openCombineDialog(host: ToolsHost, current?: Session): void {
-  const rows: Row[] = current ? [{ name: current.name, bytes: current.history.current, password: current.password, pageCount: current.view.pageCount, range: '' }] : [];
+  const rows: Row[] = current ? [{ name: current.name, bytes: current.history.current, password: current.password, pageCount: current.view.pageCount, range: '', fromViewer: true }] : [];
   const list = h('ul', { class: 'combine-list', id: 'combine-list' });
   const summary = h('p', { class: 'hint', id: 'combine-summary' });
   const error = h('p', { class: 'dialog-error', id: 'combine-error', role: 'alert' });
@@ -79,7 +81,7 @@ export function openCombineDialog(host: ToolsHost, current?: Session): void {
     if (rows.length === 0) list.append(h('li', { class: 'empty' }, t.combine.empty));
     rows.forEach((row, i) => {
       const range = h('input', { type: 'text', class: 'range-input', placeholder: t.combine.rangePlaceholder, value: row.range, 'aria-label': `${t.combine.rangeLabel} — ${row.name}`, disabled: row.pageCount === null });
-      range.oninput = () => (row.range = range.value);
+      range.oninput = () => ((row.range = range.value), updateSummary());
       list.append(
         h(
           'li',
@@ -93,29 +95,44 @@ export function openCombineDialog(host: ToolsHost, current?: Session): void {
         ),
       );
     });
-    const pages = rows.reduce((n, r) => n + (r.pageCount ?? 1), 0);
-    summary.textContent = rows.length ? fmt(t.combine.total, { files: rows.length, pages }) : '';
+    updateSummary();
     goBtn.disabled = rows.length === 0;
     error.textContent = '';
+  };
+  const updateSummary = () => {
+    const pages = rows.reduce((n, r) => {
+      if (r.pageCount === null) return n + 1;
+      const parsed = r.range.trim() ? parseRanges(r.range, r.pageCount) : null;
+      return n + (parsed?.ok ? rangesToIndices(parsed.ranges).length : r.pageCount);
+    }, 0);
+    summary.textContent = rows.length ? fmt(t.combine.total, { files: rows.length, pages }) : '';
   };
   const move = (i: number, d: number) => {
     [rows[i], rows[i + d]] = [rows[i + d], rows[i]];
     render();
   };
 
+  const addBtn = h('button', { type: 'button', id: 'combine-add', onclick: () => void add() }, t.combine.add);
   const add = async () => {
-    for (const file of await pickPdfsAndImages()) {
-      const row = await readFile(file);
-      if (row) rows.push(row);
+    const files = await pickPdfsAndImages();
+    addBtn.disabled = goBtn.disabled = true; // pas de « Combiner » pendant la lecture des fichiers
+    try {
+      for (const file of files) {
+        summary.textContent = fmt(t.combine.reading, { name: file.name });
+        const row = await readFile(file);
+        if (row) rows.push(row);
+      }
+    } finally {
+      addBtn.disabled = false;
+      render();
     }
-    render();
   };
 
   const dlg = modal((close) => [
     h('h2', {}, t.combine.title),
     h('p', { class: 'hint' }, t.combine.hint),
     list,
-    h('div', { class: 'combine-tools' }, h('button', { type: 'button', id: 'combine-add', onclick: () => void add() }, t.combine.add), summary),
+    h('div', { class: 'combine-tools' }, addBtn, summary),
     h('label', { class: 'check' }, keep, t.combine.keepBookmarks),
     error,
     h('div', { class: 'dialog-actions' }, h('button', { type: 'button', id: 'combine-cancel', onclick: close }, t.combine.cancel), goBtn),
@@ -135,7 +152,7 @@ export function openCombineDialog(host: ToolsHost, current?: Session): void {
         }
         pages = rangesToIndices(r.ranges);
       }
-      sources.push({ name: row.name, bytes: row.bytes, password: row.password, pages });
+      sources.push({ name: row.name, bytes: row.bytes, password: row.password, pages, expectedPages: row.fromViewer ? (row.pageCount ?? undefined) : undefined });
     }
     dlg.close();
     const handle = mergeOperation(sources, { keepBookmarks: keep.checked }, (f) => setProgress(f));
@@ -148,6 +165,7 @@ export function openCombineDialog(host: ToolsHost, current?: Session): void {
     } catch (err) {
       host.idle();
       if (err instanceof Cancelled) toast(t.busy.cancelled);
+      else if ((err as Error).name === 'structure') await showMessage(t.errors.title, fmt(t.combine.failed, { detail: t.editErrors.codes.structure }));
       else if ((err as Error).name === 'unsupportedImage') await showMessage(t.errors.title, fmt(t.combine.unsupportedImage, { name: (err as Error & { file?: string }).file ?? '' }));
       else await showMessage(t.errors.title, fmt(t.combine.failed, { detail: (err as Error).message }));
     }
@@ -258,12 +276,15 @@ export function openSplitDialog(host: ToolsHost, s: Session): void {
   const run = async (toZip: boolean) => {
     const chosen = parts.slice();
     dlg.close();
-    const handle = splitOperation(s.history.current, chosen.map((p) => p.range), chosen.map((p) => p.name), s.password, total, (f) => setProgress(f));
-    const setProgress = host.busy(t.split.working, () => handle.cancel());
+    let current: { cancel: () => void } = splitOperation(s.history.current, chosen.map((p) => p.range), chosen.map((p) => p.name), s.password, total, (f) => setProgress(f));
+    const first = current as ReturnType<typeof splitOperation>;
+    const setProgress = host.busy(t.split.working, () => current.cancel()); // Annuler vise l'étape en cours (découpe, puis zip)
     try {
-      const result = await handle.promise;
+      const result = await first.promise;
       if (toZip) {
-        const zip = await zipOperation(result).promise;
+        const zipHandle = zipOperation(result);
+        current = zipHandle;
+        const zip = await zipHandle.promise;
         host.idle();
         const zipName = `${sanitizeFileName(nameInput.value, base)}.zip`;
         downloadBytes(zipName, zip, 'application/zip');

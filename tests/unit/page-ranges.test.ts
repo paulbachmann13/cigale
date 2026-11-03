@@ -34,6 +34,8 @@ describe('noms de fichiers', () => {
     expect(sanitizeFileName('Chap. 1 : Intro/Suite?')).toBe('Chap. 1 Intro Suite');
     expect(sanitizeFileName('///')).toBe('document');
     expect(sanitizeFileName('..caché')).toBe('caché');
+    expect(sanitizeFileName('NUL')).toBe('document');
+    expect(sanitizeFileName('a'.repeat(79) + '. suite')).not.toMatch(/[. ]$/);
   });
   it('rend les noms uniques', () => {
     expect(uniqueNames(['a.pdf', 'b.pdf', 'A.pdf', 'a.pdf'])).toEqual(['a.pdf', 'b.pdf', 'A (2).pdf', 'a (3).pdf']);
