@@ -250,6 +250,7 @@ export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = []): 
   /** Annotation (lien, champ de formulaire…) posée sur une page supprimée : elle disparaît avec elle. */
   const isOrphanAnnotation = (obj: PDFObject | undefined) => {
     if (!(obj instanceof PDFDict)) return false;
+    if (!obj.has(PDFName.of('Subtype')) && obj.get(PDFName.of('Type')) !== PDFName.of('Annot')) return false; // pas une annotation
     const p = obj.get(PDFName.of('P'));
     return p instanceof PDFRef && !live.has(p) && (dead.has(p) || isDeadPage(p, ctx.lookup(p) as PDFObject | undefined));
   };
