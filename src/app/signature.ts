@@ -89,9 +89,13 @@ export function askSignature(): Promise<SignatureImage | null> {
       const up = () => {
         pad.removeEventListener('pointermove', move);
         pad.removeEventListener('pointerup', up);
+        pad.removeEventListener('pointercancel', up);
+        pad.removeEventListener('lostpointercapture', up);
       };
       pad.addEventListener('pointermove', move);
       pad.addEventListener('pointerup', up);
+      pad.addEventListener('pointercancel', up); // geste interrompu (tactile, système)
+      pad.addEventListener('lostpointercapture', up);
     });
     const clear = h('button', { type: 'button', id: 'sig-clear', onclick: () => pctx.clearRect(0, 0, PAD_W, PAD_H) }, t.sign.clear);
 
@@ -160,7 +164,10 @@ export function askSignature(): Promise<SignatureImage | null> {
 
     // — signatures enregistrées
     const saved = h('div', { class: 'sig-saved', id: 'sig-saved' });
+    const urls: string[] = [];
+    const revoke = () => urls.splice(0).forEach((u) => URL.revokeObjectURL(u));
     const renderSaved = async () => {
+      revoke();
       saved.replaceChildren();
       const list = await listSignatures();
       if (!list.length) return;
@@ -169,6 +176,7 @@ export function askSignature(): Promise<SignatureImage | null> {
         const bytes = await readSignature(s.id);
         if (!bytes) continue;
         const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'image/png' }));
+        urls.push(url);
         const img = h('img', { src: url, alt: t.sign.saved, class: 'sig-thumb' });
         saved.append(
           h(
@@ -205,7 +213,7 @@ export function askSignature(): Promise<SignatureImage | null> {
         error,
         h('div', { class: 'dialog-actions' }, h('button', { type: 'button', id: 'sig-cancel', onclick: close }, t.docTools.cancel), h('button', { type: 'button', id: 'sig-use', class: 'primary', onclick: () => void use() }, t.sign.use)),
       ],
-      () => resolve(answer),
+      () => (revoke(), resolve(answer)),
     );
     dlg.id = 'dialog-signature';
     dlg.classList.add('wide');

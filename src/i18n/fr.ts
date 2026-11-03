@@ -408,6 +408,7 @@ export const fr = {
       keepOne: 'un document doit garder au moins une page.',
       unsupportedImage: 'image non prise en charge.',
       noSources: 'aucun fichier à combiner.',
+      badImage: 'l’image de la signature est invalide.',
       structure: 'la structure de ce document est inhabituelle et Cigale ne peut pas le modifier sans risque de toucher la mauvaise page. Vous pouvez toujours le lire et l’imprimer.',
     },
   },

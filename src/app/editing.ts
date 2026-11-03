@@ -223,6 +223,7 @@ export class Editing {
   /** Applique le caviardage : les pages (déjà noircies, en images) remplacent les pages d'origine. */
   async redact(s: Session, pages: RedactedPage[], options: RedactOptions, clearHistory: boolean): Promise<boolean> {
     const ok = await this.annotOp(s, t.docTools.labels.redact, async () => (await redactOp(s.history.current, pages, options, s.password, s.view.pageCount).promise).bytes);
+    if (ok) s.noBackup = true; // quoi qu'il arrive, aucune copie de l'ancienne version (elle contient le texte caviardé)
     if (ok && clearHistory) await this.host.forgetOriginal(s);
     return ok;
   }
@@ -403,8 +404,8 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 
 /** Texte lisible pour une erreur d'opération (les codes de PageOpError viennent de fr.ts). */
 function describe(err: unknown): string {
-  if (err instanceof PageOpError || ['noSelection', 'keepOne', 'structure'].includes((err as Error)?.name)) {
-    return t.editErrors.codes[(err as Error).name as 'noSelection' | 'keepOne' | 'structure'];
+  if (err instanceof PageOpError || ['noSelection', 'keepOne', 'structure', 'badImage'].includes((err as Error)?.name)) {
+    return t.editErrors.codes[(err as Error).name as 'noSelection' | 'keepOne' | 'structure' | 'badImage'];
   }
   return (err as Error)?.message ?? String(err);
 }

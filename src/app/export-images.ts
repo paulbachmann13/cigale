@@ -4,13 +4,14 @@ import { fmt, t } from '../i18n/fr';
 import { zipOperation } from '../pdf/ops-client';
 import { modal } from './dialogs';
 import { h, toast } from './dom';
+import type { Editing } from './editing';
 import { scopeControls } from './page-tools';
 import { downloadBytes } from './save';
 import type { Session } from './session';
 
 const MAX_PIXELS = 2 ** 25;
 
-export function openExportImagesDialog(s: Session, overlay: (text: string, onCancel: () => void) => (f: number) => void, idle: () => void): void {
+export function openExportImagesDialog(s: Session, editing: Editing, overlay: (text: string, onCancel: () => void) => (f: number) => void, idle: () => void): void {
   const format = h('select', { id: 'img-format' }, h('option', { value: 'png' }, 'PNG'), h('option', { value: 'jpeg' }, 'JPEG'));
   const dpi = h('select', { id: 'img-dpi' }, ...[72, 150, 300].map((n) => h('option', { value: String(n), selected: n === 150 }, `${n} dpi`)));
   const error = h('p', { class: 'dialog-error', id: 'img-error', role: 'alert' });
@@ -34,7 +35,7 @@ export function openExportImagesDialog(s: Session, overlay: (text: string, onCan
             const pages = scope.read();
             if (pages === null) return;
             close();
-            void run(s, pages ?? Array.from({ length: s.view.pageCount }, (_, i) => i), format.value as 'png' | 'jpeg', Number(dpi.value), overlay, idle);
+            void editing.flushForm(s).then(() => run(s, pages ?? Array.from({ length: s.view.pageCount }, (_, i) => i), format.value as 'png' | 'jpeg', Number(dpi.value), overlay, idle));
           },
         },
         t.docTools.exportGo,
@@ -71,6 +72,7 @@ async function run(s: Session, pages: number[], type: 'png' | 'jpeg', dpi: numbe
     const names = uniqueNames(files.map((f) => f.name));
     const zip = await zipOperation(files.map((f, i) => ({ name: names[i], bytes: f.bytes }))).promise;
     idle();
+    if (cancelled) return;
     const zipName = `${base} - images.zip`;
     if (await downloadBytes(zipName, zip, 'application/zip')) toast(fmt(t.docTools.exportDone, { name: zipName, n: files.length }));
   } catch (err) {

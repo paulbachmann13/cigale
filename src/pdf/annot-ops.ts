@@ -37,7 +37,7 @@ import { loadForEdit, pruneUnreachable } from './page-ops';
 import { saveDoc } from './protection';
 
 export class AnnotError extends Error {
-  constructor(readonly code: 'notFound' | 'badPage' | 'structure') {
+  constructor(readonly code: 'notFound' | 'badPage' | 'structure' | 'badImage') {
     super(code);
     this.name = code;
   }
@@ -438,9 +438,15 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
       dict.set(N('RT'), N('R'));
       dict.set(N('Name'), N('Comment'));
       setAppearance(doc, dict, { content: '', bbox: [0, 0, 1, 1], resources: {} }); // aucune icône : seule la liste des commentaires l'affiche
-    } else if (draft.kind === 'signature' && draft.image) {
+    } else if (draft.kind === 'signature') {
+      if (!draft.image) throw new AnnotError('badImage');
       // l'image de la signature est intégrée au document et dessinée dans l'apparence
-      const img = await doc.embedPng(draft.image);
+      let img;
+      try {
+        img = await doc.embedPng(draft.image);
+      } catch {
+        throw new AnnotError('badImage');
+      }
       const [x1, y1, x2, y2] = a.rect;
       setAppearance(doc, dict, { content: `q ${f(x2 - x1)} 0 0 ${f(y2 - y1)} ${f(x1)} ${f(y1)} cm /Img Do Q`, bbox: a.rect, resources: { XObject: { Img: img.ref } } });
     } else {

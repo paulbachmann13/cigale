@@ -288,7 +288,7 @@ export class App {
         { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: () => openHeaderFooterDialog(s, this.editing) },
         { id: 'tool-crop', label: t.docTools.crop, run: () => openCropDialog(s, this.editing) },
         { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
-        { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
+        { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
       ],
       anchor,
     );

@@ -94,6 +94,11 @@ export async function applyRedactions(bytes: Uint8Array, pages: RedactedPage[], 
   doc.catalog.delete(N('Threads'));
   if (opts.removeBookmarks) doc.catalog.delete(N('Outlines'));
   if (opts.removeAttachments) {
+    // annotations « pièce jointe » des autres pages
+    for (const page of doc.getPages()) {
+      const arr = page.node.lookupMaybe(N('Annots'), PDFArray);
+      for (let i = (arr?.size() ?? 0) - 1; i >= 0; i--) if (arr!.lookupMaybe(i, PDFDict)?.get(N('Subtype')) === N('FileAttachment')) arr!.remove(i);
+    }
     doc.catalog.delete(N('AF'));
     doc.catalog.lookupMaybe(N('Names'), PDFDict)?.delete(N('EmbeddedFiles'));
   }

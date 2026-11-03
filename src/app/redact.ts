@@ -47,6 +47,7 @@ function confirmRedaction(n: number, m: number): Promise<Choice | null> {
 }
 
 export async function applyRedaction(s: Session, editing: Editing, overlay: (text: string, onCancel: () => void) => (f: number) => void, idle: () => void): Promise<void> {
+  await editing.flushForm(s); // la saisie en cours doit être dans le document AVANT le rendu des pages
   const marks = s.annots.filter((a) => a.kind === 'redact');
   if (marks.length === 0) return;
   const byPage = new Map<number, typeof marks>();
