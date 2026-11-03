@@ -22,6 +22,12 @@ fn take_pending_opens(state: tauri::State<Opens>) -> Vec<String> {
     std::mem::take(&mut *state.pending.lock().unwrap())
 }
 
+/// Quitte vraiment l'application (appelée par l'interface une fois les modifications réglées).
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Barre des menus du Mac en français (celle de Tauri par défaut est en anglais). Les commandes d'édition
 /// restent les éléments du système : ⌘C, ⌘V… arrivent ainsi à la page comme avant.
 fn french_menu<R: tauri::Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -75,10 +81,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(Opens::default())
-        .invoke_handler(tauri::generate_handler![take_pending_opens])
+        .invoke_handler(tauri::generate_handler![take_pending_opens, quit_app])
         .build(tauri::generate_context!())
         .expect("erreur au démarrage de Cigale")
         .run(|app, event| {
+            // ⌘Q ou « Quitter Cigale » : on laisse l'interface vérifier les documents modifiés avant de quitter.
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
+                if code.is_none() {
+                    api.prevent_exit();
+                    let _ = app.emit("cigale://quit-request", ());
+                }
+            }
             // macOS : double-clic sur un PDF (ou « Ouvrir avec Cigale »).
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = &event {

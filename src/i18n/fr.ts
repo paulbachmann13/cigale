@@ -301,6 +301,7 @@ export const fr = {
     downloaded: 'Votre navigateur ne permet pas de remplacer le fichier : une copie « {name} » a été téléchargée.',
     permission: 'Cigale n’a pas l’autorisation d’écrire dans ce fichier.',
     bakNote: 'L’ancienne version est dans « {bak} », à côté du fichier.',
+    bakFailed: 'La copie « .bak » n’a pas pu être créée.',
     backupNote: 'L’ancienne version est gardée dans Cigale (Accueil → Versions précédentes).',
   },
   versions: {

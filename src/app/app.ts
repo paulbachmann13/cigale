@@ -17,7 +17,7 @@ import { buildHome, openSettings, openVersions, openWhatsNew } from './home';
 import { type IconName, icon } from './icons';
 import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
-import { isTauri, onCloseRequested, onFinderOpen, takeStartupOpens, destroyWindow, tauriHandleFromPath } from './tauri-files';
+import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, quitApp, takeStartupOpens, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import type { Session } from './session';
@@ -73,6 +73,7 @@ export class App {
   private selectionInfo = h('span', { class: 'selection-info', id: 'selection-info', 'aria-live': 'polite' });
   private editButtons: Record<string, HTMLButtonElement> = {};
   private findTimer: number | undefined;
+  private closing = false;
 
   constructor(private root: HTMLElement) {
     this.homeEl = buildHome(this);
@@ -446,7 +447,23 @@ export class App {
     await onCloseRequested(async (prevent) => {
       if (!this.sessions.some((x) => x.history.dirty)) return;
       prevent();
-      if (await this.confirmCloseAll()) await destroyWindow();
+      if (this.closing) return; // une question est déjà à l'écran
+      this.closing = true;
+      try {
+        if (await this.confirmCloseAll()) await destroyWindow();
+      } finally {
+        this.closing = false;
+      }
+    });
+    // ⌘Q passe par ici (il ne ferme pas la fenêtre : il arrête l'application)
+    await onQuitRequest(async () => {
+      if (this.closing) return;
+      this.closing = true;
+      try {
+        if (await this.confirmCloseAll()) await quitApp();
+      } finally {
+        this.closing = false;
+      }
     });
   }
 

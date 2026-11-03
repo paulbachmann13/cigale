@@ -76,9 +76,11 @@ export function tauriHandleFromPath(path: string): FileSystemFileHandle {
 export const pathOfHandle = (handle: FileSystemFileHandle | undefined): string | undefined => (handle as unknown as Partial<TauriFileHandle> | undefined)?.path;
 
 /** Copie le fichier actuel en « nom.pdf.bak » (écrase le .bak précédent) avant de le remplacer. */
-export async function writeBackupCopy(path: string): Promise<void> {
+export async function writeBackupCopy(path: string): Promise<boolean> {
   const { copyFile, exists } = await import('@tauri-apps/plugin-fs');
-  if (await exists(path)) await copyFile(path, backupPathFor(path));
+  if (!(await exists(path))) return false;
+  await copyFile(path, backupPathFor(path));
+  return true;
 }
 
 const PDF_FILTER = [{ name: 'Documents PDF', extensions: ['pdf'] }];
@@ -132,4 +134,15 @@ export async function onCloseRequested(cb: (prevent: () => void) => Promise<void
   await getCurrentWindow().onCloseRequested(async (event) => {
     await cb(() => event.preventDefault());
   });
+}
+
+/** ⌘Q / « Quitter Cigale » : l'interface est prévenue avant que l'application ne s'arrête. */
+export async function onQuitRequest(cb: () => void): Promise<void> {
+  const { listen } = await import('@tauri-apps/api/event');
+  await listen('cigale://quit-request', () => cb());
+}
+
+export async function quitApp(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('quit_app');
 }

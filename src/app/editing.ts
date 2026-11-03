@@ -299,9 +299,14 @@ export class Editing {
       // Application Mac : vraie copie « nom.pdf.bak » à côté du fichier, avant de le remplacer.
       const path = pathOfHandle(handle);
       let bak = '';
-      if (path && !isNewFile && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
-        await writeBackupCopy(path);
-        bak = baseName(backupPathFor(path));
+      let bakFailed = false;
+      // « Enregistrer sous » vers un fichier qui existe déjà le remplace aussi : même copie .bak
+      if (path && (isNewFile || (s.diskBytes && !sameBytes(s.diskBytes, bytes)))) {
+        try {
+          if (await writeBackupCopy(path)) bak = baseName(backupPathFor(path));
+        } catch {
+          bakFailed = true; // on n'empêche pas l'enregistrement, mais on le dit
+        }
       }
       const ok = await writeVerified(handle, bytes);
       if (!ok) throw new Error(t.save.verifyFailed);
@@ -312,7 +317,7 @@ export class Editing {
       s.history.markSaved();
       this.host.refresh(s);
       this.host.rememberOpened(s);
-      toast(fmt(t.save.done, { name: s.name }) + (bak ? ` ${fmt(t.save.bakNote, { bak })}` : backedUp ? ` ${t.save.backupNote}` : ''));
+      toast(fmt(t.save.done, { name: s.name }) + (bak ? ` ${fmt(t.save.bakNote, { bak })}` : bakFailed ? ` ${t.save.bakFailed}` : backedUp ? ` ${t.save.backupNote}` : ''));
       return true;
     } catch (err) {
       this.host.refresh(s);
