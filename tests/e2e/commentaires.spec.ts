@@ -291,3 +291,40 @@ test('après un ajout, on reste à la même position de défilement et au même 
   expect(Math.abs(after - before)).toBeLessThan(30);
   await expect(page.locator('#zoom-select')).toHaveValue('2');
 });
+
+test('panneau : Échap annule la modification du texte, ⌘Entrée l’enregistre une seule fois', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-note');
+  await page.mouse.click(pb.x + 400, pb.y + 120);
+  await page.fill('.annot-pop textarea', 'avant');
+  await page.click('#annot-save');
+  await waitKinds(page, ['note']);
+  await page.click('#panel-tab-comments');
+  await page.locator('.comment-text').first().click();
+  await page.locator('.comments textarea').fill('Échap : ne doit rien changer');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(600);
+  expect((await annots(page))[0].contents).toBe('avant');
+  const count = await page.evaluate(() => (window as unknown as { cigale: { app: { sessions: { history: { canUndo: boolean } }[] } } }).cigale.app.sessions[0].history.canUndo);
+  expect(count).toBe(true);
+  await page.locator('.comment-text').first().click();
+  await page.locator('.comments textarea').fill('après');
+  await page.keyboard.press('Meta+Enter');
+  await expect.poll(async () => (await annots(page))[0].contents).toBe('après');
+  await page.keyboard.press('Meta+z'); // une seule étape à annuler : on revient à « avant »
+  await expect.poll(async () => (await annots(page))[0].contents).toBe('avant');
+});
+
+test('dans la vue « Organiser les pages », Suppr supprime des pages, pas un commentaire', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-rect');
+  await drag(page, pb.x + 100, pb.y + 300, pb.x + 220, pb.y + 360);
+  await waitKinds(page, ['rect']);
+  await page.click('#tool-select');
+  await page.locator('.annot-hit').first().click();
+  await page.click('#btn-organize');
+  await page.locator('.organizer .thumb[data-page="2"]').click();
+  await page.keyboard.press('Delete');
+  await expect(page.locator('.organizer .thumb')).toHaveCount(2);
+  expect(await annots(page)).toHaveLength(1);
+});

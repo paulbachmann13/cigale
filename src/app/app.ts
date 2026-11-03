@@ -361,7 +361,7 @@ export class App {
     } else if (mod && key === 'y' && this.active && !typing && !this.workspace.hidden) {
       e.preventDefault();
       void this.redo();
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active?.annotator.selection && !typing && !this.workspace.hidden && !target.closest('.thumbs')) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active?.annotator.selection && !this.active.organizing && !typing && !this.workspace.hidden && !target.closest('.thumbs')) {
       e.preventDefault();
       void this.editing.removeAnnots(this.active, [this.active.annotator.selection.id]);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active && !typing && !this.workspace.hidden && (target.closest('.thumbs') || this.active.organizing)) {
@@ -736,6 +736,7 @@ export class App {
 
   private setOrganizing(s: Session, on: boolean) {
     s.organizing = on;
+    if (on) s.annotator.select(null);
     if (on) this.ensureGrid(s);
     this.showCurrentCentre(s);
     if (!on) s.view.viewer.update();
@@ -767,6 +768,8 @@ export class App {
       if (next) this.activate(next.id);
       else {
         this.updateEditUi(null);
+        this.setAnnotTool(null);
+        this.setBadge([]);
         this.showHome();
       }
     }

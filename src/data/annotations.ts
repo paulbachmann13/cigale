@@ -125,3 +125,20 @@ export function fromPdfDate(s: string): string {
   if (sign) t -= (sign === '+' ? 1 : -1) * (Number(oh) * 60 + Number(om)) * 60000;
   return Number.isFinite(t) ? new Date(t).toISOString() : '';
 }
+
+/** Fusionne les rectangles d'une même ligne (les « span » de pdf.js découpent une ligne en plusieurs morceaux). Repère écran : [gauche, haut, droite, bas]. */
+export function mergeLines(rects: Rect[]): Rect[] {
+  const sorted = [...rects].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const out: Rect[] = [];
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    const sameLine = last && Math.abs((last[1] + last[3]) / 2 - (r[1] + r[3]) / 2) < Math.min(last[3] - last[1], r[3] - r[1]) * 0.5;
+    if (last && sameLine && r[0] <= last[2] + 4) {
+      last[0] = Math.min(last[0], r[0]);
+      last[1] = Math.min(last[1], r[1]);
+      last[2] = Math.max(last[2], r[2]);
+      last[3] = Math.max(last[3], r[3]);
+    } else out.push([...r]);
+  }
+  return out;
+}

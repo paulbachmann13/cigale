@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName } from '@cantoo/pdf-lib';
 import type { AnnotDraft } from '../../src/data/annotations';
 import { addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation } from '../../src/pdf/annot-ops';
+import { mergeLines } from '../../src/data/annotations';
 import { makePdf, readPages } from './helpers';
 
 const base = { page: 0, color: [1, 0, 0] as [number, number, number], fill: null, opacity: 1, width: 2, contents: '', rect: [100, 600, 200, 650] as [number, number, number, number] };
@@ -138,5 +139,40 @@ describe('annotations : écriture et relecture', () => {
     const moved = await applyOp(bytes, { op: 'move', pages: [2], to: 0 }, undefined, 3);
     const [a] = await listAnnotations(moved.bytes);
     expect(a).toMatchObject({ page: 0, contents: 'p3' });
+  });
+
+  it('déplacer 30 fois une annotation ne fait pas grossir le fichier', async () => {
+    let { bytes, ids } = await addAnnotations(await makePdf(1), [draft({ kind: 'freetext', rect: [100, 600, 300, 650], contents: 'Bonjour', fontSize: 12 })], undefined, 1);
+    const size0 = bytes.length;
+    for (let i = 0; i < 30; i++) bytes = await updateAnnotation(bytes, ids[0], { rect: [100 + i, 600, 300 + i, 650] }, undefined, 1);
+    expect(bytes.length).toBeLessThan(size0 * 1.1);
+  });
+
+  it('une zone de texte porte ses ressources par défaut (DR) pour qu’Acrobat puisse la modifier', async () => {
+    const { bytes } = await addAnnotations(await makePdf(1), [draft({ kind: 'freetext', rect: [100, 600, 300, 650], contents: 'x' })], undefined, 1);
+    const doc = await PDFDocument.load(bytes);
+    const d = doc.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
+    expect(d.lookup(PDFName.of('DR'), PDFDict).lookup(PDFName.of('Font'), PDFDict).get(PDFName.of('Helv'))).toBeDefined();
+  });
+
+  it('un commentaire étranger simplement déplacé garde son apparence d’origine', async () => {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([595, 842]);
+    const ctx = doc.context;
+    const ap = ctx.register(ctx.stream('1 0 0 rg 0 0 100 20 re f', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 100, 20] }));
+    const a = ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Square', Rect: [10, 10, 110, 30], C: [1, 0, 0], AP: { N: ap } }));
+    page.node.set(PDFName.of('Annots'), ctx.obj([a]));
+    const src = await doc.save();
+    const [x] = await listAnnotations(src);
+    const moved = await updateAnnotation(src, x.id, { rect: [60, 70, 160, 90] }, undefined, 1);
+    const re = await PDFDocument.load(moved);
+    const d = re.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
+    const stream = d.lookup(PDFName.of('AP'), PDFDict).lookup(PDFName.of('N')) as unknown as { getContentsString(): string };
+    expect(stream.getContentsString()).toContain('1 0 0 rg'); // même flux d'apparence que l'original
+    expect((await listAnnotations(moved))[0].rect).toEqual([60, 70, 160, 90]);
+  });
+
+  it('fusionne les rectangles d’une même ligne (repère écran)', () => {
+    expect(mergeLines([[10, 100, 50, 112], [52, 101, 90, 113], [10, 130, 60, 142]])).toEqual([[10, 100, 90, 113], [10, 130, 60, 142]]);
   });
 });

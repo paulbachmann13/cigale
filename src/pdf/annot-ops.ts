@@ -410,9 +410,10 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
     if (draft.kind === 'freetext') {
       dict.set(N('DA'), PDFString.of(`/Helv ${f(draft.fontSize ?? 12)} Tf ${colorOp(draft.color, false)}`));
       dict.set(N('Q'), PDFNumber.of(0));
+      dict.set(N('DR'), ctx.obj({ Font: { Helv: fonts.helv.ref } })); // ressources par défaut : Acrobat peut régénérer l'apparence
     }
     if (draft.kind === 'note') dict.set(N('Name'), N('Note'));
-    if (draft.kind === 'stamp') dict.set(N('Name'), N(`Cigale-${draft.stamp ?? 'custom'}`));
+    if (draft.kind === 'stamp') dict.set(N('Name'), N(`Cigale-${draft.stamp && STAMPS[draft.stamp] ? draft.stamp : 'custom'}`));
     if (draft.replyTo) {
       dict.set(N('IRT'), refOf(draft.replyTo));
       dict.set(N('RT'), N('R'));
@@ -432,6 +433,7 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
     appendAnnot(page, ctx, ref);
     ids.push(idOf(ref));
   }
+  pruneUnreachable(doc); // polices non utilisées par ces annotations
   return { bytes: await doc.save(), ids };
 }
 
@@ -478,8 +480,13 @@ export async function updateAnnotation(bytes: Uint8Array, id: string, patch: Ann
   if (patch.contents !== undefined) hit.dict.set(N('Contents'), PDFHexString.fromText(patch.contents));
   hit.dict.set(N('M'), PDFString.of(toPdfDate(now)));
   // L'apparence est refaite si le dessin change, sauf pour un commentaire d'un autre logiciel dont on ne touche que le texte.
-  const redraw = (geometryChanged || styleChanged || (patch.contents !== undefined && (next.kind === 'freetext' || next.kind === 'stamp'))) && next.kind !== 'other' && !next.replyTo;
+  // Un commentaire d'un autre logiciel simplement DÉPLACÉ garde son apparence d'origine (le lecteur la replace dans le nouveau rectangle).
+  const sameSize = !!patch.rect && Math.abs(patch.rect[2] - patch.rect[0] - (current.rect[2] - current.rect[0])) < 0.01 && Math.abs(patch.rect[3] - patch.rect[1] - (current.rect[3] - current.rect[1])) < 0.01;
+  const translateOnly = current.foreign && !styleChanged && patch.width === undefined && sameSize;
+  const redraw = !translateOnly && (geometryChanged || styleChanged || (patch.contents !== undefined && (next.kind === 'freetext' || next.kind === 'stamp'))) && next.kind !== 'other' && !next.replyTo;
+  if (patch.stamp !== undefined && next.kind === 'stamp') hit.dict.set(N('Name'), N(`Cigale-${STAMPS[patch.stamp] ? patch.stamp : 'custom'}`));
   if (redraw) setAppearance(doc, hit.dict, buildAppearance(next, await fontsFor(doc)));
+  pruneUnreachable(doc); // l'ancien flux d'apparence et les polices inutilisées ne restent pas dans le fichier
   return doc.save();
 }
 

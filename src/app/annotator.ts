@@ -2,7 +2,7 @@
  * Calque de commentaires posé sur les pages de pdf.js : outils de dessin, sélection, déplacement, redimensionnement.
  * Rien n'est écrit ici : chaque geste aboutit à un appel de l'hôte (App/Editing) qui modifie le PDF réel.
  */
-import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, normalizeRect, resize, rgbToCss, translate } from '../data/annotations';
+import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
 import { h } from './dom';
@@ -47,15 +47,18 @@ export class Annotator {
   private layers = new Map<number, HTMLElement>();
   private editor: HTMLElement | null = null;
   private onMouseUp = () => this.captureTextSelection();
+  private onPageRendered = ({ pageNumber }: { pageNumber: number }) => this.layoutPage(pageNumber);
 
   constructor(private view: DocView, private host: AnnotHost) {
-    view.eventBus.on('pagerendered', ({ pageNumber }: { pageNumber: number }) => this.layoutPage(pageNumber));
-    view.container.addEventListener('mouseup', this.onMouseUp);
+    view.eventBus.on('pagerendered', this.onPageRendered);
+    // sur le document : la sélection peut se terminer hors de la zone de lecture
+    document.addEventListener('mouseup', this.onMouseUp);
   }
 
   destroy() {
     this.closeEditor();
-    this.view.container.removeEventListener('mouseup', this.onMouseUp);
+    document.removeEventListener('mouseup', this.onMouseUp);
+    this.view.eventBus.off('pagerendered', this.onPageRendered);
     this.layers.forEach((l) => l.remove());
     this.layers.clear();
   }
@@ -182,13 +185,14 @@ export class Annotator {
       const vp = this.pageView(n)!.viewport;
       const hit = handle.parentElement!;
       handle.setPointerCapture(e.pointerId);
+      // Tout se calcule à l'écran (le coin opposé reste fixe) puis se convertit : correct aussi sur une page tournée.
+      const box = { left: hit.offsetLeft, top: hit.offsetTop, right: hit.offsetLeft + hit.offsetWidth, bottom: hit.offsetTop + hit.offsetHeight };
+      const fixed: [number, number] = [corner.endsWith('w') ? box.right : box.left, corner.startsWith('n') ? box.bottom : box.top];
       const next = (ev: PointerEvent): Rect => {
-        const [x, y] = vp.convertToPdfPoint(...this.local(layer, ev));
-        const [x1, y1, x2, y2] = a.rect;
-        // le coin tenu suit la souris ; l'opposé reste fixe (« n » = haut = y le plus grand en PDF)
-        const fixedX = corner.endsWith('w') ? x2 : x1;
-        const fixedY = corner.startsWith('n') ? y1 : y2;
-        const r = normalizeRect([x, y, fixedX, fixedY]);
+        const p = this.local(layer, ev);
+        const [x, y] = vp.convertToPdfPoint(p[0], p[1]);
+        const [fx, fy] = vp.convertToPdfPoint(fixed[0], fixed[1]);
+        const r = normalizeRect([x, y, fx, fy]);
         return [r[0], r[1], Math.max(r[2], r[0] + 6), Math.max(r[3], r[1] + 6)];
       };
       const move = (ev: PointerEvent) => {
@@ -303,7 +307,7 @@ export class Annotator {
       const canvas = pv?.div.querySelector('canvas');
       if (!pv || !canvas) continue;
       const origin = canvas.getBoundingClientRect(); // même origine que le calque : le coin de la page
-      const quads: Rect[] = [];
+      const screen: Rect[] = [];
       pv.div.querySelectorAll<HTMLElement>('.textLayer span:not(.markedContent)').forEach((span) => {
         if (!range.intersectsNode(span) || !span.textContent) return;
         const sub = document.createRange();
@@ -312,11 +316,17 @@ export class Annotator {
         if (range.compareBoundaryPoints(Range.END_TO_END, sub) < 0) sub.setEnd(range.endContainer, range.endOffset);
         const r = sub.getBoundingClientRect();
         if (r.width < 1 || r.height < 1) return;
-        const [ax, ay] = pv.viewport.convertToPdfPoint(r.left - origin.left, r.top - origin.top);
-        const [bx, by] = pv.viewport.convertToPdfPoint(r.right - origin.left, r.bottom - origin.top);
-        quads.push(normalizeRect([ax, ay, bx, by]));
+        screen.push([r.left - origin.left, r.top - origin.top, r.right - origin.left, r.bottom - origin.top]);
       });
-      if (quads.length) draftsByPage.set(n, mergeLines(quads));
+      if (screen.length) {
+        // fusion par ligne à l'écran (sens de lecture réel, même sur une page tournée), puis conversion en coordonnées PDF
+        const toPdf = (r: Rect): Rect => {
+          const [ax, ay] = pv.viewport.convertToPdfPoint(r[0], r[1]);
+          const [bx, by] = pv.viewport.convertToPdfPoint(r[2], r[3]);
+          return normalizeRect([ax, ay, bx, by]);
+        };
+        draftsByPage.set(n, mergeLines(screen).map(toPdf));
+      }
     }
     if (draftsByPage.size === 0) return;
     sel.removeAllRanges();
@@ -383,21 +393,4 @@ export class Annotator {
     this.editor = box;
     area.focus();
   }
-}
-
-/** Fusionne les rectangles d'une même ligne (les « span » de pdf.js découpent une ligne en plusieurs morceaux). */
-export function mergeLines(rects: Rect[]): Rect[] {
-  const sorted = [...rects].sort((a, b) => b[3] - a[3] || a[0] - b[0]);
-  const out: Rect[] = [];
-  for (const r of sorted) {
-    const last = out[out.length - 1];
-    const sameLine = last && Math.abs((last[1] + last[3]) / 2 - (r[1] + r[3]) / 2) < Math.min(last[3] - last[1], r[3] - r[1]) * 0.5;
-    if (last && sameLine && r[0] <= last[2] + 4) {
-      last[0] = Math.min(last[0], r[0]);
-      last[1] = Math.min(last[1], r[1]);
-      last[2] = Math.max(last[2], r[2]);
-      last[3] = Math.max(last[3], r[3]);
-    } else out.push([...r]);
-  }
-  return out;
 }

@@ -72,8 +72,9 @@ export class CommentsPanel {
     if (!a.contents) text.classList.add('muted');
     text.onclick = (e) => {
       e.stopPropagation();
-      this.host.select(a);
-      this.edit(a, text);
+      this.host.select(a); // la sélection redessine la liste : on édite l'élément à jour, pas l'ancien
+      const fresh = this.list.querySelector<HTMLElement>(`.comment[data-id="${CSS.escape(a.id)}"] > .comment-text`);
+      if (fresh) this.edit(a, fresh);
     };
     const card = h(
       'div',
@@ -122,7 +123,10 @@ export class CommentsPanel {
   private edit(a: Annot, p: HTMLElement) {
     const area = h('textarea', { class: 'annot-text', rows: 3, 'aria-label': t.annot.noteWrite });
     area.value = a.contents;
+    let closed = false; // retirer le champ du DOM déclenche « blur » : on ne traite la fin de saisie qu'une fois
     const done = (save: boolean) => {
+      if (closed) return;
+      closed = true;
       if (save && area.value.trim() !== a.contents) this.host.edit(a.id, area.value.trim());
       else this.render();
     };
