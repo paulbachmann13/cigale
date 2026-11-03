@@ -11,6 +11,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Filigrane** (Outils) : texte en diagonale ou horizontal, taille, couleur et opacité réglables, sur toutes les pages, la page affichée, la sélection ou des plages.
 - **En-têtes, pieds de page et numérotation** (Outils) : textes à gauche, au centre et à droite, avec le numéro de page, le nombre de pages, la date et le titre ; fonctionne aussi sur les pages tournées.
 - **Recadrer** (Outils) : retire des marges (en millimètres) sur les pages choisies.
+- **Protéger par mot de passe** (Outils) : mot de passe d'ouverture, restrictions (impression, copie, modification, commentaires) avec mot de passe propriétaire, chiffrement AES-256 ; **Retirer la protection**. L'historique « Annuler » et les copies de sécurité non protégées sont effacés pour ce document.
 - **Exporter les pages en images** (Outils) : PNG ou JPEG, 72 à 300 dpi, dans une archive .zip.
 
 ### Corrigé

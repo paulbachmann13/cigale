@@ -7,6 +7,7 @@ import type { Range } from '../data/page-ranges';
 import type { AddResult } from './annot-ops';
 import type { CropMargins, CropResult } from './crop-ops';
 import type { FillResult, FormValue } from './form-ops';
+import type { ProtectOptions, ProtectResult } from './protect-ops';
 import type { RedactOptions, RedactResult, RedactedPage } from './redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from './stamp-ops';
 import type { MergeOptions, MergeSource, Part } from './doc-ops';
@@ -77,3 +78,5 @@ export const watermarkOp = (bytes: Uint8Array, options: WatermarkOptions, passwo
 export const headerFooterOp = (bytes: Uint8Array, options: HeaderFooterOptions, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'headerFooter', bytes, options, password, expectedPages });
 export const cropOp = (bytes: Uint8Array, margins: CropMargins, pages: number[] | undefined, password: string | undefined, expectedPages: number) => run<CropResult>({ kind: 'crop', bytes, margins, pages, password, expectedPages });
 export const redactOp = (bytes: Uint8Array, pages: RedactedPage[], options: RedactOptions, password: string | undefined, expectedPages: number) => run<RedactResult>({ kind: 'redact', bytes, pages, options, password, expectedPages });
+export const protectOp = (bytes: Uint8Array, options: ProtectOptions, password: string | undefined, expectedPages: number) => run<ProtectResult>({ kind: 'protect', bytes, options, password, expectedPages });
+export const unprotectOp = (bytes: Uint8Array, password: string | undefined, expectedPages: number) => run<ProtectResult>({ kind: 'unprotect', bytes, password, expectedPages });

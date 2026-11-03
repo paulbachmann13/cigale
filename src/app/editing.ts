@@ -11,7 +11,8 @@ import type { AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
-import { Cancelled, addAnnotationsOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
+import type { ProtectOptions } from '../pdf/protect-ops';
+import { Cancelled, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -38,6 +39,8 @@ export interface EditHost {
   pendingSelect(s: Session, id: string | null): void;
   /** Après un caviardage : efface l'historique Annuler, les copies de sécurité et les sauvegardes qui contiennent encore le texte d'origine. */
   forgetOriginal(s: Session): Promise<void>;
+  /** Repart d'un historique vide (le document en mémoire devient l'état de départ, « modifié »). */
+  resetHistory(s: Session): Promise<void>;
   author(): string;
 }
 
@@ -91,9 +94,10 @@ export class Editing {
         const go = await confirmDialog(t.confirm.signedTitle, fmt(t.confirm.signedMessage, { name: s.name }), t.confirm.signedGo, t.confirm.signedCancel);
         if (!go) return false;
       }
-      if (info.encrypted) {
+      if (info.encrypted && !s.encryptedAck) {
         const go = await confirmDialog(t.confirm.encryptedTitle, fmt(t.confirm.encryptedMessage, { name: s.name }), t.confirm.encryptedGo, t.confirm.signedCancel);
         if (!go) return false;
+        s.encryptedAck = true;
       }
     } catch {
       /* l'analyse a échoué : l'opération elle-même dira ce qui ne va pas */
@@ -225,6 +229,34 @@ export class Editing {
     const ok = await this.annotOp(s, t.docTools.labels.redact, async () => (await redactOp(s.history.current, pages, options, s.password, s.view.pageCount).promise).bytes);
     if (ok) s.noBackup = true; // quoi qu'il arrive, aucune copie de l'ancienne version (elle contient le texte caviardé)
     if (ok && clearHistory) await this.host.forgetOriginal(s);
+    return ok;
+  }
+
+  /** Protège le document par mot de passe (AES-256). L'historique est effacé : les anciennes versions ont un autre mot de passe. */
+  async protect(s: Session, options: ProtectOptions): Promise<boolean> {
+    const oldPassword = s.password;
+    s.encryptedAck = true; // on change nous-mêmes la protection : l'avertissement n'a pas lieu d'être
+    const ok = await this.annotOp(s, t.docTools.labels.protect, async () => {
+      const r = await protectOp(s.history.current, options, s.password, s.view.pageCount).promise;
+      s.password = options.userPassword || undefined; // le rechargement et les opérations suivantes utilisent le nouveau mot de passe
+      return r.bytes;
+    });
+    if (!ok) s.password = oldPassword;
+    else await this.host.forgetOriginal(s); // les copies et sauvegardes non protégées ne doivent pas rester
+    return ok;
+  }
+
+  async unprotect(s: Session): Promise<boolean> {
+    const oldPassword = s.password;
+    s.encryptedAck = true;
+    const ok = await this.annotOp(s, t.docTools.labels.unprotect, async () => {
+      const r = await unprotectOp(s.history.current, s.password, s.view.pageCount).promise;
+      s.password = undefined;
+      if (!r.wasProtected) toast(t.docTools.notProtected);
+      return r.bytes;
+    });
+    if (!ok) s.password = oldPassword;
+    else await this.host.resetHistory(s);
     return ok;
   }
 

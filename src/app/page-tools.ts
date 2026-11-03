@@ -196,3 +196,72 @@ export function openCropDialog(s: Session, editing: Editing): void {
     ),
   ]).id = 'dialog-crop';
 }
+
+// ───────────── protection par mot de passe ─────────────
+
+export function openProtectDialog(s: Session, editing: Editing): void {
+  const pw = (id: string) => h('input', { type: 'password', id, autocomplete: 'new-password' });
+  const open1 = pw('pw-open');
+  const open2 = pw('pw-open2');
+  const owner1 = pw('pw-owner');
+  const owner2 = pw('pw-owner2');
+  const perm = (id: string, label: string) => {
+    const input = h('input', { type: 'checkbox', id, checked: true });
+    return { input, el: h('label', { class: 'check' }, input, label) };
+  };
+  const print = perm('perm-print', t.docTools.permPrint);
+  const copy = perm('perm-copy', t.docTools.permCopy);
+  const modify = perm('perm-modify', t.docTools.permModify);
+  const annotate = perm('perm-annotate', t.docTools.permAnnotate);
+  const error = h('p', { class: 'dialog-error', id: 'pw-error', role: 'alert' });
+  modal((close) => [
+    h('h2', {}, t.docTools.protectTitle),
+    h('p', { class: 'hint' }, t.docTools.protectHint),
+    field(t.docTools.pwOpen, open1),
+    field(t.docTools.pwConfirm, open2),
+    h('p', { class: 'hint' }, t.docTools.permHint),
+    print.el,
+    copy.el,
+    modify.el,
+    annotate.el,
+    field(t.docTools.pwOwner, owner1),
+    field(t.docTools.pwConfirm, owner2),
+    h('p', { class: 'hint' }, t.docTools.protectWarn),
+    error,
+    h(
+      'div',
+      { class: 'dialog-actions' },
+      h('button', { type: 'button', id: 'tool-cancel', onclick: close }, t.docTools.cancel),
+      h(
+        'button',
+        {
+          type: 'button',
+          id: 'tool-apply',
+          class: 'primary',
+          onclick: () => {
+            const restricted = !print.input.checked || !copy.input.checked || !modify.input.checked || !annotate.input.checked;
+            if (open1.value !== open2.value || owner1.value !== owner2.value) return void (error.textContent = t.docTools.pwMismatch);
+            if (!open1.value && !restricted) return void (error.textContent = t.docTools.pwNothing);
+            if (restricted && !owner1.value) return void (error.textContent = t.docTools.pwNeedOwner);
+            if (open1.value && owner1.value && open1.value === owner1.value) return void (error.textContent = t.docTools.pwSame);
+            close();
+            void editing.protect(s, {
+              userPassword: open1.value,
+              ownerPassword: owner1.value,
+              permissions: {
+                printing: print.input.checked ? 'highResolution' : false,
+                copying: copy.input.checked,
+                modifying: modify.input.checked,
+                annotating: annotate.input.checked,
+                fillingForms: annotate.input.checked,
+                contentAccessibility: true,
+                documentAssembly: modify.input.checked,
+              },
+            });
+          },
+        },
+        t.docTools.protectGo,
+      ),
+    ),
+  ]).id = 'dialog-protect';
+}

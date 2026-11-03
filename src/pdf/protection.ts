@@ -20,12 +20,19 @@ export interface Protection {
   /** Mot de passe d'ouverture (vide : le document s'ouvre sans mot de passe, seules des restrictions s'appliquent). */
   password: string;
   permissions: Permissions;
+  /** Mot de passe propriétaire choisi par l'utilisateur (lève les restrictions). Inconnu pour un document déjà protégé à l'ouverture. */
+  ownerPassword?: string;
 }
 
 const registry = new WeakMap<PDFDocument, Protection>();
 
 export const getProtection = (doc: PDFDocument): Protection | undefined => registry.get(doc);
 export const setProtection = (doc: PDFDocument, p: Protection): void => void registry.set(doc, p);
+/** Retire la protection : plus de chiffrement à l'écriture ET plus de référence « /Encrypt » dans le fichier (pdf-lib la laisse sinon). */
+export function clearProtection(doc: PDFDocument): void {
+  registry.delete(doc);
+  delete doc.context.trailerInfo.Encrypt;
+}
 
 /** Le document `to` (créé à partir de pages de `from`) hérite de sa protection, s'il n'en a pas déjà une. */
 export function inheritProtection(to: PDFDocument, from: PDFDocument): void {
@@ -55,6 +62,8 @@ function intersect(a: Permissions, b: Permissions): Permissions {
 
 /** Si /P est illisible : on préfère trop restreindre que lever des restrictions sans le savoir. */
 export const RESTRICTIVE: Permissions = { printing: false, modifying: false, copying: false, annotating: false, fillingForms: false, contentAccessibility: true, documentAssembly: false };
+
+export const ALL_ALLOWED: Permissions = { printing: 'highResolution', modifying: true, copying: true, annotating: true, fillingForms: true, contentAccessibility: true, documentAssembly: true };
 
 const unrestricted = (p: Permissions) => level(p.printing) === 2 && !!p.modifying && !!p.copying && !!p.annotating && !!p.fillingForms && !!p.contentAccessibility && !!p.documentAssembly;
 
@@ -86,7 +95,7 @@ export async function saveDoc(doc: PDFDocument): Promise<Uint8Array> {
       userPassword: p.password,
       // Propriétaire inconnu. Sans restriction, le mot de passe d'ouverture sert aussi de propriétaire (rien à protéger de plus) ;
       // avec des restrictions, un propriétaire aléatoire les garde effectives : connaître le mot de passe d'ouverture ne les lève pas.
-      ownerPassword: p.password && unrestricted(p.permissions) ? p.password : randomOwnerPassword(),
+      ownerPassword: p.ownerPassword ?? (p.password && unrestricted(p.permissions) ? p.password : randomOwnerPassword()),
       permissions: p.permissions,
     });
   }

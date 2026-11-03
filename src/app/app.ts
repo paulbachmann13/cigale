@@ -12,7 +12,7 @@ import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
 import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
 import { CommentsPanel } from './comments';
 import { hasFormFields } from './forms';
-import { askPassword, askUnsaved, showMessage } from './dialogs';
+import { askPassword, askUnsaved, confirmDialog, showMessage } from './dialogs';
 import { clear, h, toast } from './dom';
 import { Editing } from './editing';
 import { type PickedFile, filesFromDrop, pickPdfs, readFromHandle } from './files';
@@ -27,7 +27,7 @@ import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
 import { applyRedaction } from './redact';
 import { askSignature } from './signature';
-import { openCropDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
+import { openCropDialog, openProtectDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
 import { type Session, isDirty } from './session';
 import { loadSettings } from './settings';
 
@@ -101,6 +101,10 @@ export class App {
       pendingSelect: (s, id) => (s.pendingSelect = id),
       author: () => loadSettings().author || t.annot.defaultAuthor,
       forgetOriginal: (s) => this.forgetOriginal(s),
+      resetHistory: async (s) => {
+        s.history = new History(s.history.current, false);
+        this.refreshState(s);
+      },
     });
     this.fileInput.addEventListener('change', () => {
       const files = Array.from(this.fileInput.files ?? []).map((file) => ({ file }));
@@ -287,11 +291,17 @@ export class App {
         { id: 'tool-watermark', label: t.docTools.watermark, run: () => openWatermarkDialog(s, this.editing) },
         { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: () => openHeaderFooterDialog(s, this.editing) },
         { id: 'tool-crop', label: t.docTools.crop, run: () => openCropDialog(s, this.editing) },
+        { id: 'tool-protect', label: t.docTools.protect, run: () => openProtectDialog(s, this.editing), separatorBefore: true },
+        { id: 'tool-unprotect', label: t.docTools.unprotect, run: () => void this.confirmUnprotect(s) },
         { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
         { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
       ],
       anchor,
     );
+  }
+
+  private async confirmUnprotect(s: Session) {
+    if (await confirmDialog(t.docTools.unprotect, t.docTools.unprotectMessage, t.docTools.unprotectGo, t.docTools.cancel)) await this.editing.unprotect(s);
   }
 
   /** Caviardage : on marque les zones (outil « redact »), puis « Appliquer le caviardage » les noircit pour de bon. */

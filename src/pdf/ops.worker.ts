@@ -2,6 +2,7 @@
 import type { Range } from '../data/page-ranges';
 import { type MergeOptions, type MergeSource, type Part, mergeSources, splitDocument, topLevelBookmarks, zipParts } from './doc-ops';
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
+import { type ProtectOptions, type ProtectResult, protectDocument, unprotectDocument } from './protect-ops';
 import { type CropMargins, type CropResult, cropPages } from './crop-ops';
 import { type RedactOptions, type RedactResult, type RedactedPage, applyRedactions } from './redact-ops';
 import { type HeaderFooterOptions, type WatermarkOptions, addHeaderFooter, addWatermark } from './stamp-ops';
@@ -26,12 +27,14 @@ export type WorkerRequest =
   | { kind: 'headerFooter'; bytes: Uint8Array; options: HeaderFooterOptions; password?: string; expectedPages?: number }
   | { kind: 'crop'; bytes: Uint8Array; margins: CropMargins; pages?: number[]; password?: string; expectedPages?: number }
   | { kind: 'redact'; bytes: Uint8Array; pages: RedactedPage[]; options: RedactOptions; password?: string; expectedPages?: number }
+  | { kind: 'protect'; bytes: Uint8Array; options: ProtectOptions; password?: string; expectedPages?: number }
+  | { kind: 'unprotect'; bytes: Uint8Array; password?: string; expectedPages?: number }
   | { kind: 'annotDelete'; bytes: Uint8Array; ids: string[]; password?: string; expectedPages?: number };
 
 export type MergeResult = { bytes: Uint8Array; pageCount: number };
 
 export type WorkerResponse =
-  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | FillResult | CropResult | RedactResult | Annot[] | { title: string; page: number }[] }
+  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | FillResult | CropResult | RedactResult | ProtectResult | Annot[] | { title: string; page: number }[] }
   | { ok: false; error: string; name: string; file?: string }
   | { progress: number };
 
@@ -97,6 +100,14 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'redact': {
         const result = await applyRedactions(req.bytes, req.pages, req.options, req.password, req.expectedPages);
+        return post({ ok: true, result }, buffers(result.bytes));
+      }
+      case 'protect': {
+        const result = await protectDocument(req.bytes, req.options, req.password, req.expectedPages);
+        return post({ ok: true, result }, buffers(result.bytes));
+      }
+      case 'unprotect': {
+        const result = await unprotectDocument(req.bytes, req.password, req.expectedPages);
         return post({ ok: true, result }, buffers(result.bytes));
       }
       case 'annotDelete': {

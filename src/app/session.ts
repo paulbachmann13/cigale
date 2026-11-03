@@ -41,6 +41,8 @@ export interface Session {
   hasForm: boolean;
   /** Caviardage appliqué : aucune copie de l'ancienne version (elle contient le texte caviardé) n'est gardée à l'enregistrement. */
   noBackup?: boolean;
+  /** L'avertissement « document protégé » a déjà été donné (ou n'a pas lieu d'être : on change la protection nous-mêmes). */
+  encryptedAck?: boolean;
 }
 
 /** Modifié = historique modifié OU saisie de formulaire en attente. */

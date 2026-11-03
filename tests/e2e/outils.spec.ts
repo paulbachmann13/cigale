@@ -273,3 +273,45 @@ test('exporter les pages en images : archive .zip de PNG', async ({ page }) => {
     expect(bytes.length).toBeGreaterThan(2000);
   }
 });
+
+test('protéger par mot de passe : le fichier enregistré demande le mot de passe', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await tool(page, 'tool-protect');
+  await page.fill('#pw-open', 'secret');
+  await page.fill('#pw-open2', 'autre');
+  await page.click('#tool-apply');
+  await expect(page.locator('#pw-error')).toContainText('pas identiques');
+  await page.fill('#pw-open2', 'secret');
+  await page.uncheck('#perm-copy'); // une restriction exige le mot de passe propriétaire
+  await page.click('#tool-apply');
+  await expect(page.locator('#pw-error')).toContainText('propriétaire');
+  await page.fill('#pw-owner', 'chef');
+  await page.fill('#pw-owner2', 'chef');
+  await page.click('#tool-apply');
+  await expect(page.locator('#btn-undo')).toBeDisabled(); // l'historique est effacé
+  await expect.poll(() => isDirty(page)).toBe(true);
+  // les opérations suivantes marchent (nouveau mot de passe) et gardent la protection
+  await page.locator('.left-panel .thumb').first().click();
+  await page.click('#btn-rot-right');
+  await expect.poll(async () => page.evaluate(async () => (await (window as any).cigale.app.sessions[0].view.pdf.getPage(1)).rotate as number)).toBe(90);
+  const download = page.waitForEvent('download');
+  await page.keyboard.press('Meta+s');
+  const bytes = readFileSync((await (await download).path())!);
+  await expect(PDFDocument.load(bytes)).rejects.toThrow(/encrypted/i);
+  const re = await PDFDocument.load(bytes, { password: 'secret' } as never);
+  expect(re.getPageCount()).toBe(3);
+});
+
+test('retirer la protection : le fichier enregistré s’ouvre librement', async ({ page }) => {
+  await openPdf(page, 'chiffre.pdf');
+  await page.fill('#password-input', 'secret');
+  await page.click('#password-ok');
+  await waitFirstPage(page);
+  await tool(page, 'tool-unprotect');
+  await page.click('#confirm-ok');
+  await expect.poll(() => isDirty(page)).toBe(true);
+  const download = page.waitForEvent('download');
+  await page.keyboard.press('Meta+s');
+  const bytes = readFileSync((await (await download).path())!);
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1); // aucun mot de passe nécessaire
+});
