@@ -8,17 +8,18 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import { Cancelled, applyOperation, extractOperation, inspectDocument } from '../pdf/ops-client';
-import type { PageOp } from '../pdf/page-ops';
+import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
 import { toast } from './dom';
+import { loadSettings } from './settings';
 import { pickOnePdf } from './files';
 import { downloadBytes, ensureWritable, pickSaveHandle, withPdfExtension, writeVerified } from './save';
 import type { Session } from './session';
 
 export interface EditHost {
   /** Recharge l'affichage du document avec de nouveaux octets (même page, même zoom). */
-  reload(s: Session, bytes: Uint8Array, selection: number[]): Promise<void>;
+  reload(s: Session, bytes: Uint8Array, selection: number[], expectedPages?: number): Promise<void>;
   /** Ouvre des octets dans un nouvel onglet, comme document pas encore enregistré. */
   openNew(name: string, bytes: Uint8Array): Promise<unknown>;
   /** Rafraîchit les indicateurs (modifié, annuler/rétablir, état). */
@@ -30,26 +31,40 @@ export interface EditHost {
 }
 
 export class Editing {
+  /** Les opérations qui rechargent le document passent l'une après l'autre (⌘Z maintenu, clics rapides). */
+  private queue: Promise<unknown> = Promise.resolve();
+
   constructor(private host: EditHost) {}
+
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(fn, fn);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
 
   // ───────────── opérations sur les pages ─────────────
 
   /** Exécute une opération ; renvoie false si elle a été refusée, annulée ou a échoué. */
-  async run(s: Session, op: PageOp, labelKey: keyof typeof t.pages.labels): Promise<boolean> {
+  run(s: Session, op: PageOp, labelKey: keyof typeof t.pages.labels): Promise<boolean> {
+    return this.serial(() => this.runNow(s, op, labelKey));
+  }
+
+  private async runNow(s: Session, op: PageOp, labelKey: keyof typeof t.pages.labels): Promise<boolean> {
     if (!(await this.confirmRisks(s))) return false;
-    const handle = applyOperation(s.history.current, op, s.password);
+    const handle = applyOperation(s.history.current, op, s.password, s.view.pageCount);
     this.host.busy(t.busy.working, () => handle.cancel());
     try {
       const result = await handle.promise;
       this.host.idle();
+      // Le nouveau document doit s'ouvrir dans pdf.js AVANT d'être adopté : sinon rien ne change.
+      await this.host.reload(s, result.bytes, result.selection, result.pageCount);
       s.history.push(result.bytes, t.pages.labels[labelKey]);
-      await this.host.reload(s, result.bytes, result.selection);
       this.host.refresh(s);
       return true;
     } catch (err) {
       this.host.idle();
       if (err instanceof Cancelled) toast(t.busy.cancelled);
-      else await showMessage(t.editErrors.title, fmt(t.editErrors.failed, { name: s.name, detail: (err as Error).message }));
+      else await showMessage(t.editErrors.title, fmt(t.editErrors.failed, { name: s.name, detail: describe(err) }));
       return false;
     }
   }
@@ -147,7 +162,7 @@ export class Editing {
   /** Extrait la sélection dans un nouveau document (nouvel onglet, pas encore enregistré). */
   extract(s: Session): Promise<boolean> {
     return this.withSelection(s, async (pages) => {
-      const handle = extractOperation(s.history.current, pages, s.password);
+      const handle = extractOperation(s.history.current, pages, s.password, s.view.pageCount);
       this.host.busy(t.busy.working, () => handle.cancel());
       try {
         const bytes = await handle.promise;
@@ -160,7 +175,7 @@ export class Editing {
       } catch (err) {
         this.host.idle();
         if (err instanceof Cancelled) toast(t.busy.cancelled);
-        else await showMessage(t.editErrors.title, fmt(t.editErrors.failed, { name: s.name, detail: (err as Error).message }));
+        else await showMessage(t.editErrors.title, fmt(t.editErrors.failed, { name: s.name, detail: describe(err) }));
         return false;
       }
     });
@@ -176,17 +191,24 @@ export class Editing {
 
   // ───────────── annuler / rétablir ─────────────
 
-  async undo(s: Session): Promise<void> {
-    const bytes = s.history.undo();
-    if (!bytes) return;
-    await this.host.reload(s, bytes, s.selection);
-    this.host.refresh(s);
+  undo(s: Session): Promise<void> {
+    return this.serial(() => this.step(s, 'undo'));
   }
 
-  async redo(s: Session): Promise<void> {
-    const bytes = s.history.redo();
+  redo(s: Session): Promise<void> {
+    return this.serial(() => this.step(s, 'redo'));
+  }
+
+  private async step(s: Session, dir: 'undo' | 'redo'): Promise<void> {
+    const bytes = dir === 'undo' ? s.history.undo() : s.history.redo();
     if (!bytes) return;
-    await this.host.reload(s, bytes, s.selection);
+    try {
+      await this.host.reload(s, bytes, s.selection);
+    } catch (err) {
+      if (dir === 'undo') s.history.redo();
+      else s.history.undo(); // l'affichage n'a pas changé : l'historique non plus
+      await showMessage(t.editErrors.title, fmt(t.editErrors.failed, { name: s.name, detail: describe(err) }));
+    }
     this.host.refresh(s);
   }
 
@@ -204,7 +226,7 @@ export class Editing {
     try {
       handle = await pickSaveHandle(suggested);
     } catch (err) {
-      await showMessage(t.editErrors.title, fmt(t.save.failed, { name: s.name, detail: (err as Error).message }));
+      await showMessage(t.editErrors.title, fmt(t.save.failed, { name: s.name, detail: describe(err) }));
       return false;
     }
     if (handle === null) return false; // annulé
@@ -216,8 +238,6 @@ export class Editing {
       toast(fmt(t.save.downloaded, { name: suggested }));
       return true;
     }
-    s.handle = handle;
-    s.name = handle.name;
     return this.writeTo(s, handle, true);
   }
 
@@ -228,11 +248,14 @@ export class Editing {
       if (!(await ensureWritable(handle))) throw new Error(t.save.permission);
       // On garde l'ancienne version avant d'écraser (sauf si on écrit dans un nouveau fichier).
       let backedUp = false;
-      if (!isNewFile && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
+      if (!isNewFile && loadSettings().keepVersions && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
         await addBackup(s.name, s.diskBytes).then(() => (backedUp = true)).catch(() => undefined);
       }
       const ok = await writeVerified(handle, bytes);
       if (!ok) throw new Error(t.save.verifyFailed);
+      // Succès seulement : la session ne bascule sur le nouveau fichier qu'après une écriture vérifiée.
+      s.handle = handle;
+      s.name = handle.name;
       s.diskBytes = bytes;
       s.history.markSaved();
       this.host.refresh(s);
@@ -241,7 +264,7 @@ export class Editing {
       return true;
     } catch (err) {
       this.host.refresh(s);
-      await showMessage(t.editErrors.title, fmt(t.save.failed, { name: s.name, detail: (err as Error).message }));
+      await showMessage(t.editErrors.title, fmt(t.save.failed, { name: isNewFile ? handle.name : s.name, detail: describe(err) }));
       return false;
     }
   }
@@ -252,4 +275,12 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/** Texte lisible pour une erreur d'opération (les codes de PageOpError viennent de fr.ts). */
+function describe(err: unknown): string {
+  if (err instanceof PageOpError || ['noSelection', 'keepOne', 'structure'].includes((err as Error)?.name)) {
+    return t.editErrors.codes[(err as Error).name as 'noSelection' | 'keepOne' | 'structure'];
+  }
+  return (err as Error)?.message ?? String(err);
 }

@@ -37,7 +37,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Architecture (voir docs/ARCHITECTURE.md)
 
-`src/data/` logique pure testée · `src/pdf/` pdf.js (engine, DocView) · `src/app/` interface (App, home, miniatures, signets, dialogues) · `src/storage/` récents · `scripts/` fixtures et ressources pdf.js.
+`src/data/` logique pure testée (zoom, ordre des pages, historique…) · `src/pdf/` pdf.js (engine, DocView) et **modification** (`page-ops.ts` pur + `ops.worker.ts`/`ops-client.ts`) · `src/app/` interface (App, Editing = opérations + enregistrement, PageList = miniatures sélectionnables, home, menus, dialogues) · `src/storage/` récents et versions précédentes · `scripts/` fixtures et ressources pdf.js.
 
 ## Pièges connus
 
@@ -51,9 +51,14 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Feuille de route
 
-1 Socle ✔ · 2 Organiser les pages + enregistrer · 3 Fusionner et découper · 4 Annotations + panneau Commentaires · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri. Détail dans `docs/PLAN.md`.
+1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper · 4 Annotations + panneau Commentaires · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri. Détail dans `docs/PLAN.md`.
+
+- **Modifier un PDF** : toute opération passe par `Editing.run` (worker, file d'attente, adoption seulement si le résultat s'ouvre avec le bon nombre de pages). Ne jamais appeler `removePage`/`insertPage` pour réordonner (arbre cassé) : voir `reorderPages`. Toujours `updateMetadata: false`. Après suppression, `pruneUnreachable` (sinon le contenu reste dans le fichier). Pas de `.bak` voisin dans un navigateur : `storage/backups.ts`.
+- **Interface = famille Grillon** (barre à 36 px, bouton « Fichier » plein couleur, accueil à colonne colorée) ; couleur propre : terracotta.
+- Tests e2e de page : `withoutFilePickers` force le repli Safari/Firefox ; l'enregistrement sur place se teste avec des `FileSystemFileHandle` OPFS (`tests/e2e/enregistrement.spec.ts`). `qpdf` est utilisé par `tests/unit/qpdf.test.ts` s'il est installé (`brew install qpdf`).
 
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)
 
 - Rendu comparé à Aperçu et à Acrobat avec de vrais scans manuscrits ; Safari (macOS) et iPad réel (tactile : pincer, Apple Pencil).
 - Installation PWA et « Ouvrir avec » depuis le Finder.
+- Les PDF produits dans Aperçu et Acrobat (voir « Étape 2 » dans docs/VERIFICATION-MANUELLE.md) ; Chrome réel avec un fichier du Mac (les tests utilisent l'espace privé du navigateur).

@@ -174,3 +174,51 @@ describe('conservation du reste du document', () => {
     await expect(applyOp(src, { op: 'rotate', pages: [0], delta: 90 }, 'faux')).rejects.toThrow();
   });
 });
+
+import { PDFString } from '@cantoo/pdf-lib';
+
+describe('purge des pages supprimées (cas difficiles)', () => {
+  it('refuse de modifier un document que pdf-lib et pdf.js comptent différemment (page sans /Type)', async () => {
+    const doc = await PDFDocument.create();
+    for (let i = 1; i <= 3; i++) doc.addPage([595, 842]);
+    doc.getPage(1).node.delete(PDFName.of('Type'));
+    const src = await doc.save();
+    // pdf.js compte 3 pages ; pdf-lib en voit 2 : toucher ce document pourrait supprimer la mauvaise page
+    await expect(applyOp(src, { op: 'delete', pages: [1] }, undefined, 3)).rejects.toMatchObject({ name: 'structure' });
+    await expect(extractPages(src, [0], undefined, 3)).rejects.toMatchObject({ name: 'structure' });
+  });
+
+  it('un champ de formulaire posé sur une page supprimée disparaît avec elle', async () => {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < 3; i++) doc.addPage([595, 842]);
+    const ctx = doc.context;
+    const widget = ctx.obj({
+      Type: 'Annot', Subtype: 'Widget', FT: 'Tx', T: PDFString.of('champ'), V: PDFString.of('CONFIDENTIEL-PAGE-DEUX'),
+      Rect: [10, 10, 100, 30], P: doc.getPage(1).ref,
+    });
+    const widgetRef = ctx.register(widget);
+    doc.getPage(1).node.set(PDFName.of('Annots'), ctx.obj([widgetRef]));
+    doc.catalog.set(PDFName.of('AcroForm'), ctx.obj({ Fields: [widgetRef] }));
+    const src = await doc.save({ useObjectStreams: false });
+    expect(new TextDecoder('latin1').decode(src)).toContain('CONFIDENTIEL-PAGE-DEUX');
+    const r = await applyOp(src, { op: 'delete', pages: [1] });
+    expect(new TextDecoder('latin1').decode(r.bytes)).not.toContain('CONFIDENTIEL-PAGE-DEUX');
+    expect((await readPages(r.bytes)).length).toBe(2);
+  });
+
+  it('les pages gardent leur propre copie des attributs hérités (pas d’objet partagé)', async () => {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < 2; i++) doc.addPage([300, 400]);
+    const root = doc.context.lookup(doc.catalog.get(PDFName.of('Pages')) as never, PDFDict);
+    const mb = doc.getPage(0).node.get(PDFName.of('MediaBox'));
+    for (const p of doc.getPages()) p.node.delete(PDFName.of('MediaBox'));
+    root.set(PDFName.of('MediaBox'), mb!);
+    const r = await applyOp(await doc.save(), { op: 'move', pages: [0], to: 2 });
+    const re = await PDFDocument.load(r.bytes);
+    const a = re.getPage(0).node.get(PDFName.of('MediaBox'));
+    const b = re.getPage(1).node.get(PDFName.of('MediaBox'));
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    expect(re.getPage(0).getSize()).toEqual({ width: 300, height: 400 });
+  });
+});

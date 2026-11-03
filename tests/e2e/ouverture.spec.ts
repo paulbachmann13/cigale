@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
 import { gotoHome, openPdf, waitFirstPage } from './helpers';
 
 test.beforeEach(async ({ page }) => {
@@ -71,7 +74,7 @@ test('récents : un fichier ouvert apparaît sur l’accueil', async ({ page }) 
 
 test('paramètres et nouveautés', async ({ page }) => {
   await page.click('#home-news');
-  await expect(page.locator('#dialog-news')).toContainText('0.1.0');
+  await expect(page.locator('#dialog-news')).toContainText(version);
   await page.click('#dialog-news button');
   await page.click('#home-settings');
   await page.selectOption('#setting-theme', 'dark');

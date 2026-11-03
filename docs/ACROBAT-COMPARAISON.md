@@ -10,7 +10,8 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 |---|---|---|
 | Ouvrir (⌘O), glisser-déposer, Ouvrir avec | Oui | Plusieurs onglets |
 | Fichiers récents | Oui | Noms seulement, sur l'appareil |
-| Enregistrer, Enregistrer sous, Exporter une copie | Non | Étape 2 |
+| Enregistrer (⌘S), Enregistrer sous (⇧⌘S) | Oui | Écriture vérifiée ; version précédente gardée ; Safari/Firefox : copie téléchargée |
+| Annuler / Rétablir (⌘Z, ⇧⌘Z) | Oui | Pages seulement pour l'instant |
 | Imprimer (⌘P) | Non | Étape 5 |
 | Propriétés du document | Non | |
 | Protéger par mot de passe | Non | 1.x |
@@ -40,7 +41,8 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 
 | Commande Acrobat | Cigale | Note |
 |---|---|---|
-| Réordonner, pivoter, supprimer, dupliquer, insérer, remplacer, extraire, recadrer | Non | Étape 2 |
+| Réordonner (glisser-déposer, grille), pivoter, supprimer, dupliquer, insérer (vierge ou autre PDF), extraire | Oui | Étape 2 |
+| Remplacer des pages, recadrer | Non | 1.x |
 | Diviser un document | Non | Étape 3 |
 | Numéros de page, en-têtes, pieds, filigrane | Non | 1.x |
 

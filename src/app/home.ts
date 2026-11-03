@@ -104,9 +104,18 @@ export function openSettings() {
   );
   zoom.value = s.defaultZoom;
   zoom.onchange = () => saveSettings({ ...loadSettings(), defaultZoom: zoom.value as DefaultZoom });
+  const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
+  keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(
     t.settings.title,
-    h('div', { class: 'form' }, h('label', {}, t.settings.theme, theme), h('label', {}, t.settings.defaultZoom, zoom)),
+    h(
+      'div',
+      { class: 'form' },
+      h('label', {}, t.settings.theme, theme),
+      h('label', {}, t.settings.defaultZoom, zoom),
+      h('label', { class: 'check' }, keep, t.settings.keepVersions),
+      h('p', { class: 'hint' }, t.settings.keepVersionsHint),
+    ),
     t.settings.close,
     'dialog-settings',
   );

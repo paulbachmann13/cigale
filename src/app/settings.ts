@@ -4,10 +4,12 @@ export type DefaultZoom = 'page-width' | 'page-fit' | 'page-actual';
 export interface Settings {
   theme: ThemeChoice;
   defaultZoom: DefaultZoom;
+  /** Garder l'ancienne version avant d'écraser un fichier (stockée sur cet ordinateur). */
+  keepVersions: boolean;
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width' };
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true };
 
 export function loadSettings(): Settings {
   try {

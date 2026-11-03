@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
 import { gotoHome, openPdf, waitFirstPage } from './helpers';
 
 test('accueil : version, boutons et aucune requête externe', async ({ page }) => {
@@ -8,7 +11,7 @@ test('accueil : version, boutons et aucune requête externe', async ({ page }) =
     if (!['localhost', '127.0.0.1'].includes(u.hostname) && u.protocol.startsWith('http')) external.push(r.url());
   });
   await gotoHome(page);
-  await expect(page.locator('#app-version')).toContainText('Version 0.1.0');
+  await expect(page.locator('#app-version')).toContainText(`Version ${version}`);
   await expect(page.locator('#home-open')).toBeVisible();
   await expect(page.locator('#home-combine')).toBeDisabled();
   await openPdf(page, 'simple-3p.pdf');

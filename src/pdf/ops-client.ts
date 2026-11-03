@@ -47,7 +47,7 @@ function run<T>(req: WorkerRequest): OpHandle<T> {
   };
 }
 
-export const applyOperation = (bytes: Uint8Array, op: PageOp, password?: string) => run<OpResult>({ kind: 'apply', bytes, op, password });
-export const extractOperation = (bytes: Uint8Array, pages: number[], password?: string) => run<Uint8Array>({ kind: 'extract', bytes, pages, password });
+export const applyOperation = (bytes: Uint8Array, op: PageOp, password?: string, expectedPages?: number) => run<OpResult>({ kind: 'apply', bytes, op, password, expectedPages });
+export const extractOperation = (bytes: Uint8Array, pages: number[], password?: string, expectedPages?: number) => run<Uint8Array>({ kind: 'extract', bytes, pages, password, expectedPages });
 export const inspectDocument = (bytes: Uint8Array, password?: string) => run<Inspection>({ kind: 'inspect', bytes, password });
 export const normalizeOperation = (bytes: Uint8Array, password?: string) => run<Uint8Array>({ kind: 'normalize', bytes, password });

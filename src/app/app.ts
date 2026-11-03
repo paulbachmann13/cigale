@@ -522,11 +522,15 @@ export class App {
   }
 
   /** Remplace le contenu affiché par de nouveaux octets (après une opération, annuler ou rétablir). */
-  private async reload(s: Session, bytes: Uint8Array, selection: number[]): Promise<void> {
+  private async reload(s: Session, bytes: Uint8Array, selection: number[], expectedPages?: number): Promise<void> {
     const old = { view: s.view, thumbs: s.thumbs, grid: s.grid };
     const state = { page: old.view.page, zoom: old.view.scaleValue, mode: old.view.viewMode, rotation: old.view.viewRotation };
     const handle = loadPdf(bytes, { password: async () => s.password ?? null });
     const pdf = await handle.promise;
+    if (expectedPages !== undefined && pdf.numPages !== expectedPages) {
+      void pdf.loadingTask.destroy();
+      throw new Error(t.editErrors.codes.structure);
+    }
     const view = new DocView(pdf, state.zoom, performance.now(), this.docsEl);
     view.root.hidden = this.active !== s;
     await view.ready;
@@ -684,7 +688,9 @@ export class App {
       if (answer === 'cancel') return;
       if (answer === 'save' && !(await this.editing.save(s))) return;
     }
-    this.sessions.splice(i, 1);
+    const at = this.sessions.indexOf(s); // les onglets ont pu changer pendant les questions
+    if (at < 0) return;
+    this.sessions.splice(at, 1);
     s.thumbs.destroy();
     s.grid?.destroy();
     s.grid?.el.remove();
@@ -692,7 +698,7 @@ export class App {
     s.tab.remove();
     if (this.active === s) {
       this.active = null;
-      const next = this.sessions[Math.min(i, this.sessions.length - 1)];
+      const next = this.sessions[Math.min(at, this.sessions.length - 1)];
       if (next) this.activate(next.id);
       else {
         this.updateEditUi(null);

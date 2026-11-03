@@ -36,6 +36,14 @@ export interface OpResult {
   selection: number[];
 }
 
+/** Erreur « attendue » : `name` est un code que l'interface traduit (les textes sont dans fr.ts). */
+export class PageOpError extends Error {
+  constructor(readonly code: 'noSelection' | 'keepOne' | 'structure') {
+    super(code);
+    this.name = code;
+  }
+}
+
 export interface Inspection {
   pageCount: number;
   encrypted: boolean;
@@ -93,10 +101,20 @@ function hasSignatureField(doc: PDFDocument, acro: PDFDict): boolean {
   return walk(fields);
 }
 
+/**
+ * Garde-fou : pdf-lib et pdf.js doivent compter le même nombre de pages. Certains PDF mal formés (pages sans /Type…)
+ * sont lus différemment ; modifier un tel document pourrait toucher la mauvaise page, donc on refuse.
+ */
+function checkStructure(doc: PDFDocument, expectedPages?: number): void {
+  if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new PageOpError('structure');
+}
+
 /** Applique une opération et rend le nouveau document. Lève une erreur sans rien modifier en cas de problème. */
-export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string): Promise<OpResult> {
+export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, expectedPages?: number): Promise<OpResult> {
   const doc = await loadForEdit(bytes, password);
+  checkStructure(doc, expectedPages);
   const count = doc.getPageCount();
+  const before = doc.getPages().map((p) => p.ref);
   let selection: number[] = [];
 
   switch (op.op) {
@@ -109,10 +127,10 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string):
     }
     case 'delete': {
       const pages = normalizeSelection(op.pages, count);
-      if (pages.length === 0) throw new Error('Aucune page sélectionnée.');
-      if (pages.length >= count) throw new Error('Un document doit garder au moins une page.');
+      if (pages.length === 0) throw new PageOpError('noSelection');
+      if (pages.length >= count) throw new PageOpError('keepOne');
       for (const i of [...pages].reverse()) doc.removePage(i);
-      pruneUnreachable(doc);
+      pruneUnreachable(doc, before);
       selection = [Math.min(pages[0], count - pages.length - 1)];
       break;
     }
@@ -175,7 +193,7 @@ function reorderPages(doc: PDFDocument, order: number[]): void {
         if (!node) break;
         const v = node.get(key);
         if (v) {
-          leaf.set(key, v);
+          leaf.set(key, v instanceof PDFRef ? v : v.clone(ctx)); // copie : les pages ne partagent pas d'objet modifiable
           break;
         }
         parent = node.get(PDFName.of('Parent'));
@@ -191,10 +209,11 @@ function reorderPages(doc: PDFDocument, order: number[]): void {
 }
 
 /** Nouveau document contenant seulement les pages demandées (les signets et formulaires ne sont pas repris). */
-export async function extractPages(bytes: Uint8Array, pages: number[], password?: string): Promise<Uint8Array> {
+export async function extractPages(bytes: Uint8Array, pages: number[], password?: string, expectedPages?: number): Promise<Uint8Array> {
   const src = await loadForEdit(bytes, password);
+  checkStructure(src, expectedPages);
   const wanted = normalizeSelection(pages, src.getPageCount());
-  if (wanted.length === 0) throw new Error('Aucune page sélectionnée.');
+  if (wanted.length === 0) throw new PageOpError('noSelection');
   const out = await PDFDocument.create({ updateMetadata: false });
   const copies = await out.copyPages(src, wanted);
   copies.forEach((p) => out.addPage(p));
@@ -215,17 +234,24 @@ export async function normalizeDocument(bytes: Uint8Array, password?: string): P
  * fichier. Pour un document confidentiel c'est inacceptable : on repart de la racine et on garde seulement ce qui est
  * atteignable. Les références vers une page supprimée (signets, liens) ne sont pas suivies : elles deviennent « nulles ».
  */
-export function pruneUnreachable(doc: PDFDocument): number {
+export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = []): number {
   const ctx = doc.context;
   const live = new Set<PDFRef>(doc.getPages().map((p) => p.ref));
+  // pages qui existaient avant l'opération et ont disparu : on ne les suit jamais, même si leur /Type manque
+  const dead = new Set<PDFRef>(pagesBefore.filter((r) => !live.has(r)));
   const keep = new Set<PDFRef>();
   const stack: PDFObject[] = [];
   for (const root of [ctx.trailerInfo.Root, ctx.trailerInfo.Info, ctx.trailerInfo.Encrypt]) if (root) stack.push(root);
 
-  const isPageObject = (obj: PDFObject | undefined) => {
+  const isDeadPage = (ref: PDFRef, obj: PDFObject | undefined) => {
+    if (dead.has(ref)) return true;
+    return obj instanceof PDFDict && obj.get(PDFName.of('Type')) === PDFName.of('Page') && !live.has(ref);
+  };
+  /** Annotation (lien, champ de formulaire…) posée sur une page supprimée : elle disparaît avec elle. */
+  const isOrphanAnnotation = (obj: PDFObject | undefined) => {
     if (!(obj instanceof PDFDict)) return false;
-    const type = obj.get(PDFName.of('Type'));
-    return type === PDFName.of('Page');
+    const p = obj.get(PDFName.of('P'));
+    return p instanceof PDFRef && !live.has(p) && (dead.has(p) || isDeadPage(p, ctx.lookup(p) as PDFObject | undefined));
   };
 
   while (stack.length) {
@@ -233,7 +259,8 @@ export function pruneUnreachable(doc: PDFDocument): number {
     if (obj instanceof PDFRef) {
       if (keep.has(obj)) continue;
       const target = ctx.lookup(obj);
-      if (isPageObject(target as PDFObject) && !live.has(obj)) continue; // page supprimée : on ne la suit pas
+      if (isDeadPage(obj, target as PDFObject | undefined)) continue; // page supprimée : on ne la suit pas
+      if (isOrphanAnnotation(target as PDFObject | undefined)) continue;
       keep.add(obj);
       if (target) stack.push(target as PDFObject);
     } else if (obj instanceof PDFDict) {

@@ -91,6 +91,8 @@ export const fr = {
     themeLight: 'Clair',
     themeDark: 'Sombre',
     defaultZoom: 'Zoom à l’ouverture',
+    keepVersions: 'Garder l’ancienne version avant d’enregistrer',
+    keepVersionsHint: 'La version précédente reste sur cet ordinateur, dans Cigale (Accueil → Versions précédentes), jamais envoyée ailleurs. Décochez pour ne rien conserver.',
     close: 'Fermer',
   },
   whatsNew: { title: 'Nouveautés', close: 'Fermer', added: 'Ajouté', fixed: 'Corrigé', changed: 'Modifié' },
@@ -157,6 +159,11 @@ export const fr = {
     title: 'Modification impossible',
     failed: 'Cigale n’a pas pu modifier « {name} » : {detail}\n\nLe document n’a pas été touché.',
     otherFailed: 'Impossible de lire « {name} » : {detail}',
+    codes: {
+      noSelection: 'aucune page n’est sélectionnée.',
+      keepOne: 'un document doit garder au moins une page.',
+      structure: 'la structure de ce document est inhabituelle et Cigale ne peut pas le modifier sans risque de toucher la mauvaise page. Vous pouvez toujours le lire et l’imprimer.',
+    },
   },
   confirm: {
     unsavedTitle: 'Enregistrer les modifications ?',

@@ -198,3 +198,22 @@ test('enregistrer sans accès au fichier : télécharge une copie correcte', asy
   expect(await isDirty(page)).toBe(false);
   await expect(page.locator('.tab.doc-tab.dirty')).toHaveCount(0);
 });
+
+test('annuler très vite plusieurs fois : un seul document affiché, aucun reste en mémoire', async ({ page }) => {
+  await thumb(page, 1).click();
+  await page.click('#btn-duplicate');
+  await expectPages(page, 4);
+  await page.click('#btn-rot-right');
+  await expect.poll(() => docRotations(page)).toEqual([0, 90, 0, 0]);
+  await page.click('#btn-duplicate');
+  await expectPages(page, 5);
+  // trois ⌘Z d'affilée, sans attendre
+  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('Meta+z');
+  await expectPages(page, 3);
+  expect(await docRotations(page)).toEqual([0, 0, 0]);
+  expect(await isDirty(page)).toBe(false);
+  await expect(page.locator('.doc-view')).toHaveCount(1);
+  await expect(page.locator('.left-panel .thumbs')).toHaveCount(1);
+});

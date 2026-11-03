@@ -2,8 +2,8 @@
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
 
 export type WorkerRequest =
-  | { kind: 'apply'; bytes: Uint8Array; op: PageOp; password?: string }
-  | { kind: 'extract'; bytes: Uint8Array; pages: number[]; password?: string }
+  | { kind: 'apply'; bytes: Uint8Array; op: PageOp; password?: string; expectedPages?: number }
+  | { kind: 'extract'; bytes: Uint8Array; pages: number[]; password?: string; expectedPages?: number }
   | { kind: 'inspect'; bytes: Uint8Array; password?: string }
   | { kind: 'normalize'; bytes: Uint8Array; password?: string };
 
@@ -15,10 +15,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const req = e.data;
   try {
     if (req.kind === 'apply') {
-      const result = await applyOp(req.bytes, req.op, req.password);
+      const result = await applyOp(req.bytes, req.op, req.password, req.expectedPages);
       (self as unknown as Worker).postMessage({ ok: true, result } satisfies WorkerResponse, [result.bytes.buffer as ArrayBuffer]);
     } else if (req.kind === 'extract') {
-      const bytes = await extractPages(req.bytes, req.pages, req.password);
+      const bytes = await extractPages(req.bytes, req.pages, req.password, req.expectedPages);
       (self as unknown as Worker).postMessage({ ok: true, result: bytes } satisfies WorkerResponse, [bytes.buffer as ArrayBuffer]);
     } else if (req.kind === 'normalize') {
       const bytes = await normalizeDocument(req.bytes, req.password);
