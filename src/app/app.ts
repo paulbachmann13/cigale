@@ -23,6 +23,8 @@ import { printDocument } from './print';
 import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, quitApp, takeStartupOpens, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
+import { applyRedaction } from './redact';
+import { openCropDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
 import { type Session, isDirty } from './session';
 import { loadSettings } from './settings';
 
@@ -80,6 +82,7 @@ export class App {
   private findTimer: number | undefined;
   private closing = false;
   private formDismissed = new Set<number>();
+  private redactApplyBtn = h('button', { class: 'primary', id: 'redact-apply', type: 'button', hidden: true, onclick: () => void this.applyRedactionNow() }, t.docTools.redactApply);
 
   constructor(private root: HTMLElement) {
     this.homeEl = buildHome(this);
@@ -192,6 +195,7 @@ export class App {
       h('span', { class: 'sep' }),
       this.iconButton('btn-organize', t.pages.organize, 'grid', () => this.toggleOrganize()),
       this.iconButton('btn-comment', t.annot.mode, 'comment', () => this.toggleCommentMode()),
+      this.iconButton('btn-tools', t.docTools.menu, 'tools', () => this.openToolsMenu()),
       this.thumbSize,
       this.selectionInfo,
       h('span', { class: 'spacer' }),
@@ -267,6 +271,31 @@ export class App {
     this.fileButton.setAttribute('aria-expanded', 'true');
     const menu = showMenu(items, this.fileButton, () => this.fileButton.setAttribute('aria-expanded', 'false'));
     menu.id = 'file-menu-list';
+  }
+
+  private openToolsMenu() {
+    const s = this.active;
+    if (!s) return;
+    const anchor = this.workspace.querySelector<HTMLElement>('#btn-tools')!;
+    showMenu(
+      [
+        { id: 'tool-watermark', label: t.docTools.watermark, run: () => openWatermarkDialog(s, this.editing) },
+        { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: () => openHeaderFooterDialog(s, this.editing) },
+        { id: 'tool-crop', label: t.docTools.crop, run: () => openCropDialog(s, this.editing) },
+        { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
+      ],
+      anchor,
+    );
+  }
+
+  /** Caviardage : on marque les zones (outil « redact »), puis « Appliquer le caviardage » les noircit pour de bon. */
+  private startRedaction() {
+    this.setAnnotTool('redact');
+  }
+
+  private async applyRedactionNow() {
+    const s = this.active;
+    if (s) await applyRedaction(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading());
   }
 
   private toolsHost() {
@@ -922,6 +951,7 @@ export class App {
     };
     this.annotBar.append(
       mk('select', 'pointer'),
+      mk('redact', 'redact'),
       h('span', { class: 'sep' }),
       mk('highlight', 'highlight'),
       mk('underline', 'underline'),
@@ -939,6 +969,8 @@ export class App {
       ...this.swatches,
       this.widthSelect,
       this.sizeSelect,
+      h('span', { class: 'spacer' }),
+      this.redactApplyBtn,
     );
   }
 
@@ -997,6 +1029,7 @@ export class App {
     const n = list.filter((a) => !a.replyTo).length;
     this.commentsBadge.textContent = String(n);
     this.commentsBadge.hidden = n === 0;
+    this.redactApplyBtn.hidden = !list.some((a) => a.kind === 'redact');
   }
 
   private setColor(rgb: Rgb) {

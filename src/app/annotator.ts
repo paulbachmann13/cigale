@@ -7,7 +7,7 @@ import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
 import { h } from './dom';
 
-export type Tool = 'select' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
@@ -35,9 +35,9 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['redact', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
-const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp']);
+const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact']);
 
 export class Annotator {
   private tool: Tool | null = null;
@@ -238,6 +238,7 @@ export class Annotator {
         const [x2, y2] = end;
         const common = { stroke: color, 'stroke-width': sw, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
         if (tool === 'ink') el('polyline', { ...common, points: points.map((p) => p.join(',')).join(' ') });
+        else if (tool === 'redact') el('rect', { stroke: '#d9231a', 'stroke-width': 2, fill: 'rgba(217,35,26,0.18)', 'stroke-dasharray': '5 3', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'rect') el('rect', { ...common, x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'ellipse') el('ellipse', { ...common, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, rx: Math.abs(x2 - x1) / 2, ry: Math.abs(y2 - y1) / 2 });
         else if (tool === 'line' || tool === 'arrow') el('line', { ...common, x1, y1, x2, y2 });
@@ -274,6 +275,10 @@ export class Annotator {
       const pts = points.map(pdf);
       if (pts.length < 2) pts.push([pts[0][0] + 0.1, pts[0][1]]);
       void this.host.add([{ ...base, kind: 'ink', strokes: [pts], rect: normalizeRect([pts[0][0], pts[0][1], pts[0][0], pts[0][1]]) }]);
+    } else if (tool === 'redact' && dragged) {
+      const [p, q] = [pdf(a), pdf(b)];
+      const rect = normalizeRect([p[0], p[1], q[0], q[1]]);
+      void this.host.add([{ ...base, kind: 'redact', color: [0.85, 0.1, 0.1], fill: [0, 0, 0], width: 1.5, rect, quads: [rect] }]);
     } else if ((tool === 'rect' || tool === 'ellipse') && dragged) {
       const [p, q] = [pdf(a), pdf(b)];
       void this.host.add([{ ...base, kind: tool, rect: normalizeRect([p[0], p[1], q[0], q[1]]) }]);

@@ -8,7 +8,10 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
-import { Cancelled, addAnnotationsOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
+import type { CropMargins } from '../pdf/crop-ops';
+import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
+import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
+import { Cancelled, addAnnotationsOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -201,6 +204,25 @@ export class Editing {
     return fn(s.selection);
   }
 
+  // ───────────── outils de page : filigrane, en-têtes, recadrage, caviardage ─────────────
+
+  watermark(s: Session, options: WatermarkOptions): Promise<boolean> {
+    return this.annotOp(s, t.docTools.labels.watermark, () => watermarkOp(s.history.current, options, s.password, s.view.pageCount).promise);
+  }
+
+  headerFooter(s: Session, options: HeaderFooterOptions): Promise<boolean> {
+    return this.annotOp(s, t.docTools.labels.headerFooter, () => headerFooterOp(s.history.current, options, s.password, s.view.pageCount).promise);
+  }
+
+  crop(s: Session, margins: CropMargins, pages?: number[]): Promise<boolean> {
+    return this.annotOp(s, t.docTools.labels.crop, async () => (await cropOp(s.history.current, margins, pages, s.password, s.view.pageCount).promise).bytes);
+  }
+
+  /** Applique le caviardage : les pages (déjà noircies, en images) remplacent les pages d'origine. */
+  redact(s: Session, pages: RedactedPage[], options: RedactOptions): Promise<boolean> {
+    return this.annotOp(s, t.docTools.labels.redact, async () => (await redactOp(s.history.current, pages, options, s.password, s.view.pageCount).promise).bytes);
+  }
+
   // ───────────── formulaires ─────────────
 
   /** Écrit dans le document les champs remplis à l'écran (une étape annuler/rétablir). */
@@ -253,14 +275,14 @@ export class Editing {
   }
 
   /** Même chemin que les pages : file d'attente, document adopté seulement s'il s'ouvre, historique, aucune écriture disque. */
-  private annotOp(s: Session, label: keyof typeof t.annot.labels, work: () => Promise<Uint8Array>): Promise<boolean> {
+  private annotOp(s: Session, label: keyof typeof t.annot.labels | string, work: () => Promise<Uint8Array>): Promise<boolean> {
     return this.serial(async () => {
       if (!(await this.flushFormInner(s))) return false;
       if (!(await this.confirmRisks(s))) return false;
       try {
         const bytes = await work();
         await this.host.reload(s, bytes, s.selection, s.view.pageCount);
-        s.history.push(bytes, t.annot.labels[label]);
+        s.history.push(bytes, (t.annot.labels as Record<string, string>)[label] ?? label);
         this.host.refresh(s);
         return true;
       } catch (err) {

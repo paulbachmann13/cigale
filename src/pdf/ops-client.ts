@@ -5,7 +5,10 @@
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { Range } from '../data/page-ranges';
 import type { AddResult } from './annot-ops';
+import type { CropMargins, CropResult } from './crop-ops';
 import type { FillResult, FormValue } from './form-ops';
+import type { RedactOptions, RedactResult, RedactedPage } from './redact-ops';
+import type { HeaderFooterOptions, WatermarkOptions } from './stamp-ops';
 import type { MergeOptions, MergeSource, Part } from './doc-ops';
 import type { MergeResult, WorkerRequest, WorkerResponse } from './ops.worker';
 import type { Inspection, OpResult, PageOp } from './page-ops';
@@ -70,3 +73,7 @@ export const addAnnotationsOp = (bytes: Uint8Array, drafts: AnnotDraft[], passwo
 export const updateAnnotationOp = (bytes: Uint8Array, id: string, patch: AnnotPatch, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdate', bytes, id, patch, password, expectedPages });
 export const deleteAnnotationsOp = (bytes: Uint8Array, ids: string[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotDelete', bytes, ids, password, expectedPages });
 export const fillFormOp = (bytes: Uint8Array, values: FormValue[], password: string | undefined, expectedPages: number) => run<FillResult>({ kind: 'formFill', bytes, values, password, expectedPages });
+export const watermarkOp = (bytes: Uint8Array, options: WatermarkOptions, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'watermark', bytes, options, password, expectedPages });
+export const headerFooterOp = (bytes: Uint8Array, options: HeaderFooterOptions, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'headerFooter', bytes, options, password, expectedPages });
+export const cropOp = (bytes: Uint8Array, margins: CropMargins, pages: number[] | undefined, password: string | undefined, expectedPages: number) => run<CropResult>({ kind: 'crop', bytes, margins, pages, password, expectedPages });
+export const redactOp = (bytes: Uint8Array, pages: RedactedPage[], options: RedactOptions, password: string | undefined, expectedPages: number) => run<RedactResult>({ kind: 'redact', bytes, pages, options, password, expectedPages });

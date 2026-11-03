@@ -72,6 +72,7 @@ const SUBTYPES: Record<string, AnnotKind> = {
   Circle: 'ellipse',
   Line: 'line',
   Stamp: 'stamp',
+  Redact: 'redact',
 };
 /** Ces sous-types ne sont pas des commentaires : liens, champs de formulaire, bulles. */
 const HIDDEN = new Set(['Link', 'Widget', 'Popup', 'Screen', 'Movie', 'Sound', 'TrapNet', 'PrinterMark', 'Watermark']);
@@ -288,6 +289,16 @@ function buildAppearance(a: Pick<Annot, 'kind' | 'rect' | 'color' | 'fill' | 'op
       const fill = a.fill ? `${colorOp(a.fill, false)} ${f(x1)} ${f(y1)} ${f(x2 - x1)} ${f(y2 - y1)} re f\n` : '';
       return { content: `q ${f(x1)} ${f(y1)} ${f(x2 - x1)} ${f(y2 - y1)} re W n\n${fill}${border}${body}\nQ`, bbox: a.rect, resources: { Font: { Helv: fonts.helv.ref } } };
     }
+    case 'redact': {
+      // marque de caviardage : cadre rouge et voile rouge léger (le noir n'est appliqué que par « Appliquer le caviardage »)
+      const w = x2 - x1;
+      const h = y2 - y1;
+      return {
+        content: `/GSF gs 0.85 0.1 0.1 rg ${f(x1)} ${f(y1)} ${f(w)} ${f(h)} re f\n/GS gs 0.85 0.1 0.1 RG 1.5 w ${f(x1 + 0.75)} ${f(y1 + 0.75)} ${f(w - 1.5)} ${f(h - 1.5)} re S`,
+        bbox: a.rect,
+        resources: { ExtGState: { GS: { Type: 'ExtGState', CA: 1, ca: 1 }, GSF: { Type: 'ExtGState', CA: 0.2, ca: 0.2 } } },
+      };
+    }
     case 'note': {
       // petite note jaune au coin replié
       const s = Math.min(x2 - x1, y2 - y1);
@@ -334,6 +345,7 @@ const SUBTYPE_OF: Record<AnnotKind, string> = {
   line: 'Line',
   arrow: 'Line',
   stamp: 'Stamp',
+  redact: 'Redact',
   other: '',
 };
 

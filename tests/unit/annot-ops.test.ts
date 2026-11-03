@@ -176,3 +176,15 @@ describe('annotations : écriture et relecture', () => {
     expect(mergeLines([[10, 100, 50, 112], [52, 101, 90, 113], [10, 130, 60, 142]])).toEqual([[10, 100, 90, 113], [10, 130, 60, 142]]);
   });
 });
+
+describe('zones à caviarder (marques standard /Redact)', () => {
+  it('s’écrit comme une vraie annotation Redact et se relit', async () => {
+    const { bytes } = await addAnnotations(await makePdf(1), [draft({ kind: 'redact', rect: [50, 600, 250, 640], fill: [0, 0, 0], quads: [[50, 600, 250, 640]] })], undefined, 1);
+    const doc = await PDFDocument.load(bytes);
+    const d = doc.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
+    expect(d.get(PDFName.of('Subtype'))).toBe(PDFName.of('Redact'));
+    expect(d.lookup(PDFName.of('AP'), PDFDict).get(PDFName.of('N'))).toBeDefined();
+    const [a] = await listAnnotations(bytes);
+    expect(a).toMatchObject({ kind: 'redact', rect: [50, 600, 250, 640] });
+  });
+});
