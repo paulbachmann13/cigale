@@ -42,6 +42,7 @@ export class DocView {
       textLayerMode: 1,
       annotationMode: 2, // ENABLE_FORMS : les annotations s'affichent ; l'édition vient plus tard
       maxCanvasPixels: 2 ** 25,
+      imageResourcesPath: `${import.meta.env.BASE_URL}pdfjs/images/`,
     });
     this.linkService.setViewer(this.viewer);
 

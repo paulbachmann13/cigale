@@ -30,10 +30,10 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Plein écran | Oui | |
 | Aller à la page | Oui | |
 | Panneau Miniatures, Signets | Oui | |
-| Panneau Commentaires | Non | Étape 4 |
+| Panneau Commentaires | Oui | Par page, filtre, réponses ; pas de statuts de révision |
 | Rechercher (⌘F), suivant/précédent | Oui | Pas de recherche multi-fichiers |
 | Sélection et copie de texte | Oui | |
-| Outil Main / Sélection | Non | Étape 4 |
+| Outil Main / Sélection | Partiel | Sélection de texte ; outil « Sélectionner » dans Commenter |
 | Mode sombre | Oui | |
 | Lecture à voix haute | Non | Hors périmètre |
 
@@ -50,9 +50,9 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 
 | Commande Acrobat | Cigale | Note |
 |---|---|---|
-| Surligner, souligner, barrer, zone de texte, note, dessin, formes, tampons, gomme | Non | Étape 4 |
-| Afficher les annotations existantes | Oui | Lecture seule |
-| Liste des commentaires, réponses | Non | Étape 4 |
+| Surligner, souligner, barrer, zone de texte, note, dessin, formes (rectangle, ellipse, ligne, flèche), tampons | Oui | Gomme, polygone, nuage : non |
+| Afficher les annotations existantes | Oui | Modifiables dans Commenter |
+| Liste des commentaires, réponses | Oui | |
 
 ## Autres outils
 

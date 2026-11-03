@@ -15,6 +15,19 @@ const PATHS = {
   open: ['M3 7h6l2 2h10v10H3z'],
   search: ['M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z', 'M15.5 15.5L20 20'],
   panel: ['M4 5h16v14H4z', 'M9 5v14'],
+  pointer: ['M6 3l12 9-5.5 1.2L15 19l-2.5 1-2.5-5.8L6 17z'],
+  highlight: ['M9 14l7-7 3 3-7 7H9z', 'M4 20h8'],
+  underline: ['M7 4v7a5 5 0 0 0 10 0V4', 'M5 20h14'],
+  strikeout: ['M8 7a4 3 0 0 1 8 0', 'M5 12h14', 'M8 17a4 3 0 0 0 8 0'],
+  note: ['M4 4h16v12H10l-4 4v-4H4z'],
+  text: ['M5 5h14', 'M12 5v14', 'M9 19h6'],
+  pen: ['M4 20l1-4L16 5l3 3L8 19z', 'M14 7l3 3'],
+  rect: ['M4 6h16v12H4z'],
+  ellipse: ['M4 12a8 6 0 1 0 16 0a8 6 0 1 0-16 0'],
+  line: ['M5 19L19 5'],
+  arrow: ['M5 19L19 5', 'M10 5h9v9'],
+  stamp: ['M8 4h8v7l3 3v2H5v-2l3-3z', 'M5 20h14'],
+  comment: ['M4 4h16v12H9l-5 4z', 'M8 9h8', 'M8 12h5'],
 } as const;
 
 export type IconName = keyof typeof PATHS;

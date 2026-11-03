@@ -65,7 +65,7 @@ button.tool.text { border-color: var(--border); }
 .toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--border); flex: none; overflow-x: auto; }
 .toolbar > * { flex: none; }
 .body { flex: 1; display: flex; min-height: 0; }
-.left-panel { width: 190px; flex: none; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
+.left-panel { width: 224px; flex: none; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
 .left-panel.collapsed { display: none; }
 .panel-tabs { display: flex; border-bottom: 1px solid var(--border); }
 .panel-tabs button { flex: 1; background: none; border: 0; padding: 8px 4px; color: var(--muted); border-bottom: 2px solid transparent; }
@@ -204,3 +204,46 @@ button.mini:disabled { opacity: 0.35; }
 .form-row input, dialog input[type='text'] { padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
 .loading-box progress { width: 100%; }
 #page-count { white-space: nowrap; }
+
+/* Commentaires */
+.annot-toolbar { border-top: 0; flex-wrap: nowrap; }
+.annot-toolbar select { min-width: 70px; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; flex: none; }
+.swatch.on { box-shadow: 0 0 0 2px var(--accent); }
+.annot-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.annot-layer.capture { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.annot-hit { position: absolute; border: 1px dashed transparent; pointer-events: auto; cursor: move; touch-action: none; box-sizing: border-box; }
+.annot-hit:hover { border-color: var(--accent); }
+.annot-hit.selected { border: 2px solid var(--accent); background: rgba(180, 83, 42, 0.08); }
+.annot-handle { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid var(--accent); box-sizing: border-box; pointer-events: auto; }
+.annot-handle.nw { left: -6px; top: -6px; cursor: nwse-resize; } .annot-handle.ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.annot-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; } .annot-handle.se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.annot-preview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.annotating.annot-markup .textLayer { cursor: text; }
+.annot-pop { position: fixed; z-index: 3500; width: 300px; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgb(0 0 0 / 22%); display: flex; flex-direction: column; gap: 8px; }
+.annot-pop-actions { display: flex; align-items: center; gap: 8px; }
+.annot-pop button:not(.primary):not(.link) { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+.annot-pop button.primary { padding: 6px 12px; }
+textarea.annot-text { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: inherit; font: inherit; resize: vertical; box-sizing: border-box; }
+.comments { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.comments-head { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.comments-head input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.comments-count { color: var(--muted); font-size: 12px; width: 100%; }
+.comments-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.comments-page { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.comment { border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; background: var(--panel); }
+.comment.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.comment-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.comment-author { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comment-date { color: var(--muted); white-space: nowrap; }
+.comment-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-text.muted { color: var(--muted); font-style: italic; }
+.comment-foreign { font-size: 11px; color: var(--muted); }
+.comment-reply { margin-left: 12px; padding-left: 8px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.mini-tool { height: 24px !important; min-width: 24px !important; padding: 0 4px !important; }
+.panel-tabs button { font-size: 12px; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+
+.annotationLayer .textAnnotation img { opacity: 0; }
+.panel-badge { margin-left: 4px; font-size: 11px; background: var(--accent); color: var(--accent-text); border-radius: 9px; padding: 0 6px; }
+/* Pendant « Commenter », les zones cliquables de pdf.js (liens, commentaires déjà posés) ne doivent pas bloquer la sélection de texte */
+.annotating .annotationLayer section, .annotating .annotationLayer .popup { pointer-events: none !important; }

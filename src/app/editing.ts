@@ -7,7 +7,8 @@
  */
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
-import { Cancelled, applyOperation, extractOperation, inspectDocument } from '../pdf/ops-client';
+import type { AnnotDraft, AnnotPatch } from '../data/annotations';
+import { Cancelled, addAnnotationsOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -28,6 +29,9 @@ export interface EditHost {
   idle(): void;
   setStatus(text: string): void;
   rememberOpened(s: Session): void;
+  /** Sélectionner ce commentaire dès que la liste est relue. */
+  pendingSelect(s: Session, id: string | null): void;
+  author(): string;
 }
 
 export class Editing {
@@ -187,6 +191,46 @@ export class Editing {
       return false;
     }
     return fn(s.selection);
+  }
+
+  // ───────────── commentaires ─────────────
+
+  addAnnots(s: Session, drafts: AnnotDraft[], label: keyof typeof t.annot.labels = 'add'): Promise<boolean> {
+    return this.annotOp(s, label, async () => {
+      const h = addAnnotationsOp(s.history.current, drafts, s.password, s.view.pageCount, this.host.author());
+      const r = await h.promise;
+      this.host.pendingSelect(s, r.ids[r.ids.length - 1] ?? null);
+      return r.bytes;
+    });
+  }
+
+  updateAnnot(s: Session, id: string, patch: AnnotPatch, label: keyof typeof t.annot.labels = 'edit'): Promise<boolean> {
+    return this.annotOp(s, label, async () => {
+      this.host.pendingSelect(s, id);
+      return updateAnnotationOp(s.history.current, id, patch, s.password, s.view.pageCount).promise;
+    });
+  }
+
+  removeAnnots(s: Session, ids: string[]): Promise<boolean> {
+    return this.annotOp(s, 'delete', () => deleteAnnotationsOp(s.history.current, ids, s.password, s.view.pageCount).promise);
+  }
+
+  /** Même chemin que les pages : file d'attente, document adopté seulement s'il s'ouvre, historique, aucune écriture disque. */
+  private annotOp(s: Session, label: keyof typeof t.annot.labels, work: () => Promise<Uint8Array>): Promise<boolean> {
+    return this.serial(async () => {
+      if (!(await this.confirmRisks(s))) return false;
+      try {
+        const bytes = await work();
+        await this.host.reload(s, bytes, s.selection, s.view.pageCount);
+        s.history.push(bytes, t.annot.labels[label]);
+        this.host.refresh(s);
+        return true;
+      } catch (err) {
+        this.host.pendingSelect(s, null);
+        await showMessage(t.editErrors.title, fmt(t.annot.failed, { name: s.name, detail: describe(err) }));
+        return false;
+      }
+    });
   }
 
   // ───────────── annuler / rétablir ─────────────

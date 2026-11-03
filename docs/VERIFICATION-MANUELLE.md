@@ -35,6 +35,16 @@ Avec `simple-3p.pdf`, `signets.pdf`, `tailles-mixtes.pdf` et `chiffre.pdf` (mot 
 4. Diviser `signets.pdf` par signets de premier niveau (3 parties), puis en .zip : décompresser avec l'Archive Utility du Mac ; les noms accentués sont corrects et chaque PDF s'ouvre dans Aperçu/Acrobat.
 5. Un vrai scan (plusieurs pages d'images) : combiner 3 scans, vérifier netteté et poids du fichier (pas de recompression des images : le poids doit être voisin de la somme des originaux).
 
+## Étape 4 (commentaires) — Aperçu ET Acrobat
+
+Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un souligné, un barré, une note (« Test note »), une zone de texte avec « Éléphant à l'été — vérifié », un dessin à main levée, un rectangle rempli, une ellipse, une flèche, un tampon « Confidentiel », une réponse à la note. Enregistrer sous « commentaires.pdf », puis :
+
+1. **Aperçu** : tous les commentaires s'affichent, mêmes couleurs ; le surlignage est translucide (le texte reste lisible) ; la zone de texte montre les accents ; le panneau d'annotations d'Aperçu liste les commentaires.
+2. **Acrobat** : mêmes constats ; panneau Commentaires : auteur « Utilisateur » (ou votre nom réglé dans Cigale), date juste ; la note s'ouvre en bulle avec son texte ; la réponse apparaît **dans le fil** de la note ; on peut sélectionner et déplacer le rectangle, modifier la zone de texte.
+3. Dans Acrobat, ajouter un surlignage et un commentaire, enregistrer, rouvrir dans Cigale : ils sont listés (« Créé dans un autre logiciel »), supprimables, et le reste est intact.
+4. Impression en PDF depuis Aperçu : les commentaires sont imprimés (drapeau « imprimer » posé).
+5. Avec un scan réel : rectangle et dessin au stylet (iPad / Apple Pencil) fonctionnent ; le tracé suit le doigt sans retard sensible.
+
 ## Étapes suivantes (à compléter au fur et à mesure)
 
 - **Étapes 2 et 3** : pour chaque PDF produit (réorganisé, extrait, fusionné, découpé) — s'ouvre sans message d'erreur dans Aperçu **et** Acrobat ; nombre et ordre des pages ; signets et liens conservés ; Acrobat ne propose pas d'« enregistrer les modifications » à la fermeture sans raison.

@@ -37,7 +37,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Architecture (voir docs/ARCHITECTURE.md)
 
-`src/data/` logique pure testée (zoom, ordre des pages, historique…) · `src/pdf/` pdf.js (engine, DocView) et **modification** (`page-ops.ts` et `doc-ops.ts` (fusion, découpe, signets) purs + `ops.worker.ts`/`ops-client.ts`) · `src/app/` interface (App, Editing = opérations + enregistrement, `tools.ts` = boîtes Combiner/Diviser, PageList = miniatures sélectionnables, home, menus, dialogues) · `src/storage/` récents et versions précédentes · `scripts/` fixtures et ressources pdf.js.
+`src/data/` logique pure testée (zoom, ordre des pages, historique…) · `src/pdf/` pdf.js (engine, DocView) et **modification** (`page-ops.ts`, `doc-ops.ts` (fusion, découpe, signets) et `annot-ops.ts` (annotations + apparences) purs + `ops.worker.ts`/`ops-client.ts`) · `src/app/` interface (App, Editing = opérations + enregistrement, `tools.ts` = boîtes Combiner/Diviser, `annotator.ts` = calque et outils de commentaire, `comments.ts` = panneau Commentaires, PageList = miniatures sélectionnables, home, menus, dialogues) · `src/storage/` récents et versions précédentes · `scripts/` fixtures et ressources pdf.js.
 
 ## Pièges connus
 
@@ -51,13 +51,15 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Feuille de route
 
-1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri. Détail dans `docs/PLAN.md`.
+1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri. Détail dans `docs/PLAN.md`.
 
 - **Modifier un PDF** : toute opération passe par `Editing.run` (worker, file d'attente, adoption seulement si le résultat s'ouvre avec le bon nombre de pages). Ne jamais appeler `removePage`/`insertPage` pour réordonner (arbre cassé) : voir `reorderPages`. Toujours `updateMetadata: false`. Après suppression, `pruneUnreachable` (sinon le contenu reste dans le fichier). Pas de `.bak` voisin dans un navigateur : `storage/backups.ts`.
 - **Interface = famille Grillon** (barre à 36 px, bouton « Fichier » plein couleur, accueil à colonne colorée) ; couleur propre : terracotta.
 - Tests e2e de page : `withoutFilePickers` force le repli Safari/Firefox ; l'enregistrement sur place se teste avec des `FileSystemFileHandle` OPFS (`tests/e2e/enregistrement.spec.ts`). `qpdf` est utilisé par `tests/unit/qpdf.test.ts` s'il est installé (`brew install qpdf`).
 
 - **Fusion/découpe** : toute opération qui crée un document passe par le worker (`mergeOperation`, `splitOperation`, `zipOperation`) et s'ouvre en onglet non enregistré (`openBytes(..., {unsaved: true})`). Appeler `pruneUnreachable` sur tout document créé par copie de pages. Les tests e2e fournissent les fichiers par `filechooser` (`withoutFilePickers`).
+
+- **Commentaires** : toute annotation passe par `Editing.addAnnots/updateAnnot/removeAnnots` (jamais d'écriture directe) ; `annot-ops.ts` est pur et testé (`tests/unit/annot-ops.test.ts`, `qpdf`). Les zones cliquables (`.annot-hit`) n'existent que pour l'outil « Sélectionner ». pdf.js intercepte les clics avec ses propres sections d'annotation : voir la règle CSS `.annotating .annotationLayer section`. Après `reload`, `attachAnnotations` recrée l'`Annotator` et relit la liste (`listAnnotationsOp`). Les tests e2e vérifient le **rendu** par pixels (`countPixels`).
 
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)
 

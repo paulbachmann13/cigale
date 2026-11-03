@@ -1,5 +1,8 @@
 import type { History } from '../data/history';
 import type { DocView } from '../pdf/viewer';
+import type { Annot } from '../data/annotations';
+import type { Annotator } from './annotator';
+import type { CommentsPanel } from './comments';
 import type { PageList } from './pagelist';
 
 /**
@@ -23,4 +26,10 @@ export interface Session {
   grid: PageList | null;
   outline: HTMLElement;
   tab: HTMLElement;
+  /** Commentaires du document (relus après chaque modification). */
+  annots: Annot[];
+  annotator: Annotator;
+  comments: CommentsPanel;
+  /** Commentaire à sélectionner dès que la liste est relue (après un ajout). */
+  pendingSelect: string | null;
 }

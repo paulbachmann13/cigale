@@ -1,10 +1,14 @@
+import { COLORS, type Annot, STAMPS, type Rgb, rgbToCss } from '../data/annotations';
 import { History } from '../data/history';
 import { classifyPdfError, hasPdfHeader } from '../data/pdf-files';
 import { formatZoom, stepZoom } from '../data/zoom';
 import { fmt, plural, t } from '../i18n/fr';
 import { loadPdf } from '../pdf/engine';
+import { listAnnotationsOp } from '../pdf/ops-client';
 import { DocView, type ViewMode } from '../pdf/viewer';
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
+import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
+import { CommentsPanel } from './comments';
 import { askPassword, askUnsaved, showMessage } from './dialogs';
 import { clear, h, toast } from './dom';
 import { Editing } from './editing';
@@ -30,7 +34,17 @@ export class App {
   readonly sessions: Session[] = [];
   private active: Session | null = null;
   private nextId = 1;
-  private panelTab: 'thumbnails' | 'bookmarks' = 'thumbnails';
+  private panelTab: 'thumbnails' | 'bookmarks' | 'comments' = 'thumbnails';
+  private annotTool: Tool | null = null;
+  private annotStyle: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved' };
+  private annotBar = h('div', { class: 'toolbar annot-toolbar', id: 'annot-toolbar', role: 'toolbar', 'aria-label': t.annot.toolbar, hidden: true });
+  private toolButtons: Record<string, HTMLButtonElement> = {};
+  private widthSelect = h('select', { id: 'annot-width', 'aria-label': t.annot.width });
+  private sizeSelect = h('select', { id: 'annot-size', 'aria-label': t.annot.fontSize });
+  private swatches: HTMLButtonElement[] = [];
+  private toolColors: Partial<Record<Tool, Rgb>> = { highlight: COLORS[0].rgb, underline: COLORS[3].rgb, strikeout: COLORS[3].rgb };
+  private commentsBadge = h('span', { class: 'panel-badge', id: 'comments-badge', hidden: true });
+  private commentsTabBtn = h('button', { id: 'panel-tab-comments', role: 'tab' }, t.annot.panel);
   private fileInput = h('input', { type: 'file', accept: 'application/pdf,.pdf', multiple: true, id: 'file-input', hidden: true });
   private editing: Editing;
 
@@ -69,6 +83,8 @@ export class App {
       idle: () => this.hideLoading(),
       setStatus: (text) => this.setStatus(text, ''),
       rememberOpened: (s) => void rememberFile(s.name, s.history.current.length, s.handle).then(() => this.refreshHome()),
+      pendingSelect: (s, id) => (s.pendingSelect = id),
+      author: () => loadSettings().author || t.annot.defaultAuthor,
     });
     this.fileInput.addEventListener('change', () => {
       const files = Array.from(this.fileInput.files ?? []).map((file) => ({ file }));
@@ -166,6 +182,7 @@ export class App {
       this.editButton('btn-extract', t.pages.extract, 'extract', () => void this.withActive((s) => this.editing.extract(s))),
       h('span', { class: 'sep' }),
       this.iconButton('btn-organize', t.pages.organize, 'grid', () => this.toggleOrganize()),
+      this.iconButton('btn-comment', t.annot.mode, 'comment', () => this.toggleCommentMode()),
       this.thumbSize,
       this.selectionInfo,
       h('span', { class: 'spacer' }),
@@ -173,6 +190,7 @@ export class App {
       this.iconButton('btn-fullscreen', t.toolbar.fullscreen, '⤢', () => this.toggleFullscreen()),
     );
     this.editButtons['btn-organize'] = toolbar.querySelector<HTMLButtonElement>('#btn-organize')!;
+    this.buildAnnotBar();
     this.thumbSize.hidden = true;
 
     // volet gauche : miniatures / signets
@@ -181,7 +199,10 @@ export class App {
       { class: 'panel-tabs', role: 'tablist' },
       h('button', { id: 'panel-tab-thumbnails', role: 'tab', onclick: () => this.setPanelTab('thumbnails') }, t.panels.thumbnails),
       h('button', { id: 'panel-tab-bookmarks', role: 'tab', onclick: () => this.setPanelTab('bookmarks') }, t.panels.bookmarks),
+      this.commentsTabBtn,
     );
+    this.commentsTabBtn.append(this.commentsBadge);
+    this.commentsTabBtn.onclick = () => this.setPanelTab('comments');
     this.leftPanel.append(panelTabs, this.panelBody);
 
     // barre de recherche
@@ -210,7 +231,7 @@ export class App {
     );
 
     const center = h('div', { class: 'center' }, this.findBar, this.docsEl);
-    this.workspace.append(toolbar, h('div', { class: 'body' }, this.leftPanel, center));
+    this.workspace.append(toolbar, this.annotBar, h('div', { class: 'body' }, this.leftPanel, center));
 
     this.root.append(topbar, this.homeEl, this.workspace, this.fileInput, this.loadingEl);
     this.setPanelTab('thumbnails');
@@ -340,6 +361,9 @@ export class App {
     } else if (mod && key === 'y' && this.active && !typing && !this.workspace.hidden) {
       e.preventDefault();
       void this.redo();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active?.annotator.selection && !typing && !this.workspace.hidden && !target.closest('.thumbs')) {
+      e.preventDefault();
+      void this.editing.removeAnnots(this.active, [this.active.annotator.selection.id]);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active && !typing && !this.workspace.hidden && (target.closest('.thumbs') || this.active.organizing)) {
       e.preventDefault();
       void this.editing.remove(this.active);
@@ -369,6 +393,9 @@ export class App {
       view.setZoom('page-width');
     } else if (e.key === 'Escape' && !this.findBar.hidden) {
       this.closeFind();
+    } else if (e.key === 'Escape' && this.annotTool && this.active) {
+      if (this.annotTool === 'select') this.active.annotator.select(null);
+      else this.setAnnotTool('select');
     } else if (view && !typing && !mod && !this.workspace.hidden && !target.closest('.thumbs')) {
       // Navigation en mode « page par page » : le défilement natif ne change pas de page.
       if (view.isPagedMode) {
@@ -539,18 +566,22 @@ export class App {
       grid: null,
       outline,
       tab,
+      annots: [],
+      pendingSelect: null,
     } as unknown as Session;
+    session.comments = new CommentsPanel(this.commentsHost(session));
     session.thumbs = this.makeList(session, 'list', pdf, PANEL_THUMB);
     this.sessions.push(session);
     this.tabsEl.append(tab);
     this.bindView(session);
+    this.attachAnnotations(session, bytes);
     this.activate(id);
   }
 
   /** Remplace le contenu affiché par de nouveaux octets (après une opération, annuler ou rétablir). */
   private async reload(s: Session, bytes: Uint8Array, selection: number[], expectedPages?: number): Promise<void> {
-    const old = { view: s.view, thumbs: s.thumbs, grid: s.grid };
-    const state = { page: old.view.page, zoom: old.view.scaleValue, mode: old.view.viewMode, rotation: old.view.viewRotation };
+    const old = { view: s.view, thumbs: s.thumbs, grid: s.grid, annotator: s.annotator };
+    const state = { page: old.view.page, zoom: old.view.scaleValue, mode: old.view.viewMode, rotation: old.view.viewRotation, top: old.view.container.scrollTop, left: old.view.container.scrollLeft };
     const handle = loadPdf(bytes, { password: async () => s.password ?? null });
     const pdf = await handle.promise;
     if (expectedPages !== undefined && pdf.numPages !== expectedPages) {
@@ -563,6 +594,9 @@ export class App {
     if (state.mode !== 'continuous') view.setViewMode(state.mode);
     if (state.rotation) view.setRotation(state.rotation);
     view.page = Math.min(state.page, view.pageCount);
+    // même position de défilement qu'avant (le zoom est le même, donc la mise en page aussi) : on reste là où on travaillait
+    view.container.scrollTop = state.top;
+    view.container.scrollLeft = state.left;
     s.view = view;
     s.selection = selection.filter((i) => i < view.pageCount);
     s.thumbs = this.makeList(s, 'list', pdf, PANEL_THUMB);
@@ -571,6 +605,8 @@ export class App {
     if (s.organizing) this.ensureGrid(s, pdf);
     s.outline = await buildOutline(pdf, view.linkService);
     this.bindView(s);
+    old.annotator?.destroy?.();
+    this.attachAnnotations(s, bytes);
     old.thumbs.destroy();
     old.grid?.destroy();
     old.grid?.el.remove();
@@ -675,6 +711,8 @@ export class App {
     this.updatePageUi(s);
     this.updateZoomUi(s);
     this.viewSelect.value = s.view.viewMode;
+    this.setBadge(s.annots);
+    this.syncStyleUi();
     this.showCurrentCentre(s);
     this.refreshState(s);
     s.view.viewer.update();
@@ -717,6 +755,7 @@ export class App {
     const at = this.sessions.indexOf(s); // les onglets ont pu changer pendant les questions
     if (at < 0) return;
     this.sessions.splice(at, 1);
+    s.annotator.destroy();
     s.thumbs.destroy();
     s.grid?.destroy();
     s.grid?.el.remove();
@@ -731,6 +770,173 @@ export class App {
         this.showHome();
       }
     }
+  }
+
+  // ───────────────────────── commentaires ─────────────────────────
+
+  private buildAnnotBar() {
+    const mk = (tool: Tool, iconName: IconName) => {
+      const b = this.iconButton(`tool-${tool}`, t.annot.tools[tool], iconName, () => this.setAnnotTool(tool));
+      b.setAttribute('aria-pressed', 'false');
+      this.toolButtons[tool] = b;
+      return b;
+    };
+    const stampBtn = mk('stamp', 'stamp');
+    stampBtn.onclick = () => {
+      this.setAnnotTool('stamp');
+      showMenu(
+        Object.entries(STAMPS).map(([key]) => ({ id: `stamp-${key}`, label: t.annot.stamps[key as keyof typeof t.annot.stamps], run: () => ((this.annotStyle.stamp = key), this.pushStyle()) })),
+        stampBtn,
+      );
+    };
+    for (const color of COLORS) {
+      const b = h('button', { type: 'button', class: 'swatch', title: `${t.annot.color} : ${color.name}`, 'aria-label': color.name, 'data-color': color.name, onclick: () => this.setColor(color.rgb) });
+      b.style.background = rgbToCss(color.rgb);
+      this.swatches.push(b);
+    }
+    for (const w of [1, 2, 3, 5, 8]) this.widthSelect.append(h('option', { value: String(w) }, `${w} pt`));
+    for (const z of [10, 12, 14, 18, 24, 32]) this.sizeSelect.append(h('option', { value: String(z) }, `${z} pt`));
+    this.widthSelect.value = String(this.annotStyle.width);
+    this.sizeSelect.value = String(this.annotStyle.fontSize);
+    this.widthSelect.onchange = () => {
+      this.annotStyle.width = Number(this.widthSelect.value);
+      this.pushStyle({ width: this.annotStyle.width });
+    };
+    this.sizeSelect.onchange = () => {
+      this.annotStyle.fontSize = Number(this.sizeSelect.value);
+      this.pushStyle({ fontSize: this.annotStyle.fontSize });
+    };
+    this.annotBar.append(
+      mk('select', 'pointer'),
+      h('span', { class: 'sep' }),
+      mk('highlight', 'highlight'),
+      mk('underline', 'underline'),
+      mk('strikeout', 'strikeout'),
+      h('span', { class: 'sep' }),
+      mk('note', 'note'),
+      mk('freetext', 'text'),
+      mk('ink', 'pen'),
+      mk('rect', 'rect'),
+      mk('ellipse', 'ellipse'),
+      mk('line', 'line'),
+      mk('arrow', 'arrow'),
+      stampBtn,
+      h('span', { class: 'sep' }),
+      ...this.swatches,
+      this.widthSelect,
+      this.sizeSelect,
+    );
+  }
+
+  private toggleCommentMode() {
+    this.setAnnotTool(this.annotTool === null ? 'select' : null);
+  }
+
+  private setAnnotTool(tool: Tool | null) {
+    this.annotTool = tool;
+    if (tool && tool !== 'select') this.annotStyle.color = this.toolColors[tool] ?? this.annotStyle.color;
+    this.sessions.forEach((x) => (x.annotator.style = this.annotStyle));
+    this.annotBar.hidden = tool === null;
+    this.editButtons['btn-comment']?.classList.toggle('on', tool !== null);
+    this.workspace.querySelector('#btn-comment')?.classList.toggle('on', tool !== null);
+    for (const [name, b] of Object.entries(this.toolButtons)) {
+      b.classList.toggle('on', name === tool);
+      b.setAttribute('aria-pressed', String(name === tool));
+    }
+    this.sessions.forEach((x) => x.annotator.setTool(tool));
+    if (tool !== null && this.active) this.active.view.container.focus({ preventScroll: true });
+    this.syncStyleUi();
+  }
+
+  /** Applique la couleur ou l'épaisseur au commentaire sélectionné, sinon aux prochains. */
+  private pushStyle(patch: { width?: number; fontSize?: number; color?: Rgb } = {}) {
+    this.sessions.forEach((x) => (x.annotator.style = this.annotStyle));
+    const s = this.active;
+    const sel = s?.annotator.selection;
+    if (s && sel && Object.keys(patch).length) {
+      const p: Record<string, unknown> = { ...patch };
+      if (patch.width !== undefined && ['highlight', 'freetext', 'note', 'stamp'].includes(sel.kind)) delete p.width;
+      if (patch.fontSize !== undefined && sel.kind !== 'freetext') delete p.fontSize;
+      if (Object.keys(p).length) void this.editing.updateAnnot(s, sel.id, p);
+    }
+    this.syncStyleUi();
+  }
+
+  private setBadge(list: Annot[]) {
+    const n = list.filter((a) => !a.replyTo).length;
+    this.commentsBadge.textContent = String(n);
+    this.commentsBadge.hidden = n === 0;
+  }
+
+  private setColor(rgb: Rgb) {
+    this.annotStyle.color = rgb;
+    if (this.annotTool && this.annotTool !== 'select') this.toolColors[this.annotTool] = rgb;
+    this.pushStyle({ color: rgb });
+  }
+
+  private syncStyleUi() {
+    const sel = this.active?.annotator.selection;
+    const color = sel?.color ?? this.annotStyle.color;
+    this.swatches.forEach((b, i) => b.classList.toggle('on', COLORS[i].rgb.every((c, k) => Math.abs(c - color[k]) < 0.01)));
+    this.widthSelect.value = String(sel && sel.width ? Math.round(sel.width) : this.annotStyle.width);
+    this.sizeSelect.value = String(sel?.fontSize ?? this.annotStyle.fontSize);
+    const tool = this.annotTool;
+    this.sizeSelect.hidden = !(tool === 'freetext' || sel?.kind === 'freetext');
+  }
+
+  private annotHost(s: Session): AnnotHost {
+    return {
+      add: (drafts) => this.editing.addAnnots(s, drafts).then(() => undefined),
+      update: (id, patch, label) => this.editing.updateAnnot(s, id, patch, label).then(() => undefined),
+      remove: (ids) => this.editing.removeAnnots(s, ids).then(() => undefined),
+      selected: (id) => {
+        s.comments.update(s.annots, id);
+        this.syncStyleUi();
+      },
+      notify: (m) => toast(m),
+    };
+  }
+
+  private commentsHost(s: Session) {
+    return {
+      select: (a: Annot) => {
+        if (this.annotTool !== 'select') this.setAnnotTool('select');
+        if (s.organizing) this.setOrganizing(s, false);
+        s.annotator.select(a.id, false);
+        s.comments.update(s.annots, a.id);
+        s.view.viewer.scrollPageIntoView({ pageNumber: a.page + 1, destArray: [null, { name: 'XYZ' }, Math.max(0, a.rect[0] - 30), a.rect[3] + 60, null] });
+        this.syncStyleUi();
+      },
+      edit: (id: string, text: string) => void this.editing.updateAnnot(s, id, { contents: text }),
+      remove: (id: string) => void this.editing.removeAnnots(s, [id]),
+      reply: (parentId: string, page: number, text: string) => {
+        const parent = s.annots.find((a) => a.id === parentId);
+        const [x, , , y] = parent?.rect ?? [20, 20, 44, 44];
+        void this.editing.addAnnots(s, [{ kind: 'note', page, color: [1, 0.85, 0.2], fill: null, opacity: 1, width: 1, contents: text, rect: [x, y - 24, x + 24, y], replyTo: parentId }], 'reply');
+      },
+    };
+  }
+
+  /** Crée le calque de commentaires de la vue courante de la session et relit la liste des commentaires. */
+  private attachAnnotations(s: Session, bytes: Uint8Array) {
+    const annotator = new Annotator(s.view, this.annotHost(s));
+    annotator.style = this.annotStyle;
+    annotator.setTool(this.annotTool);
+    s.annotator = annotator;
+    const view = s.view;
+    void listAnnotationsOp(bytes, s.password, view.pageCount).promise.then(
+      (list) => {
+        if (s.view !== view) return; // un rechargement plus récent a pris le relais
+        s.annots = list;
+        annotator.setAnnots(list);
+        if (s.pendingSelect && list.some((a) => a.id === s.pendingSelect)) annotator.select(s.pendingSelect, false);
+        s.pendingSelect = null;
+        s.comments.update(list, annotator.selection?.id ?? null);
+        this.setBadge(list);
+        this.syncStyleUi();
+      },
+      () => undefined,
+    );
   }
 
   // ───────────────────────── modifications et enregistrement ─────────────────────────
@@ -788,7 +994,7 @@ export class App {
     this.leftPanel.classList.toggle('collapsed');
   }
 
-  private setPanelTab(tab: 'thumbnails' | 'bookmarks') {
+  private setPanelTab(tab: 'thumbnails' | 'bookmarks' | 'comments') {
     this.panelTab = tab;
     this.leftPanel.querySelectorAll('.panel-tabs button').forEach((b) => b.classList.toggle('active', b.id === `panel-tab-${tab}`));
     this.leftPanel.querySelectorAll('.panel-tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.id === `panel-tab-${tab}`)));
@@ -799,7 +1005,7 @@ export class App {
     this.panelBody.replaceChildren();
     const s = this.active;
     if (!s) return;
-    this.panelBody.append(this.panelTab === 'thumbnails' ? s.thumbs.el : s.outline);
+    this.panelBody.append(this.panelTab === 'thumbnails' ? s.thumbs.el : this.panelTab === 'bookmarks' ? s.outline : s.comments.el);
     if (this.panelTab === 'thumbnails') s.thumbs.setCurrent(s.view.page);
   }
 

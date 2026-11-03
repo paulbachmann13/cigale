@@ -2,6 +2,20 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [0.4.0] — 2026-11-03
+
+### Ajouté
+- **Commenter** (bouton en haut, à droite des outils de pages) : surligner, souligner ou barrer du texte ; ajouter une note, une zone de texte, un dessin à main levée, un rectangle, une ellipse, une ligne, une flèche ou un tampon (Approuvé, Refusé, Confidentiel, Brouillon, À revoir, Reçu).
+- Ce sont de **vrais commentaires PDF** : ils sont enregistrés dans le fichier avec leur apparence, donc visibles à l'identique dans Aperçu, Acrobat et les autres lecteurs.
+- **Panneau Commentaires** : tous les commentaires du document, page par page, avec leur auteur et leur date ; filtre ; clic pour aller au commentaire ; modification du texte ; **réponses** ; suppression.
+- Sélectionner un commentaire pour le **déplacer**, le **redimensionner**, changer sa **couleur** ou son **épaisseur**, ou le supprimer (touche ⌫).
+- Les commentaires faits dans un autre logiciel (Acrobat, Aperçu…) sont affichés dans le panneau et peuvent être modifiés ou supprimés.
+- Réglage du **nom inscrit dans vos commentaires** (Paramètres).
+- Annuler et rétablir fonctionnent aussi pour les commentaires, et la page reste à la même place après chaque ajout.
+
+### Modifié
+- Le panneau de gauche est un peu plus large pour loger l'onglet Commentaires.
+
 ## [0.3.0] — 2026-11-03
 
 ### Ajouté

@@ -104,6 +104,8 @@ export function openSettings() {
   );
   zoom.value = s.defaultZoom;
   zoom.onchange = () => saveSettings({ ...loadSettings(), defaultZoom: zoom.value as DefaultZoom });
+  const author = h('input', { type: 'text', id: 'setting-author', value: s.author, placeholder: t.annot.defaultAuthor });
+  author.onchange = () => saveSettings({ ...loadSettings(), author: author.value.trim() });
   const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
   keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(
@@ -113,6 +115,7 @@ export function openSettings() {
       { class: 'form' },
       h('label', {}, t.settings.theme, theme),
       h('label', {}, t.settings.defaultZoom, zoom),
+      h('label', {}, t.settings.author, author),
       h('label', { class: 'check' }, keep, t.settings.keepVersions),
       h('p', { class: 'hint' }, t.settings.keepVersionsHint),
     ),

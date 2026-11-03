@@ -1,6 +1,6 @@
 # Fonctionnalités et limites connues
 
-État : **étape 3 (fusionner et découper)**, version 0.3.0.
+État : **étape 4 (annotations et commentaires)**, version 0.4.0.
 
 ## Fonctionnalités
 
@@ -22,6 +22,13 @@
 - **Annuler / rétablir** (⌘Z, ⇧⌘Z) sans limite pratique (octets complets gardés, plafonnés à 400 Mo).
 - Toutes les opérations tournent dans un **Web Worker** (annulables) ; le document n'est adopté que si le résultat s'ouvre correctement et a le bon nombre de pages.
 - Conservés : signets (ils suivent leurs pages), liens, métadonnées d'origine (titre, producteur…), pièces jointes, XMP, chiffrement (le document reste protégé par le même mot de passe).
+
+### Commenter (étape 4)
+- **Outils** : surligner / souligner / barrer (d'après le texte sélectionné, une zone par ligne), note, zone de texte (texte qui passe à la ligne, taille réglable), dessin à main levée, rectangle, ellipse, ligne, flèche, tampons (6 modèles dessinés par Cigale). Couleur (7 teintes, mémorisée par outil) et épaisseur.
+- **Vraies annotations PDF** (Highlight, Underline, StrikeOut, Text + Popup, FreeText, Ink, Square, Circle, Line, Stamp) avec **flux d'apparence** : le rendu vient du fichier lui-même. Auteur (réglable), date, `NM` unique.
+- **Sélection** : déplacer (glisser), redimensionner (coins : rectangle, ellipse, zone de texte, tampon), couleur, épaisseur, taille du texte, double-clic pour modifier le texte, ⌫ pour supprimer.
+- **Panneau Commentaires** : liste par page (auteur, date, texte), filtre, aller au commentaire, modifier, **répondre** (fils de discussion, `IRT`), supprimer (les réponses partent avec le parent). Commentaires d'autres logiciels listés et marqués « Créé dans un autre logiciel ».
+- Chaque ajout est une étape de l'historique (annuler / rétablir) ; le document n'est écrit sur le disque que par « Enregistrer ». Les commentaires suivent leurs pages quand on les réorganise.
 
 ### Combiner et diviser (étape 3)
 - **Combiner des fichiers** : PDF et images (JPEG, PNG ; WebP, GIF, BMP… si le navigateur sait les décoder), réordonner (↑ ↓), retirer, **plage de pages par fichier** (« 1-3, 5, 8- », ordre conservé), mots de passe demandés pour les PDF chiffrés. Si un document est ouvert, il est la première ligne.
@@ -48,7 +55,13 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 
 | Limite | Détail | Prévu |
 |---|---|---|
-| Pas d'annotation | Annotations existantes affichées seulement | Étape 4 |
+| Surlignage de scans | Surligner / souligner / barrer exigent du texte sélectionnable : sur un scan, utiliser un rectangle (OCR prévu) | 1.x |
+| Zone de texte | Seuls les caractères du jeu Windows Latin-1 (accents français, œ, €…) sont dessinés ; les autres s'affichent « ? » (le texte exact reste dans le commentaire). Pages tournées : le texte tourne avec la page | 1.x |
+| Formes | Pas de polygone, de nuage ni de gomme ; extrémités d'une ligne non modifiables (on la déplace ou on la refait) ; redimensionnement des seuls rectangle, ellipse, zone de texte, tampon | Étape 5 |
+| Tampons | Six modèles fixes, pas de tampon image personnalisé ni de date | 1.x |
+| Commentaires d'autres logiciels | Modifiables, mais si on change leur couleur ou leur forme, Cigale redessine leur apparence à sa façon | — |
+| États de révision | Pas de statut (accepté / refusé) ni de réponse à une réponse dans l'interface | Étape 5 |
+| Notes | Le texte s'affiche en bulle dans les autres lecteurs ; dans Cigale, au survol et dans le panneau | — |
 | Fusion : formulaires | Les champs de formulaire des fichiers combinés ne sont pas repris (le contenu affiché l'est) | Étape 5 |
 | Découpe : signets | Les parties ne reprennent pas les signets | Étape 5 |
 | Fichier ajouté à « Combiner » | Le garde-fou de structure (pdf-lib / pdf.js comptent autant de pages) ne s'applique qu'au document déjà ouvert | Étape 5 |

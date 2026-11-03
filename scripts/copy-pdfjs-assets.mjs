@@ -10,3 +10,5 @@ const dst = fileURLToPath(new URL('public/pdfjs/', root));
 rmSync(dst, { recursive: true, force: true });
 mkdirSync(dst, { recursive: true });
 for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) cpSync(src(dir), `${dst}${dir}`, { recursive: true });
+// icônes des annotations (seulement celles-là : on ne charge rien depuis l'extérieur)
+cpSync(src('web/images'), `${dst}images`, { recursive: true, filter: (f) => !f.includes('.') || /annotation-[a-z-]+\.svg$/.test(f) });

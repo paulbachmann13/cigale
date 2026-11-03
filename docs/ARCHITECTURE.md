@@ -56,6 +56,17 @@ tests/unit, e2e, fixtures/out (générées)
 - **Fuites** : après fusion, découpe et extraction on appelle `pruneUnreachable` : seul ce qui est atteignable depuis les pages gardées reste dans le fichier.
 - **Choix d'interface** : le résultat d'une fusion ou d'une découpe s'ouvre toujours dans un onglet « non enregistré » (jamais d'écriture automatique) ; « Combiner » part du document ouvert ; ≤ 10 onglets pour une découpe, ≤ 200 parties au total.
 
+## Décisions de l'étape 4 (annotations)
+
+- **Annotations maison, écrites avec pdf-lib** (`src/pdf/annot-ops.ts`) plutôt que l'éditeur d'annotations intégré de pdf.js : celui-ci ne couvre ni soulignement, ni formes, ni notes, ni réponses, impose son propre enregistrement incrémental et ses propres écrans. Ici : un modèle simple (`src/data/annotations.ts`), des **flux d'apparence** générés à la main (surlignage en mode « Multiply », traits, ellipses en Bézier, flèches, texte Helvetica avec retour à la ligne, tampons), un `/Popup` pour les notes, `/IRT` + `/RT /R` pour les réponses. Le rendu affiché par Cigale est celui de pdf.js à partir du fichier : ce qu'on voit est ce qui est écrit.
+- **Même chemin que les pages** : `Editing.annotOp` (worker, file d'attente, adoption seulement si le document s'ouvre, historique) ; chaque geste = une étape annuler/rétablir ; le document est rechargé et la position de défilement restaurée.
+- **Calque par page** (`annotator.ts`) posé dans le `div` de la page de pdf.js (recréé à chaque `pagerendered`) ; conversions par `PageViewport.convertToPdfPoint` (pages tournées et CropBox gérés par pdf.js). Les zones cliquables n'existent qu'avec l'outil « Sélectionner » ; les outils de texte laissent passer la souris vers la couche de texte ; en mode Commenter, les zones HTML de pdf.js (annotations) ne captent plus les clics.
+- **Texte marqué** : sélection → une zone par `span` de la couche de texte (sous-intervalle de la sélection), regroupées par ligne, converties en QuadPoints.
+- **Identifiants** = références d'objet (« 12 0 ») ; stables tant que le fichier n'est pas réécrit ailleurs. `NM` = `cigale-…` distingue nos annotations de celles des autres logiciels (« étrangères »).
+- **Suppression** : l'annotation, ses réponses (récursif) et sa bulle disparaissent, puis `pruneUnreachable`.
+- **Auteur** : réglage local (Paramètres), « Utilisateur » par défaut.
+- **Icônes de notes de pdf.js** : on copie seulement `annotation-*.svg` dans `public/pdfjs/images/` (aucune requête externe) et on masque l'icône (notre apparence est dessinée dans le fichier).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

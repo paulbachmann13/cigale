@@ -6,10 +6,12 @@ export interface Settings {
   defaultZoom: DefaultZoom;
   /** Garder l'ancienne version avant d'écraser un fichier (stockée sur cet ordinateur). */
   keepVersions: boolean;
+  /** Nom inscrit dans les commentaires. */
+  author: string;
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true };
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '' };
 
 export function loadSettings(): Settings {
   try {
