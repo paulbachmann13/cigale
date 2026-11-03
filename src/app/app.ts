@@ -6,6 +6,7 @@ import { fmt, plural, t } from '../i18n/fr';
 import { loadPdf } from '../pdf/engine';
 import { listAnnotationsOp } from '../pdf/ops-client';
 import { DocView, type ViewMode } from '../pdf/viewer';
+import { deleteDraft, listDrafts, newDraftId, readDraft, saveDraft } from '../storage/autosave';
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
 import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
 import { CommentsPanel } from './comments';
@@ -17,6 +18,7 @@ import { buildHome, openSettings, openVersions, openWhatsNew } from './home';
 import { type IconName, icon } from './icons';
 import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
+import { printDocument } from './print';
 import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, quitApp, takeStartupOpens, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
@@ -96,6 +98,7 @@ export class App {
     this.buildShell();
     this.bindGlobalEvents();
     this.showHome();
+    void listDrafts().then((d) => d.length && toast(t.home.resumeFound));
   }
 
   // ───────────────────────── construction de l'interface ─────────────────────────
@@ -250,6 +253,7 @@ export class App {
       { id: 'split', label: t.file.split, disabled: !has, run: () => this.openSplit() },
       { id: 'save', label: t.file.save, shortcut: `${mod}S`, disabled: !has, run: () => void this.save(), separatorBefore: true },
       { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
+      { id: 'print', label: t.file.print, shortcut: `${mod}P`, disabled: !has, run: () => void this.print() },
       { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
       { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
       { id: 'settings', label: t.home.settings, run: () => openSettings() },
@@ -315,6 +319,9 @@ export class App {
 
   private bindGlobalEvents() {
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.sessions.forEach((x) => this.scheduleDraft(x, true));
+    });
     window.addEventListener('beforeunload', (e) => {
       if (this.sessions.some((s) => s.history.dirty)) {
         e.preventDefault();
@@ -357,6 +364,9 @@ export class App {
     } else if (mod && key === 's' && this.active && !this.workspace.hidden) {
       e.preventDefault();
       void (e.shiftKey ? this.saveAs() : this.save());
+    } else if (mod && key === 'p' && this.active && !this.workspace.hidden) {
+      e.preventDefault();
+      void this.print();
     } else if (mod && key === 'z' && this.active && !typing && !this.workspace.hidden) {
       e.preventDefault();
       void (e.shiftKey ? this.redo() : this.undo());
@@ -474,6 +484,7 @@ export class App {
       const answer = await askUnsaved(s.name);
       if (answer === 'cancel') return false;
       if (answer === 'save' && !(await this.editing.save(s))) return false;
+      if (answer === 'discard') await deleteDraft(s.draftId); // abandonné en connaissance de cause
     }
     return true;
   }
@@ -625,6 +636,7 @@ export class App {
       tab,
       annots: [],
       pendingSelect: null,
+      draftId: newDraftId(),
     } as unknown as Session;
     session.comments = new CommentsPanel(this.commentsHost(session));
     session.thumbs = this.makeList(session, 'list', pdf, PANEL_THUMB);
@@ -810,6 +822,8 @@ export class App {
       if (answer === 'cancel') return;
       if (answer === 'save' && !(await this.editing.save(s))) return;
     }
+    window.clearTimeout(s.draftTimer);
+    void deleteDraft(s.draftId); // fermé en connaissance de cause (enregistré ou abandonné)
     const at = this.sessions.indexOf(s); // les onglets ont pu changer pendant les questions
     if (at < 0) return;
     this.sessions.splice(at, 1);
@@ -1011,6 +1025,9 @@ export class App {
   private async redo() {
     if (this.active) await this.editing.redo(this.active);
   }
+  private async print() {
+    if (this.active) await printDocument(this.active, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading());
+  }
   private async save() {
     if (this.active) await this.editing.save(this.active);
   }
@@ -1020,6 +1037,7 @@ export class App {
 
   /** Met à jour tout ce qui dépend de l'état du document : modifié, annuler/rétablir, sélection. */
   private refreshState(s: Session) {
+    this.scheduleDraft(s);
     s.tab.classList.toggle('dirty', s.history.dirty);
     s.tab.querySelector('.tab-label')!.textContent = s.name;
     if (this.active !== s) return;
@@ -1027,6 +1045,35 @@ export class App {
     this.updateEditUi(s);
     if (s.history.dirty) this.setStatus(t.status.dirty, 'dirty');
     else this.setStatus(s.diskBytes && s.handle ? fmt(t.status.saved, { time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }) : '', 'saved');
+  }
+
+  /** Sauvegarde automatique : 2 s après la dernière modification (et tout de suite quand la page est masquée). */
+  private scheduleDraft(s: Session, now = false) {
+    window.clearTimeout(s.draftTimer);
+    if (!s.history.dirty) {
+      void deleteDraft(s.draftId);
+      return;
+    }
+    if (!loadSettings().autosave) return;
+    const write = () => void saveDraft(s.draftId, s.name, s.history.current);
+    if (now) write();
+    else s.draftTimer = window.setTimeout(write, 2000);
+  }
+
+  /** Rouvre un travail sauvegardé automatiquement, comme document non enregistré. */
+  async resumeDraft(id: string, name: string): Promise<void> {
+    const bytes = await readDraft(id);
+    if (!bytes) {
+      toast(t.home.resumeGone);
+      await deleteDraft(id);
+      this.refreshHome();
+      return;
+    }
+    // Pas de lien avec le fichier d'origine (il a pu changer depuis) : « Enregistrer » demandera où écrire.
+    if (await this.openBytes(name, bytes, { unsaved: true })) {
+      await deleteDraft(id);
+      this.refreshHome();
+    }
   }
 
   private setStatus(text: string, kind: string) {

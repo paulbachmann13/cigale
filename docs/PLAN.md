@@ -31,7 +31,7 @@ Pas de framework d'interface : TypeScript + DOM, comme l'écran d'accueil de Gri
 2. ✔ **Organiser les pages** (réordonner, pivoter, supprimer, dupliquer, insérer, extraire) et **enregistrer** (⌘S vérifié, version précédente, annuler/rétablir).
 3. ✔ **Fusionner et découper** (plages, images, signets conservés, export en lot zip).
 4. ✔ **Annotations** (vraies annotations PDF avec apparences) et panneau Commentaires.
-5. **Durcissement** : corpus de tests, performances, PDF cassés ou chiffrés, sauvegarde automatique, limites. **Version 1.0.**
+5. ✔ **Durcissement** : corpus de tests, performances, PDF cassés ou chiffrés, sauvegarde automatique, limites. **Version 1.0.**
 6. **1.x** : formulaires, signature, caviardage réel, OCR, compression, protection, en-têtes/pieds, recadrage, comparaison, conversions, édition de texte limitée.
 7. ✔ **Application Mac (Tauri, installation par .dmg)** comme Grillon : même structure (`src-tauri/`, workflow `mac.yml` sur GitHub Actions), vrai `.bak` à côté du fichier, associations de fichiers PDF, mises à jour. À placer après l'étape 5 (v1.0), ou plus tôt si Paul le demande.
 

@@ -7,7 +7,7 @@ Site : https://paulbachmann13.github.io/cigale/ — même philosophie que [Grill
 
 ## État
 
-Version 0.5.0 (étapes 2 à 4 + application Mac) : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
+Version 1.0.0 : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
 (pivoter, supprimer, dupliquer, déplacer, insérer, extraire, vue grille), **annuler/rétablir** et **enregistrer** (⌘S vérifié, version précédente gardée), **combiner** des PDF et des images, **diviser** (plages, tous les N, signets, .zip), **commenter** (surlignage, notes, zones de texte, dessin, formes, tampons, panneau Commentaires avec réponses). Les étapes suivantes
 (durcissement 1.0, application Mac) sont décrites dans [docs/PLAN.md](docs/PLAN.md) ; l'état détaillé et les limites dans
 [docs/FONCTIONNALITES.md](docs/FONCTIONNALITES.md) ; la comparaison avec Acrobat dans [docs/ACROBAT-COMPARAISON.md](docs/ACROBAT-COMPARAISON.md).

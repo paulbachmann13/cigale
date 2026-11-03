@@ -8,10 +8,12 @@ export interface Settings {
   keepVersions: boolean;
   /** Nom inscrit dans les commentaires. */
   author: string;
+  /** Garder une copie du travail non enregistré (reprise après une fermeture imprévue). */
+  autosave: boolean;
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '' };
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true };
 
 export function loadSettings(): Settings {
   try {

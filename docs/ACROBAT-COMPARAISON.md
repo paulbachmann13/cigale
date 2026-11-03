@@ -12,10 +12,10 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Fichiers récents | Oui | Noms seulement, sur l'appareil |
 | Enregistrer (⌘S), Enregistrer sous (⇧⌘S) | Oui | Écriture vérifiée ; version précédente gardée ; Safari/Firefox : copie téléchargée |
 | Annuler / Rétablir (⌘Z, ⇧⌘Z) | Oui | Pages seulement pour l'instant |
-| Imprimer (⌘P) | Non | Étape 5 |
+| Imprimer (⌘P) | Partiel | Pages, plages, commentaires ; pages rasterisées à 200 dpi ; pas de mise à l'échelle ni de réglages avancés |
 | Propriétés du document | Non | |
 | Protéger par mot de passe | Non | 1.x |
-| Ouvrir un PDF protégé par mot de passe | Oui | |
+| Ouvrir un PDF protégé par mot de passe | Oui | Reste protégé après modification |
 | Combiner des fichiers | Oui | PDF et images, plages par fichier, signets conservés |
 | Créer un PDF depuis une image | Oui | Via « Combiner » (JPEG, PNG, WebP…) |
 | Exporter vers Word, Excel, images | Non | 1.x (limité) |

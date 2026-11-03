@@ -80,6 +80,15 @@ tests/unit, e2e, fixtures/out (générées)
 - **Pas de mise à jour automatique** (elle demande une clé de signature secrète dans les secrets GitHub) : prévu en étape 5.
 - **Version** : `package.json`, `src-tauri/tauri.conf.json` et `src-tauri/Cargo.toml` doivent être identiques (testé).
 
+## Décisions de l'étape 5 (durcissement, version 1.0)
+
+- **Protection par mot de passe = `src/pdf/protection.ts`.** pdf-lib déchiffre à l'ouverture (`Encrypt` retiré du dictionnaire) et n'écrit plus de chiffrement : sans précaution, modifier un PDF protégé le rendait lisible par tous (défaut des versions 0.2 à 0.5, trouvé par les tests d'étape 5 avec `qpdf --show-encryption`). `loadForEdit` retient (WeakMap) le mot de passe d'ouverture et les autorisations (`/P` lu sans déchiffrer), `saveDoc` ré-chiffre en AES-256 ; les documents créés par copie de pages (extraire, diviser, fusionner) héritent de la protection (`inheritProtection`). Propriétaire inconnu : remplacé (mot de passe d'ouverture, ou valeur aléatoire pour les restrictions seules). Un test interdit tout `.save(` direct dans `src/pdf/`.
+- **Document chiffré sans mot de passe d'ouverture** : pdf.js l'ouvre sans rien demander, pdf-lib refuse sans mot de passe ; `loadForEdit` retente avec `''`.
+- **Sauvegarde automatique** (`src/storage/autosave.ts`) : IndexedDB, file d'attente, 2 s après la dernière modification, immédiate quand la page est masquée ; supprimée par l'enregistrement, la fermeture ou le choix « Ne pas enregistrer ». La reprise ouvre un document non enregistré sans « handle » : jamais d'écrasement du fichier d'origine (il a pu changer).
+- **Impression** (`src/app/print.ts`) : pages dessinées par pdf.js (annotations comprises) en JPEG 200 dpi dans `#print-root`, règle `@media print` qui masque tout le reste, `window.print()` (le seul moyen qui marche aussi dans WKWebView / Tauri). Compromis : le texte n'est plus sélectionnable dans le PDF « imprimé ».
+- **Défense contre les PDF abîmés** : garde-fou « pdf-lib et pdf.js comptent le même nombre de pages » (étape 2), corpus et mutations aléatoires (`corpus.test.ts`) ; le test échoue si une opération renvoie un document qui se rouvre avec un autre nombre de pages.
+- **Safari** : le projet Playwright `webkit` exécute tous les tests (seuls les tests d'enregistrement sur place, qui exigent `createWritable`, sont ignorés).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

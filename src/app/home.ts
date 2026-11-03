@@ -2,6 +2,7 @@ import { parseChangelog, stripMarkup } from '../data/changelog';
 import { formatSize } from '../data/recent';
 import { fmt, t } from '../i18n/fr';
 import { deleteBackup, listBackups, readBackup } from '../storage/backups';
+import { deleteDraft, listDrafts } from '../storage/autosave';
 import { clearRecents, loadRecents } from '../storage/recent';
 import { downloadBytes } from './save';
 import changelogMd from '../../CHANGELOG.md?raw';
@@ -29,6 +30,23 @@ export function buildHome(app: App): HTMLElement {
       ),
     );
   }
+
+  const drafts = h('ul', { class: 'recent-list', id: 'drafts-list' });
+  void listDrafts().then((items) => {
+    if (!items.length) drafts.append(h('li', { class: 'empty', id: 'no-drafts' }, t.home.resumeNone));
+    for (const d of items) {
+      drafts.append(
+        h(
+          'li',
+          { class: 'version-row', 'data-draft': d.id },
+          h('span', { class: 'recent-name' }, d.name),
+          h('span', { class: 'recent-meta' }, `${formatSize(d.size)} · ${new Date(d.at).toLocaleString('fr-FR')}`),
+          h('button', { class: 'link', 'data-resume': d.id, onclick: () => void app.resumeDraft(d.id, d.name) }, t.home.resumeOpen),
+          h('button', { class: 'link', 'data-discard': d.id, onclick: () => void deleteDraft(d.id).then(() => app.refreshHome()) }, t.home.resumeDelete),
+        ),
+      );
+    }
+  });
 
   const tile = (id: string, iconName: IconName, title: string, sub: string, onclick?: () => void, disabled = false) =>
     h(
@@ -66,6 +84,9 @@ export function buildHome(app: App): HTMLElement {
     recents.length ? list : h('p', { class: 'empty', id: 'no-recents' }, t.home.noRecents),
     h('p', { class: 'hint' }, t.home.recentsPrivacy),
     recents.length ? h('button', { class: 'link', id: 'clear-recents', onclick: () => void clearRecents().then(() => app.refreshHome()) }, t.home.clearRecents) : null,
+    h('h2', {}, t.home.resume),
+    drafts,
+    h('p', { class: 'hint' }, t.home.resumeHint),
     h('p', { class: 'hint' }, t.home.offline),
   );
 
@@ -106,6 +127,8 @@ export function openSettings() {
   zoom.onchange = () => saveSettings({ ...loadSettings(), defaultZoom: zoom.value as DefaultZoom });
   const author = h('input', { type: 'text', id: 'setting-author', value: s.author, placeholder: t.annot.defaultAuthor });
   author.onchange = () => saveSettings({ ...loadSettings(), author: author.value.trim() });
+  const auto = h('input', { type: 'checkbox', id: 'setting-autosave', checked: s.autosave });
+  auto.onchange = () => saveSettings({ ...loadSettings(), autosave: auto.checked });
   const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
   keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(
@@ -116,6 +139,8 @@ export function openSettings() {
       h('label', {}, t.settings.theme, theme),
       h('label', {}, t.settings.defaultZoom, zoom),
       h('label', {}, t.settings.author, author),
+      h('label', { class: 'check' }, auto, t.settings.autosave),
+      h('p', { class: 'hint' }, t.settings.autosaveHint),
       h('label', { class: 'check' }, keep, t.settings.keepVersions),
       h('p', { class: 'hint' }, t.settings.keepVersionsHint),
     ),

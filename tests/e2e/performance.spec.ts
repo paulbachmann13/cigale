@@ -17,3 +17,24 @@ test('500 pages : première page en moins de 2 s', async ({ page }) => {
   const canvases = await page.locator('.page canvas').count();
   expect(canvases).toBeLessThan(30);
 });
+
+// Une modification sur un document de 500 pages (worker + rechargement + miniatures) reste fluide.
+test('500 pages : pivoter, supprimer et annuler en moins de 3 s chacun', async ({ page }) => {
+  await gotoHome(page);
+  await openPdf(page, 'long-500p.pdf');
+  await waitFirstPage(page);
+  await page.locator('.left-panel .thumb[data-page="250"]').scrollIntoViewIfNeeded();
+  await page.locator('.left-panel .thumb[data-page="250"]').click();
+  const measure = async (label: string, action: () => Promise<void>, ready: () => Promise<unknown>) => {
+    const t0 = Date.now();
+    await action();
+    await ready();
+    const ms = Date.now() - t0;
+    console.log(`PERF ${label} : ${ms} ms`);
+    expect(ms, label).toBeLessThan(3000);
+  };
+  const rotation = () => page.evaluate(async () => (await (window as any).cigale.app.sessions[0].view.pdf.getPage(250)).rotate as number);
+  await measure('pivoter une page (500 p.)', () => page.click('#btn-rot-right'), () => expect.poll(rotation).toBe(90));
+  await measure('supprimer une page (500 p.)', () => page.click('#btn-delete'), () => expect(page.locator('#page-count')).toHaveText('sur 499'));
+  await measure('annuler (500 p.)', () => page.click('#btn-undo'), () => expect(page.locator('#page-count')).toHaveText('sur 500'));
+});

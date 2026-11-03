@@ -1,7 +1,7 @@
 {
   "name": "cigale",
   "private": true,
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "Cigale — éditeur PDF local et gratuit (PWA)",
   "license": "Apache-2.0",
   "type": "module",

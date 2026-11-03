@@ -53,7 +53,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Feuille de route
 
-1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri ✔ (0.5.0). Détail dans `docs/PLAN.md`.
+1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement ✔ (v1.0.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri ✔ (0.5.0). Détail dans `docs/PLAN.md`.
 
 - **Modifier un PDF** : toute opération passe par `Editing.run` (worker, file d'attente, adoption seulement si le résultat s'ouvre avec le bon nombre de pages). Ne jamais appeler `removePage`/`insertPage` pour réordonner (arbre cassé) : voir `reorderPages`. Toujours `updateMetadata: false`. Après suppression, `pruneUnreachable` (sinon le contenu reste dans le fichier). Pas de `.bak` voisin dans un navigateur : `storage/backups.ts`.
 - **Interface = famille Grillon** (barre à 36 px, bouton « Fichier » plein couleur, accueil à colonne colorée) ; couleur propre : terracotta.
@@ -64,6 +64,10 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 - **Commentaires** : toute annotation passe par `Editing.addAnnots/updateAnnot/removeAnnots` (jamais d'écriture directe) ; `annot-ops.ts` est pur et testé (`tests/unit/annot-ops.test.ts`, `qpdf`). Les zones cliquables (`.annot-hit`) n'existent que pour l'outil « Sélectionner ». pdf.js intercepte les clics avec ses propres sections d'annotation : voir la règle CSS `.annotating .annotationLayer section`. Après `reload`, `attachAnnotations` recrée l'`Annotator` et relit la liste (`listAnnotationsOp`). Les tests e2e vérifient le **rendu** par pixels (`countPixels`).
 
 - **Application Mac** : `src/app/tauri-files.ts` (handle maison, écriture atomique, `.bak`, ouvrir avec). Ne jamais importer `@tauri-apps/*` en haut de fichier (imports dynamiques seulement : le code tourne aussi dans le navigateur). Version identique dans `package.json`, `tauri.conf.json`, `Cargo.toml` (test). Pas de service worker dans Tauri. `dragDropEnabled: false` (sinon les miniatures ne se glissent plus). Test local : `npx tauri build --debug --bundles app` puis `open -a …/Cigale.app fichier.pdf`.
+
+- **JAMAIS `doc.save()` direct** dans `src/pdf/` : `saveDoc` (protection.ts) ré-applique la protection par mot de passe, sinon un PDF protégé est écrit en clair (test `no-direct-save`). Tout nouveau document créé par copie de pages : `inheritProtection(out, src)`.
+- Sauvegarde automatique : `scheduleDraft` dans `App.refreshState` ; supprimer le brouillon quand on enregistre/ferme/abandonne. Impression : `print.ts` (image 200 dpi + `@media print`).
+- Tests : `npm run test:e2e` lance aussi `webkit` (Safari) ; `tests/unit/corpus.test.ts` = PDF difficiles + mutations (graine fixe).
 
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)
 

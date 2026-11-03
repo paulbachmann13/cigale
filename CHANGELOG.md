@@ -2,6 +2,20 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.0.0] — 2026-11-03
+
+### Corrigé
+- **Important — documents protégés par mot de passe** : dans les versions 0.2 à 0.5, un PDF protégé par mot de passe qu'on modifiait puis enregistrait pouvait être écrit **sans protection**. C'est corrigé : le document reste protégé avec le même mot de passe d'ouverture et les mêmes restrictions (impression, copie…), en chiffrement AES-256. Cigale prévient avant la première modification que l'ancien mot de passe « propriétaire » est remplacé. **Si vous avez enregistré un document protégé avec une version antérieure, vérifiez-le** (il s'ouvre sans mot de passe ?) et protégez-le de nouveau.
+- Extraire, diviser et combiner à partir d'un document protégé protègent aussi le résultat.
+- Les documents dont les restrictions s'appliquent sans mot de passe d'ouverture (copie ou impression interdites) peuvent maintenant être modifiés.
+
+### Ajouté
+- **Sauvegarde automatique** : votre travail non enregistré est gardé sur l'ordinateur ; après une fermeture imprévue il réapparaît dans « Reprendre » (accueil). Réglable dans les paramètres.
+- **Imprimer** (⌘P) : toutes les pages, la page affichée ou des plages, commentaires compris ; la boîte du système permet aussi « Enregistrer au format PDF ».
+- Vérifié sur un ensemble de PDF difficiles (fichiers abîmés, tronqués, chiffrés de plusieurs façons, structures inhabituelles) et sur 200 fichiers volontairement détériorés : Cigale ne plante pas et ne produit jamais un document faux ; elle refuse ou explique.
+- Fonctionnement vérifié sur Safari en plus de Chrome.
+- Performances mesurées : une modification sur un document de 500 pages prend moins d'une seconde.
+
 ## [0.5.0] — 2026-11-03
 
 ### Ajouté

@@ -32,4 +32,7 @@ export interface Session {
   comments: CommentsPanel;
   /** Commentaire à sélectionner dès que la liste est relue (après un ajout). */
   pendingSelect: string | null;
+  /** Identifiant de la sauvegarde automatique de ce document. */
+  draftId: string;
+  draftTimer?: number;
 }

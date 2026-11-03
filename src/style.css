@@ -247,3 +247,13 @@ textarea.annot-text { width: 100%; padding: 8px; border: 1px solid var(--border)
 .panel-badge { margin-left: 4px; font-size: 11px; background: var(--accent); color: var(--accent-text); border-radius: 9px; padding: 0 6px; }
 /* Pendant « Commenter », les zones cliquables de pdf.js (liens, commentaires déjà posés) ne doivent pas bloquer la sélection de texte */
 .annotating .annotationLayer section, .annotating .annotationLayer .popup { pointer-events: none !important; }
+
+/* Impression : seule la zone #print-root sort sur le papier */
+#print-root { display: none; }
+@media print {
+  body > *:not(#print-root):not(#print-style) { display: none !important; }
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  #print-root { display: block !important; }
+  #print-root img { display: block; width: 100%; height: auto; page-break-after: always; break-after: page; }
+  #print-root img:last-child { page-break-after: auto; break-after: auto; }
+}

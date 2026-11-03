@@ -45,6 +45,14 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 4. Impression en PDF depuis Aperçu : les commentaires sont imprimés (drapeau « imprimer » posé).
 5. Avec un scan réel : rectangle et dessin au stylet (iPad / Apple Pencil) fonctionnent ; le tracé suit le doigt sans retard sensible.
 
+## Étape 5 (version 1.0)
+
+1. **Protection** : avec `chiffre.pdf` (mot de passe `secret`) pivoter une page, enregistrer sous « protege.pdf ». Dans **Aperçu** : demande le mot de passe `secret`. Dans **Acrobat** : idem ; Propriétés > Sécurité : chiffrement AES 256 bits. Puis avec un de vos PDF « copie interdite » : après modification il reste interdit à la copie.
+2. **Sauvegarde automatique** : modifier un document, attendre 3 s, fermer l'onglet du navigateur (ou ⌘Q de l'application Mac, « Annuler » puis forcer l'arrêt), rouvrir Cigale : « Reprendre » propose le travail.
+3. **Impression** : ⌘P sur un document de 3 pages avec un commentaire : l'aperçu de la boîte système montre les 3 pages et le commentaire ; « Enregistrer au format PDF » produit un fichier lisible.
+4. **Safari** (le vôtre) : ouvrir, organiser, commenter, combiner ; ⌘S télécharge une copie. **Application Mac** : voir la section suivante.
+5. Un de vos vrais PDF « difficiles » (scan multipage, formulaire, protégé, très gros) : s'ouvre, se modifie, se rouvre dans Acrobat sans message.
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

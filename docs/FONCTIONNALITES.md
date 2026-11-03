@@ -1,6 +1,6 @@
 # Fonctionnalités et limites connues
 
-État : **étape 4 (annotations et commentaires)** + application Mac, version 0.5.0.
+État : **version 1.0** (étapes 1 à 5 + application Mac).
 
 ## Fonctionnalités
 
@@ -22,6 +22,13 @@
 - **Annuler / rétablir** (⌘Z, ⇧⌘Z) sans limite pratique (octets complets gardés, plafonnés à 400 Mo).
 - Toutes les opérations tournent dans un **Web Worker** (annulables) ; le document n'est adopté que si le résultat s'ouvre correctement et a le bon nombre de pages.
 - Conservés : signets (ils suivent leurs pages), liens, métadonnées d'origine (titre, producteur…), pièces jointes, XMP, chiffrement (le document reste protégé par le même mot de passe).
+
+### Fiabilité (étape 5)
+- **Documents protégés** : un PDF ouvert avec mot de passe reste protégé après toute opération (modifier, commenter, extraire, diviser, combiner) : même mot de passe d'ouverture, mêmes restrictions, AES-256. Avertissement avant la première modification (l'ancien mot de passe propriétaire est remplacé). Un PDF à restrictions seules (copie interdite, sans mot de passe d'ouverture) se modifie aussi et garde ses restrictions.
+- **Sauvegarde automatique** : 2 s après la dernière modification (et quand la page est masquée), copie dans IndexedDB ; « Reprendre » sur l'accueil ; supprimée à l'enregistrement, à la fermeture ou sur choix ; réglable ; jamais envoyée ailleurs. Les documents protégés restent chiffrés dans la sauvegarde.
+- **Imprimer** (⌘P) : toutes les pages / page affichée / plages ; commentaires compris ; chaque page est dessinée à 200 dpi puis la boîte du système s'ouvre (« Enregistrer au format PDF » possible) ; dans l'application Mac aussi.
+- **Corpus de PDF difficiles** (`tests/unit/corpus.test.ts`) : octets parasites avant l'en-tête, nombre de pages faux, page sans type, fichier tronqué, table des références fausse, page tournée avec zone de recadrage décalée, attributs hérités, chiffrement AES-256 / AES-128 / RC4, restrictions seules, 30 pages liées entre elles, formulaires et XFA. Pour chacun et pour chaque opération : refus clair ou résultat qui se rouvre avec le bon nombre de pages. **200 mutations aléatoires** d'un PDF (octets changés, morceaux supprimés ou dupliqués, troncature) : aucun blocage, aucun résultat faux.
+- **Safari** : toute la batterie de tests automatiques tourne aussi sur WebKit.
 
 ### Application Mac (.dmg)
 - Même code que la version web, dans une fenêtre native (Tauri 2). Installation : ouvrir le .dmg, glisser Cigale dans Applications.
@@ -87,10 +94,11 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Annuler | L'historique garde les octets complets : lourd pour de très gros PDF (plafond 400 Mo, les plus anciennes étapes sont oubliées) | Étape 5 |
 | Annotations existantes | Affichées, mais non modifiables | Étape 4 |
 | Formulaires | Champs affichés, saisie non prise en charge | 1.x |
-| Impression (⌘P) | Absente | Étape 5 |
-| Reprise après fermeture | Pas encore de sauvegarde automatique (rien à perdre tant qu'il n'y a pas de modification) | Étape 5 |
-| PDF réparés | Aucune réparation maison : seule la tolérance de pdf.js | Étape 5 |
+| Impression | Chaque page est une image à 200 dpi : le PDF « enregistré » depuis la boîte d'impression n'a plus de texte sélectionnable ; toutes les pages sortent au format de la première ; 300 pages au plus à la fois | 1.x |
+| Sauvegarde automatique | Documents de plus de 150 Mo non sauvegardés ; « Reprendre » rouvre un nouveau document (sans lien avec le fichier d'origine : « Enregistrer sous ») | — |
+| Protection | AES-256 systématique (même si l'original était RC4/AES-128) ; le mot de passe propriétaire d'origine est remplacé ; les restrictions sont conservées | — |
+| PDF réparés | Cigale ne répare pas un PDF abîmé : si pdf.js le lit mais que pdf-lib compte autrement les pages, elle refuse de le modifier (lecture et impression restent possibles) | — |
 | Rouvrir un récent | Safari et Firefox ne gardent pas l'accès au fichier : il faut repasser par « Ouvrir » | — |
 | Chiffrement non pris en charge | Message d'erreur explicite ; pas de contournement | — |
 | Rotation de l'affichage | ⌘⇧R ne change que l'affichage ; « Pivoter les pages » (miniatures) modifie le fichier | — |
-| Mémoire | Le fichier est gardé deux fois en mémoire (original + copie pour pdf.js) | Étape 5 |
+| Mémoire | L'historique garde les octets de chaque étape (plafond 400 Mo) | — |
