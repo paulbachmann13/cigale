@@ -2,7 +2,9 @@
  * Côté interface : lance une opération dans un Web Worker (l'écran ne se fige pas) et permet de l'annuler
  * (le worker est simplement arrêté : le document n'est jamais modifié tant que le résultat n'est pas adopté).
  */
+import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { Range } from '../data/page-ranges';
+import type { AddResult } from './annot-ops';
 import type { MergeOptions, MergeSource, Part } from './doc-ops';
 import type { MergeResult, WorkerRequest, WorkerResponse } from './ops.worker';
 import type { Inspection, OpResult, PageOp } from './page-ops';
@@ -61,3 +63,8 @@ export const splitOperation = (bytes: Uint8Array, ranges: Range[], names: string
   run<Part[]>({ kind: 'split', bytes, ranges, names, password, expectedPages }, onProgress);
 export const zipOperation = (parts: Part[]) => run<Uint8Array>({ kind: 'zip', parts });
 export const bookmarksOperation = (bytes: Uint8Array, password?: string) => run<{ title: string; page: number }[]>({ kind: 'bookmarks', bytes, password });
+
+export const listAnnotationsOp = (bytes: Uint8Array, password?: string, expectedPages?: number) => run<Annot[]>({ kind: 'annotList', bytes, password, expectedPages });
+export const addAnnotationsOp = (bytes: Uint8Array, drafts: AnnotDraft[], password: string | undefined, expectedPages: number, author: string) => run<AddResult>({ kind: 'annotAdd', bytes, drafts, password, expectedPages, author });
+export const updateAnnotationOp = (bytes: Uint8Array, id: string, patch: AnnotPatch, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdate', bytes, id, patch, password, expectedPages });
+export const deleteAnnotationsOp = (bytes: Uint8Array, ids: string[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotDelete', bytes, ids, password, expectedPages });

@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 import { type PageOp, applyOp, extractPages } from '../../src/pdf/page-ops';
 import { mergeSources, splitDocument } from '../../src/pdf/doc-ops';
+import type { AnnotDraft } from '../../src/data/annotations';
+import { addAnnotations, deleteAnnotations, updateAnnotation } from '../../src/pdf/annot-ops';
 import { addFlatOutline, makePdf, makePng } from './helpers';
 
 /** Contrôle structurel externe : qpdf --check (ignoré si qpdf n'est pas installé ; la CI l'installe). */
@@ -78,5 +80,27 @@ describe.skipIf(!hasQpdf)('qpdf --check sur les documents produits', () => {
   it('découpe', async () => {
     const parts = await splitDocument(await withOutline(), [{ from: 1, to: 2 }, { from: 3, to: 5 }], ['a.pdf', 'b.pdf']);
     parts.forEach((p) => check(p.bytes, p.name));
+  });
+  it('annotations de tous les types, modification et suppression', async () => {
+    const b = { page: 0, color: [1, 0, 0] as [number, number, number], fill: null, opacity: 0.8, width: 2, contents: 'é', rect: [100, 600, 200, 650] as [number, number, number, number] };
+    const drafts: AnnotDraft[] = [
+      { ...b, kind: 'highlight', quads: [[50, 700, 150, 715]], rect: [50, 700, 150, 715] },
+      { ...b, kind: 'underline', quads: [[50, 500, 150, 512]], rect: [50, 500, 150, 512] },
+      { ...b, kind: 'strikeout', quads: [[50, 450, 150, 462]], rect: [50, 450, 150, 462] },
+      { ...b, kind: 'rect', fill: [1, 1, 0] },
+      { ...b, kind: 'ellipse' },
+      { ...b, kind: 'arrow', line: [10, 300, 110, 360], rect: [10, 300, 110, 360] },
+      { ...b, kind: 'ink', strokes: [[[20, 400], [40, 420], [60, 400]]], rect: [20, 400, 60, 420] },
+      { ...b, kind: 'freetext', rect: [200, 300, 360, 360], contents: 'Texte libre qui doit passer à la ligne plusieurs fois dans la zone', fontSize: 12 },
+      { ...b, kind: 'note', rect: [300, 700, 324, 724] },
+      { ...b, kind: 'stamp', rect: [300, 400, 460, 450], stamp: 'review' },
+    ];
+    const r = await addAnnotations(await withOutline(), drafts, undefined, 5, 'Paul');
+    check(r.bytes, 'annots.pdf');
+    const reply = await addAnnotations(r.bytes, [{ ...b, kind: 'note', rect: [300, 700, 324, 724], replyTo: r.ids[8] }], undefined, 5);
+    check(reply.bytes, 'reponse.pdf');
+    const edited = await updateAnnotation(reply.bytes, r.ids[3], { rect: [120, 620, 220, 670], color: [0, 0, 1] }, undefined, 5);
+    check(edited, 'modifie.pdf');
+    check(await deleteAnnotations(edited, [r.ids[8], r.ids[0]], undefined, 5), 'supprime.pdf');
   });
 });
