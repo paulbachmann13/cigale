@@ -140,7 +140,7 @@ test('diviser en .zip : noms et contenus', async ({ page }) => {
   const download = page.waitForEvent('download');
   await page.click('#split-zip');
   const file = await download;
-  expect(file.suggestedFilename().normalize('NFC')).toBe('Rapport été.zip'); // WebKit renvoie les accents décomposés
+  expect(file.suggestedFilename().normalize('NFC').replace(/_/g, ' ')).toBe('Rapport été.zip'); // WebKit : accents décomposés (Mac) ou espaces remplacés par « _ » (Linux)
   const files = unzipSync(new Uint8Array(readFileSync((await file.path())!)));
   expect(Object.keys(files).sort()).toEqual(['Rapport été - pages 1–2.pdf', 'Rapport été - pages 3–4.pdf', 'Rapport été - pages 5–6.pdf']);
   for (const bytes of Object.values(files)) expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
