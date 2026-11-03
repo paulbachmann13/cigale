@@ -16,8 +16,8 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Propriétés du document | Non | |
 | Protéger par mot de passe | Non | 1.x |
 | Ouvrir un PDF protégé par mot de passe | Oui | |
-| Combiner des fichiers | Non | Étape 3 |
-| Créer un PDF depuis une image | Non | Étape 3 |
+| Combiner des fichiers | Oui | PDF et images, plages par fichier, signets conservés |
+| Créer un PDF depuis une image | Oui | Via « Combiner » (JPEG, PNG, WebP…) |
 | Exporter vers Word, Excel, images | Non | 1.x (limité) |
 
 ## Affichage
@@ -43,7 +43,7 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 |---|---|---|
 | Réordonner (glisser-déposer, grille), pivoter, supprimer, dupliquer, insérer (vierge ou autre PDF), extraire | Oui | Étape 2 |
 | Remplacer des pages, recadrer | Non | 1.x |
-| Diviser un document | Non | Étape 3 |
+| Diviser un document | Oui | Plages, tous les N pages, signets ; .zip ou onglets |
 | Numéros de page, en-têtes, pieds, filigrane | Non | 1.x |
 
 ## Commenter

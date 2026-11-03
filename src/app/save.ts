@@ -47,8 +47,8 @@ export async function pickSaveHandle(suggestedName: string): Promise<FileSystemF
   }
 }
 
-export function downloadBytes(name: string, bytes: Uint8Array): void {
-  const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }));
+export function downloadBytes(name: string, bytes: Uint8Array, mime = 'application/pdf'): void {
+  const url = URL.createObjectURL(new Blob([bytes.slice()], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;

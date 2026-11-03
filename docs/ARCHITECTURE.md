@@ -47,6 +47,15 @@ tests/unit, e2e, fixtures/out (générées)
 - **Interface alignée sur Grillon** : barre du haut à 36 px avec le bouton « Fichier » plein couleur et son menu déroulant, accueil à colonne colorée et tuiles ; mêmes neutres (blanc, gris froids), couleur propre à Cigale (terracotta) pour que les applis se reconnaissent comme une famille.
 - **Tests de contrôle** : `qpdf --check` sur chaque opération et sur un enchaînement de 20 (ignoré si qpdf est absent ; la CI l'installe), rendu identique au pixel des pages non touchées, texte et signets relus par pdf.js, enregistrement testé avec de vrais `FileSystemFileHandle` (OPFS).
 
+## Décisions de l'étape 3 (fusionner et découper)
+
+- **`src/pdf/doc-ops.ts`** (pur, sans DOM) : `mergeSources`, `splitDocument`, `topLevelBookmarks`, `zipParts` ; **`src/data/page-ranges.ts`** : syntaxe des plages, découpe tous les N / aux signets, noms de fichiers sûrs et uniques. Même worker que l'étape 2 (nouveaux types de message, **progression** par messages `{progress}`), Annuler = arrêt du worker.
+- **Signets** : lecture maison de l'arbre `/Outlines` avec pdf-lib (destinations explicites, actions GoTo, destinations nommées `/Dests` et arbre `/Names/Dests`, protection contre les cycles) ; réécriture à la main. Un signet par fichier fusionné (comme Acrobat), les signets d'origine dessous.
+- **Images** : JPEG et PNG intégrés tels quels (pas de recompression) ; les autres formats passent par `createImageBitmap` + `OffscreenCanvas` dans le worker (PNG, fond blanc), refusés proprement sinon. Orientation EXIF lue à la main, appliquée par la rotation de page.
+- **Zip** : `fflate.zipSync` niveau 0 (un PDF est déjà compressé), noms UTF-8.
+- **Fuites** : après fusion, découpe et extraction on appelle `pruneUnreachable` : seul ce qui est atteignable depuis les pages gardées reste dans le fichier.
+- **Choix d'interface** : le résultat d'une fusion ou d'une découpe s'ouvre toujours dans un onglet « non enregistré » (jamais d'écriture automatique) ; « Combiner » part du document ouvert ; ≤ 10 onglets pour une découpe, ≤ 200 parties au total.
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

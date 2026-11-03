@@ -13,7 +13,7 @@ test('accueil : version, boutons et aucune requête externe', async ({ page }) =
   await gotoHome(page);
   await expect(page.locator('#app-version')).toContainText(`Version ${version}`);
   await expect(page.locator('#home-open')).toBeVisible();
-  await expect(page.locator('#home-combine')).toBeDisabled();
+  await expect(page.locator('#home-combine')).toBeEnabled();
   await openPdf(page, 'simple-3p.pdf');
   await waitFirstPage(page);
   expect(external).toEqual([]);

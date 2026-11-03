@@ -29,7 +29,7 @@ Pas de framework d'interface : TypeScript + DOM, comme l'écran d'accueil de Gri
 
 1. ✔ **Socle** — dépôt, Vite + TypeScript, CI, PWA, accueil, ouverture et affichage, miniatures, signets, zoom, recherche, tests, déploiement.
 2. ✔ **Organiser les pages** (réordonner, pivoter, supprimer, dupliquer, insérer, extraire) et **enregistrer** (⌘S vérifié, version précédente, annuler/rétablir).
-3. **Fusionner et découper** (plages, images, signets conservés, export en lot zip).
+3. ✔ **Fusionner et découper** (plages, images, signets conservés, export en lot zip).
 4. **Annotations** (vraies annotations PDF avec apparences) et panneau Commentaires.
 5. **Durcissement** : corpus de tests, performances, PDF cassés ou chiffrés, sauvegarde automatique, limites. **Version 1.0.**
 6. **1.x** : formulaires, signature, caviardage réel, OCR, compression, protection, en-têtes/pieds, recadrage, comparaison, conversions, édition de texte limitée.

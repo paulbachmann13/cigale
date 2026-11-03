@@ -1,7 +1,7 @@
 import { fmt, t } from '../i18n/fr';
 import { clear, h } from './dom';
 
-function modal(build: (close: () => void) => Node[], onClose?: () => void): HTMLDialogElement {
+export function modal(build: (close: () => void) => Node[], onClose?: () => void): HTMLDialogElement {
   const dlg = h('dialog', { class: 'modal' });
   const close = () => dlg.close();
   dlg.append(...build(close));

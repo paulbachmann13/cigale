@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 import { type PageOp, applyOp, extractPages } from '../../src/pdf/page-ops';
-import { addFlatOutline, makePdf } from './helpers';
+import { mergeSources, splitDocument } from '../../src/pdf/doc-ops';
+import { addFlatOutline, makePdf, makePng } from './helpers';
 
 /** Contrôle structurel externe : qpdf --check (ignoré si qpdf n'est pas installé ; la CI l'installe). */
 const hasQpdf = spawnSync('qpdf', ['--version']).status === 0;
@@ -66,5 +67,16 @@ describe.skipIf(!hasQpdf)('qpdf --check sur les documents produits', () => {
     ];
     for (const op of [...seq, ...seq, ...seq.slice(0, 4)]) bytes = (await applyOp(bytes, op)).bytes;
     check(bytes, 'enchainement.pdf');
+  });
+  it('fusion avec signets, images et sous-ensemble de pages', async () => {
+    const r = await mergeSources(
+      [{ name: 'a.pdf', bytes: await withOutline(), pages: [0, 2, 4] }, { name: 'i.png', bytes: makePng(300, 200) }, { name: 'b.pdf', bytes: await makePdf(3) }],
+      { keepBookmarks: true },
+    );
+    check(r.bytes, 'fusion.pdf');
+  });
+  it('découpe', async () => {
+    const parts = await splitDocument(await withOutline(), [{ from: 1, to: 2 }, { from: 3, to: 5 }], ['a.pdf', 'b.pdf']);
+    parts.forEach((p) => check(p.bytes, p.name));
   });
 });

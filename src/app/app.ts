@@ -14,6 +14,7 @@ import { type IconName, icon } from './icons';
 import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
 import { PageList } from './pagelist';
+import { openCombineDialog, openSplitDialog } from './tools';
 import type { Session } from './session';
 import { loadSettings } from './settings';
 
@@ -222,6 +223,8 @@ export class App {
     const items: MenuItem[] = [
       { id: 'home', label: t.file.home, run: () => this.showHome() },
       { id: 'open', label: t.file.open, shortcut: `${mod}O`, run: () => void this.openDialog(), separatorBefore: true },
+      { id: 'combine', label: t.file.combine, run: () => this.openCombine(), separatorBefore: true },
+      { id: 'split', label: t.file.split, disabled: !has, run: () => this.openSplit() },
       { id: 'save', label: t.file.save, shortcut: `${mod}S`, disabled: !has, run: () => void this.save(), separatorBefore: true },
       { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
       { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
@@ -232,6 +235,23 @@ export class App {
     this.fileButton.setAttribute('aria-expanded', 'true');
     const menu = showMenu(items, this.fileButton, () => this.fileButton.setAttribute('aria-expanded', 'false'));
     menu.id = 'file-menu-list';
+  }
+
+  private toolsHost() {
+    return {
+      busy: (text: string, onCancel: () => void) => this.showOverlay(text, onCancel),
+      idle: () => this.hideLoading(),
+      openNew: (name: string, bytes: Uint8Array) => this.openBytes(name, bytes, { unsaved: true }),
+    };
+  }
+
+  /** « Combiner des fichiers » : part du document affiché, s'il y en a un. */
+  openCombine(): void {
+    openCombineDialog(this.toolsHost(), !this.workspace.hidden ? (this.active ?? undefined) : undefined);
+  }
+
+  private openSplit(): void {
+    if (this.active) openSplitDialog(this.toolsHost(), this.active);
   }
 
   private openInsertMenu(anchor: HTMLElement) {
@@ -454,10 +474,16 @@ export class App {
     }
   }
 
-  private showOverlay(text: string, onCancel: () => void) {
+  /** Affiche le message d'attente avec Annuler ; renvoie la fonction qui règle la progression (0 à 1). */
+  private showOverlay(text: string, onCancel: () => void): (fraction: number) => void {
     clear(this.loadingEl);
-    this.loadingEl.append(h('div', { class: 'loading-box' }, h('p', {}, text), h('progress', {}), h('button', { id: 'loading-cancel', onclick: onCancel }, t.loading.cancel)));
+    const bar = h('progress', {});
+    this.loadingEl.append(h('div', { class: 'loading-box' }, h('p', {}, text), bar, h('button', { id: 'loading-cancel', onclick: onCancel }, t.loading.cancel)));
     this.loadingEl.hidden = false;
+    return (fraction) => {
+      bar.max = 1;
+      bar.value = Math.min(1, Math.max(0, fraction));
+    };
   }
   private hideLoading() {
     this.loadingEl.hidden = true;

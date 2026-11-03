@@ -27,6 +27,14 @@ Avec `simple-3p.pdf`, `signets.pdf`, `tailles-mixtes.pdf` et `chiffre.pdf` (mot 
 6. Avec **Chrome** : ouvrir un PDF du Mac, modifier, ⌘S ; fermer, rouvrir depuis Récents (accepter la permission) : modifications présentes. Vérifier dans Accueil → Versions précédentes que l'ancienne version est téléchargeable et identique à l'original.
 7. Avec **Safari** : ⌘S télécharge une copie (message explicite).
 
+## Étape 3 (fusionner et découper) — Aperçu ET Acrobat
+
+1. Combiner `simple-3p.pdf` + `signets.pdf` + une photo JPEG prise au téléphone en portrait : enregistrer sous « combine.pdf ». Dans Aperçu et Acrobat : 10 pages, la photo est à l'endroit et entière, accents intacts.
+2. Panneau Signets (Aperçu : Affichage > Signets ; Acrobat : volet Signets) : « simple-3p », « signets » (avec Partie A, Partie B… dessous) et la photo ; chaque clic mène à la bonne page.
+3. Combiner avec une plage « 2-3, 6 » sur `signets.pdf` : 3 pages, les bonnes.
+4. Diviser `signets.pdf` par signets de premier niveau (3 parties), puis en .zip : décompresser avec l'Archive Utility du Mac ; les noms accentués sont corrects et chaque PDF s'ouvre dans Aperçu/Acrobat.
+5. Un vrai scan (plusieurs pages d'images) : combiner 3 scans, vérifier netteté et poids du fichier (pas de recompression des images : le poids doit être voisin de la somme des originaux).
+
 ## Étapes suivantes (à compléter au fur et à mesure)
 
 - **Étapes 2 et 3** : pour chaque PDF produit (réorganisé, extrait, fusionné, découpé) — s'ouvre sans message d'erreur dans Aperçu **et** Acrobat ; nombre et ordre des pages ; signets et liens conservés ; Acrobat ne propose pas d'« enregistrer les modifications » à la fermeture sans raison.

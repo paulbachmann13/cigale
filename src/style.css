@@ -186,3 +186,21 @@ button.tool svg { display: block; }
 .selection-info { color: var(--muted); font-size: 13px; white-space: nowrap; margin-left: 8px; }
 #thumb-size { width: 110px; accent-color: var(--accent); }
 dialog input[type='number'] { width: 100%; padding: 8px; margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+
+/* Combiner / Diviser */
+dialog.wide { width: min(720px, 94vw); max-width: none; }
+.combine-list, .split-preview { list-style: none; margin: 8px 0; padding: 0; max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.combine-row, .split-preview li { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.combine-row:last-child, .split-preview li:last-child { border-bottom: 0; }
+.combine-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combine-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.range-input { width: 190px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.range-input:disabled { opacity: 0.4; }
+button.mini { padding: 2px 8px !important; border-radius: 6px !important; }
+button.mini:disabled { opacity: 0.35; }
+.combine-tools { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.split-modes { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; }
+.form-row { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.form-row input, dialog input[type='text'] { padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.loading-box progress { width: 100%; }
+#page-count { white-space: nowrap; }

@@ -79,3 +79,33 @@ export async function pickOnePdf(): Promise<File | null> {
     input.click();
   });
 }
+
+const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif'];
+
+/** Choisit plusieurs fichiers PDF et images (pour « Combiner »). */
+export async function pickPdfsAndImages(): Promise<File[]> {
+  const picker = (window as unknown as { showOpenFilePicker?: Picker }).showOpenFilePicker;
+  if (picker) {
+    try {
+      const handles = await picker({
+        multiple: true,
+        types: [{ description: 'PDF et images', accept: { 'application/pdf': ['.pdf'], 'image/*': IMAGE_EXT } }],
+      });
+      return await Promise.all(handles.map((h) => h.getFile()));
+    } catch (err) {
+      if ((err as DOMException).name === 'AbortError') return [];
+    }
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = ['application/pdf', '.pdf', 'image/*', ...IMAGE_EXT].join(',');
+    input.id = 'file-input-combine';
+    input.hidden = true;
+    input.addEventListener('change', () => (resolve(Array.from(input.files ?? [])), input.remove()));
+    input.addEventListener('cancel', () => (resolve([]), input.remove()));
+    document.body.append(input);
+    input.click();
+  });
+}

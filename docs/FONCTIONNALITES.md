@@ -1,6 +1,6 @@
 # Fonctionnalités et limites connues
 
-État : **étape 2 (organiser les pages et enregistrer)**, version 0.2.0.
+État : **étape 3 (fusionner et découper)**, version 0.3.0.
 
 ## Fonctionnalités
 
@@ -23,6 +23,14 @@
 - Toutes les opérations tournent dans un **Web Worker** (annulables) ; le document n'est adopté que si le résultat s'ouvre correctement et a le bon nombre de pages.
 - Conservés : signets (ils suivent leurs pages), liens, métadonnées d'origine (titre, producteur…), pièces jointes, XMP, chiffrement (le document reste protégé par le même mot de passe).
 
+### Combiner et diviser (étape 3)
+- **Combiner des fichiers** : PDF et images (JPEG, PNG ; WebP, GIF, BMP… si le navigateur sait les décoder), réordonner (↑ ↓), retirer, **plage de pages par fichier** (« 1-3, 5, 8- », ordre conservé), mots de passe demandés pour les PDF chiffrés. Si un document est ouvert, il est la première ligne.
+- **Signets** : un signet par fichier (nom sans extension) avec dessous les signets d'origine, remappés sur les nouvelles pages (signets vers des pages non gardées retirés) ; option pour ne pas les garder.
+- **Images** : page à la taille de l'image, réduite pour tenir dans un A4 (portrait ou paysage) ; orientation EXIF des JPEG respectée (page tournée).
+- **Diviser** : par plages, tous les N pages, ou aux signets de premier niveau (les pages avant le premier signet forment une partie). Aperçu des noms (« rapport - pages 1–3.pdf », noms uniques, caractères interdits retirés), **.zip** (fflate) ou ouverture dans des onglets (10 parties au plus), 200 parties au plus.
+- Tout tourne dans un Web Worker, avec **progression et Annuler** ; fusion de 10 × 100 pages en ≈ 0,2 s (cible : < 10 s).
+- Les fichiers produits ne contiennent que le contenu atteignable depuis les pages gardées.
+
 ### Enregistrer (étape 2)
 - **⌘S** remplace le fichier (Chrome, Edge : écriture sur place via un fichier temporaire, atomique), puis **relit le fichier et compare** (SHA-256) avec ce qui devait être écrit.
 - **⇧⌘S** « Enregistrer sous ». Safari et Firefox n'ont pas cette API : Cigale **télécharge une copie** et le dit.
@@ -40,7 +48,11 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 
 | Limite | Détail | Prévu |
 |---|---|---|
-| Pas de fusion ni d'annotation | Seules les pages s'organisent pour l'instant | Étapes 3 et 4 |
+| Pas d'annotation | Annotations existantes affichées seulement | Étape 4 |
+| Fusion : formulaires | Les champs de formulaire des fichiers combinés ne sont pas repris (le contenu affiché l'est) | Étape 5 |
+| Découpe : signets | Les parties ne reprennent pas les signets | Étape 5 |
+| Images HEIC, TIFF | Acceptées seulement si le navigateur sait les décoder (Safari : HEIC ; Chrome : non) ; sinon message clair | — |
+| Combiner : glisser-déposer | Réordonner avec ↑ ↓ (pas de glisser) ; pas de dépôt de fichiers dans la boîte | Étape 5 |
 | « .bak » à côté du fichier | Un navigateur ne peut pas créer de fichier voisin : l'ancienne version est gardée dans Cigale (Accueil → Versions précédentes). L'application Mac pourra écrire un vrai .bak | App Mac |
 | Safari / Firefox | Pas d'enregistrement sur place : copie téléchargée | — |
 | Extraire | Le nouveau document ne reprend ni les signets ni les formulaires | Étape 5 |

@@ -7,9 +7,9 @@ Site : https://paulbachmann13.github.io/cigale/ — même philosophie que [Grill
 
 ## État
 
-Version 0.2.0 (étape 2) : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
-(pivoter, supprimer, dupliquer, déplacer, insérer, extraire, vue grille), **annuler/rétablir** et **enregistrer** (⌘S vérifié, version précédente gardée). Les étapes suivantes
-(fusionner/découper, annoter, application Mac) sont décrites dans [docs/PLAN.md](docs/PLAN.md) ; l'état détaillé et les limites dans
+Version 0.3.0 (étapes 2 et 3) : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
+(pivoter, supprimer, dupliquer, déplacer, insérer, extraire, vue grille), **annuler/rétablir** et **enregistrer** (⌘S vérifié, version précédente gardée), **combiner** des PDF et des images, **diviser** (plages, tous les N, signets, .zip). Les étapes suivantes
+(annoter, application Mac) sont décrites dans [docs/PLAN.md](docs/PLAN.md) ; l'état détaillé et les limites dans
 [docs/FONCTIONNALITES.md](docs/FONCTIONNALITES.md) ; la comparaison avec Acrobat dans [docs/ACROBAT-COMPARAISON.md](docs/ACROBAT-COMPARAISON.md).
 
 ## Installer l'application (PWA)

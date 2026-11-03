@@ -2,6 +2,18 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [0.3.0] — 2026-11-03
+
+### Ajouté
+- **Combiner des fichiers** (menu Fichier ou tuile de l'accueil) : assemblez des PDF et des images (JPEG, PNG, et selon votre navigateur WebP, GIF, BMP) dans l'ordre voulu, avec pour chaque PDF une plage de pages facultative (par exemple « 1-3, 5 »). Le résultat s'ouvre dans un nouvel onglet ; rien n'est enregistré sans votre accord.
+- **Signets conservés** à la fusion : un signet par fichier, avec ses propres signets dessous.
+- Les photos prises « de côté » (téléphone) sont redressées, et les grandes images sont ramenées à la taille d'une page A4.
+- **Diviser le document** (menu Fichier) : par plages de pages, tous les N pages, ou d'après les signets de premier niveau. Un aperçu des fichiers s'affiche avant de partir ; vous pouvez les ouvrir dans des onglets ou les enregistrer d'un coup dans une archive .zip.
+- Une barre de progression avec « Annuler » pour les fusions et les découpes longues.
+
+### Modifié
+- Les nouveaux documents créés (extrait, combiné, parties) ne contiennent que ce qui est utile : rien d'autre du fichier d'origine n'est resté caché dedans.
+
 ## [0.2.0] — 2026-11-03
 
 ### Ajouté

@@ -219,6 +219,7 @@ export async function extractPages(bytes: Uint8Array, pages: number[], password?
   copies.forEach((p) => out.addPage(p));
   const title = src.getTitle();
   if (title) out.setTitle(title, { showInWindowTitleBar: false });
+  pruneUnreachable(out);
   return out.save();
 }
 
