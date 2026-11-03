@@ -84,6 +84,10 @@ export class Editing {
         const go = await confirmDialog(t.confirm.signedTitle, fmt(t.confirm.signedMessage, { name: s.name }), t.confirm.signedGo, t.confirm.signedCancel);
         if (!go) return false;
       }
+      if (info.encrypted) {
+        const go = await confirmDialog(t.confirm.encryptedTitle, fmt(t.confirm.encryptedMessage, { name: s.name }), t.confirm.encryptedGo, t.confirm.signedCancel);
+        if (!go) return false;
+      }
     } catch {
       /* l'analyse a échoué : l'opération elle-même dira ce qui ne va pas */
     }

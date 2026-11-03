@@ -34,6 +34,7 @@ import {
   unionRect,
 } from '../data/annotations';
 import { loadForEdit, pruneUnreachable } from './page-ops';
+import { saveDoc } from './protection';
 
 export class AnnotError extends Error {
   constructor(readonly code: 'notFound' | 'badPage' | 'structure') {
@@ -434,7 +435,7 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
     ids.push(idOf(ref));
   }
   pruneUnreachable(doc); // polices non utilisées par ces annotations
-  return { bytes: await doc.save(), ids };
+  return { bytes: await saveDoc(doc), ids };
 }
 
 function appendAnnot(page: PDFPage, ctx: PDFDocument['context'], ref: PDFRef): void {
@@ -487,7 +488,7 @@ export async function updateAnnotation(bytes: Uint8Array, id: string, patch: Ann
   if (patch.stamp !== undefined && next.kind === 'stamp') hit.dict.set(N('Name'), N(`Cigale-${STAMPS[patch.stamp] ? patch.stamp : 'custom'}`));
   if (redraw) setAppearance(doc, hit.dict, buildAppearance(next, await fontsFor(doc)));
   pruneUnreachable(doc); // l'ancien flux d'apparence et les polices inutilisées ne restent pas dans le fichier
-  return doc.save();
+  return saveDoc(doc);
 }
 
 /** Supprime des annotations, avec leurs réponses et leur bulle (Popup). */
@@ -527,5 +528,5 @@ export async function deleteAnnotations(bytes: Uint8Array, ids: string[], passwo
   }
   if (removed === 0) throw new AnnotError('notFound');
   pruneUnreachable(doc);
-  return doc.save();
+  return saveDoc(doc);
 }

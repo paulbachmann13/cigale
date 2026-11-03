@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { docRotations, docTitles, expectPages, gotoHome, isDirty, openPdf, waitFirstPage, withoutFilePickers } from './helpers';
+import { docRotations, docTitles, expectPages, fixture, gotoHome, isDirty, openPdf, waitFirstPage, withoutFilePickers } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await withoutFilePickers(page);
@@ -216,4 +216,28 @@ test('annuler très vite plusieurs fois : un seul document affiché, aucun reste
   expect(await isDirty(page)).toBe(false);
   await expect(page.locator('.doc-view')).toHaveCount(1);
   await expect(page.locator('.left-panel .thumbs')).toHaveCount(1);
+});
+
+test('un PDF protégé par mot de passe le reste après modification et enregistrement', async ({ page }) => {
+  await page.click('#tab-home').catch(() => undefined);
+  await page.locator('#file-input').setInputFiles(fixture('chiffre.pdf'));
+  await page.fill('#password-input', 'secret');
+  await page.click('#password-ok');
+  await page.waitForSelector('.tab.doc-tab.active .tab-label:has-text("chiffre.pdf")');
+  await page.locator('.doc-view:not([hidden]) .page canvas').first().waitFor();
+  await page.click('.doc-view:not([hidden])'); // focus
+  await page.locator('.left-panel .thumb').first().click();
+  await page.click('#btn-rot-right');
+  // avertissement : la protection est gardée, l'ancien mot de passe propriétaire est remplacé
+  await expect(page.locator('#dialog-confirm')).toContainText('protégé');
+  await page.click('#confirm-ok');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { cigale: { app: { sessions: { history: { dirty: boolean } }[] } } }).cigale.app.sessions.at(-1)!.history.dirty)).toBe(true);
+  const download = page.waitForEvent('download');
+  await page.keyboard.press('Meta+s');
+  const file = await download;
+  const { readFileSync } = await import('node:fs');
+  const bytes = readFileSync((await file.path())!);
+  // sans mot de passe, pdf-lib refuse : le fichier est toujours chiffré
+  await expect(PDFDocument.load(bytes)).rejects.toThrow(/encrypted/i);
+  expect((await PDFDocument.load(bytes, { ignoreEncryption: true })).context.trailerInfo.Encrypt).toBeDefined();
 });

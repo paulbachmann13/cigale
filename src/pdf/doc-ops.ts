@@ -6,6 +6,7 @@ import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, type 
 import { zipSync } from 'fflate';
 import { type Range, rangesToIndices } from '../data/page-ranges';
 import { loadForEdit, pruneUnreachable } from './page-ops';
+import { inheritProtection, saveDoc } from './protection';
 
 export class DocOpError extends Error {
   constructor(readonly code: 'unsupportedImage' | 'noSources' | 'structure', readonly file = '') {
@@ -273,6 +274,7 @@ export async function mergeSources(sources: MergeSource[], opts: MergeOptions, p
       if (src.expectedPages !== undefined && doc.getPageCount() !== src.expectedPages) throw new DocOpError('structure', src.name);
       const indices = src.pages ?? Array.from({ length: doc.getPageCount() }, (_, i) => i);
       const originals = doc.getPages().map((p) => p.ref);
+      inheritProtection(out, doc); // un fichier protégé protège le résultat (mot de passe du premier fichier protégé)
       const copies = await out.copyPages(doc, indices);
       copies.forEach((p) => out.addPage(p));
       if (copies.length) {
@@ -286,7 +288,7 @@ export async function mergeSources(sources: MergeSource[], opts: MergeOptions, p
   }
   if (opts.keepBookmarks) writeOutline(out, outline);
   pruneUnreachable(out); // rien d'autre que ce qui est atteignable depuis les pages gardées
-  return { bytes: await out.save(), pageCount: out.getPageCount() };
+  return { bytes: await saveDoc(out), pageCount: out.getPageCount() };
 }
 
 // ───────────── découpe ─────────────
@@ -303,12 +305,13 @@ export async function splitDocument(bytes: Uint8Array, ranges: Range[], names: s
   const parts: Part[] = [];
   for (const [i, r] of ranges.entries()) {
     const out = await PDFDocument.create({ updateMetadata: false });
+    inheritProtection(out, src);
     const copies = await out.copyPages(src, rangesToIndices([r]));
     copies.forEach((p) => out.addPage(p));
     const title = src.getTitle();
     if (title) out.setTitle(title, { showInWindowTitleBar: false });
     pruneUnreachable(out);
-    parts.push({ name: names[i], bytes: await out.save() });
+    parts.push({ name: names[i], bytes: await saveDoc(out) });
     progress?.((i + 1) / ranges.length);
   }
   return parts;

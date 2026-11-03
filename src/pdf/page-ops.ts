@@ -19,6 +19,7 @@ import {
   degrees,
 } from '@cantoo/pdf-lib';
 import { moveOrder, normalizeSelection } from '../data/page-order';
+import { getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
 
 export type PageOp =
   | { op: 'rotate'; pages: number[]; delta: 90 | -90 | 180 }
@@ -54,10 +55,34 @@ export interface Inspection {
   hasAttachments: boolean;
 }
 
-const loadOpts = (password?: string) => ({ updateMetadata: false, password, throwOnInvalidObject: false });
+// preserveXFA : sinon pdf-lib supprime les formulaires XFA (ils deviendraient vides dans Acrobat)
+const loadOpts = (password?: string) => ({ updateMetadata: false, password, throwOnInvalidObject: false, preserveXFA: true });
 
 export async function loadForEdit(bytes: Uint8Array, password?: string): Promise<PDFDocument> {
-  return PDFDocument.load(bytes, loadOpts(password));
+  let pw = password;
+  let doc: PDFDocument;
+  try {
+    doc = await PDFDocument.load(bytes, loadOpts(pw));
+  } catch (err) {
+    // Document chiffré SANS mot de passe d'ouverture (restrictions seules) : pdf.js l'ouvre sans rien demander, pdf-lib veut « '' ».
+    if (pw !== undefined || !/encrypted/i.test((err as Error).message)) throw err;
+    pw = '';
+    doc = await PDFDocument.load(bytes, loadOpts(pw));
+  }
+  // pdf-lib déchiffre à l'ouverture : on retient comment le protéger de nouveau à l'enregistrement.
+  if (doc.context.isDecrypted && pw !== undefined) {
+    let permissions = {};
+    try {
+      const raw = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
+      const enc = raw.context.lookup(raw.context.trailerInfo.Encrypt, PDFDict);
+      const P = enc?.lookupMaybe(PDFName.of('P'), PDFNumber)?.asNumber();
+      if (P !== undefined) permissions = permissionsFromP(P | 0);
+    } catch {
+      /* /P illisible : aucune restriction connue, le mot de passe est quand même gardé */
+    }
+    setProtection(doc, { password: pw, permissions });
+  }
+  return doc;
 }
 
 /** Ce que contient le document, pour avertir AVANT d'écrire quelque chose que Cigale ne sait pas conserver. */
@@ -74,7 +99,7 @@ export async function inspect(bytes: Uint8Array, password?: string): Promise<Ins
   const names = cat.lookupMaybe(PDFName.of('Names'), PDFDict);
   return {
     pageCount: doc.getPageCount(),
-    encrypted: doc.isEncrypted || doc.context.isDecrypted || !!doc.context.trailerInfo.Encrypt,
+    encrypted: getProtection(doc) !== undefined || doc.isEncrypted,
     signed,
     hasForm: !!acro,
     hasOutline: !!cat.lookupMaybe(PDFName.of('Outlines'), PDFDict),
@@ -170,7 +195,7 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, 
       break;
     }
   }
-  const out = await doc.save();
+  const out = await saveDoc(doc);
   return { bytes: out, pageCount: doc.getPageCount(), selection };
 }
 
@@ -215,19 +240,20 @@ export async function extractPages(bytes: Uint8Array, pages: number[], password?
   const wanted = normalizeSelection(pages, src.getPageCount());
   if (wanted.length === 0) throw new PageOpError('noSelection');
   const out = await PDFDocument.create({ updateMetadata: false });
+  inheritProtection(out, src);
   const copies = await out.copyPages(src, wanted);
   copies.forEach((p) => out.addPage(p));
   const title = src.getTitle();
   if (title) out.setTitle(title, { showInWindowTitleBar: false });
   pruneUnreachable(out);
-  return out.save();
+  return saveDoc(out);
 }
 
 /** Ré-écrit le document tel quel (chiffrement retiré, objets inutiles écartés) : base de « Enregistrer ». */
 export async function normalizeDocument(bytes: Uint8Array, password?: string): Promise<Uint8Array> {
   const doc = await loadForEdit(bytes, password);
   pruneUnreachable(doc);
-  return doc.save();
+  return saveDoc(doc);
 }
 
 /**

@@ -155,15 +155,12 @@ describe('conservation du reste du document', () => {
     expect(after.map((p) => [p.width, p.height, p.rotate])).toEqual([before[1], before[2], before[0]].map((p) => [p.width, p.height, p.rotate]));
   });
 
-  it('retire le chiffrement à l’écriture : signalé par inspect() pour avertir avant', async () => {
+  it('signale un document chiffré (pour avertir avant) ; la protection elle-même est testée dans corpus.test.ts', async () => {
     const doc = await PDFDocument.create();
     doc.addPage();
-    doc.encrypt({ userPassword: 'secret', ownerPassword: 'chef', permissions: { printing: 'highResolution' } });
-    const src = await doc.save();
-    const info = await inspect(src, 'secret');
+    doc.encrypt({ userPassword: 'secret', ownerPassword: 'chef', permissions: {} });
+    const info = await inspect(await doc.save(), 'secret');
     expect(info.encrypted).toBe(true);
-    const r = await applyOp(src, { op: 'rotate', pages: [0], delta: 90 }, 'secret');
-    expect((await readPages(r.bytes))[0].rotate).toBe(90);
   });
 
   it('refuse un mot de passe faux sans rien produire', async () => {

@@ -3,6 +3,8 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { readFileSync } from 'node:fs';
 import { docRotations, fixture, gotoHome, isDirty } from './helpers';
 
+test.skip(({ browserName }) => browserName !== 'chromium', 'Safari n’a ni « createWritable » ni « Enregistrer sous » : il télécharge (testé dans pages.spec.ts)');
+
 /**
  * Enregistrement « sur place » : on utilise le système de fichiers privé du navigateur (OPFS), qui fournit de vrais
  * FileSystemFileHandle avec createWritable : c'est exactement le chemin qu'emprunte Chrome pour un fichier du Mac.

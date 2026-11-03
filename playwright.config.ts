@@ -19,6 +19,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // Safari (WebKit) : toute la batterie, pas seulement la fumée
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
     { name: 'webkit-ipad', use: { ...devices['iPad (gen 7) landscape'] }, testMatch: /smoke\.spec\.ts/ },
   ],
   webServer: {
