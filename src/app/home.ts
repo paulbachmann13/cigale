@@ -1,14 +1,17 @@
 import { parseChangelog, stripMarkup } from '../data/changelog';
 import { formatSize } from '../data/recent';
 import { fmt, t } from '../i18n/fr';
+import { deleteBackup, listBackups, readBackup } from '../storage/backups';
 import { clearRecents, loadRecents } from '../storage/recent';
+import { downloadBytes } from './save';
 import changelogMd from '../../CHANGELOG.md?raw';
 import type { App } from './app';
 import { showCustom } from './dialogs';
-import { h } from './dom';
+import { h, toast } from './dom';
+import { type IconName, icon } from './icons';
 import { type DefaultZoom, type ThemeChoice, loadSettings, saveSettings } from './settings';
 
-/** Écran d'accueil : Ouvrir, Combiner, Récents, Reprendre, Paramètres, version et nouveautés. */
+/** Écran d'accueil (même disposition que Grillon) : colonne colorée à gauche, tuiles d'actions et récents à droite. */
 export function buildHome(app: App): HTMLElement {
   const recents = loadRecents();
   const list = h('ul', { class: 'recent-list', id: 'recent-list' });
@@ -27,45 +30,49 @@ export function buildHome(app: App): HTMLElement {
     );
   }
 
-  const section = h(
-    'section',
-    { id: 'home', class: 'home' },
+  const tile = (id: string, iconName: IconName, title: string, sub: string, onclick?: () => void, disabled = false) =>
+    h(
+      'button',
+      { id, class: 'tile', type: 'button', disabled, onclick },
+      h('span', { class: 'tile-icon' }, icon(iconName, 28)),
+      h('span', { class: 'tile-text' }, h('strong', {}, title), h('small', {}, sub)),
+    );
+
+  const nav = h(
+    'aside',
+    { class: 'home-nav' },
+    h('div', { class: 'home-brand' }, h('img', { src: `${import.meta.env.BASE_URL}icon.svg`, alt: '', width: 36, height: 36 }), t.app.name),
+    h('button', { class: 'home-nav-item active', type: 'button' }, t.file.home),
+    h('button', { class: 'home-nav-item', id: 'home-nav-open', type: 'button', onclick: () => void app.openDialog() }, t.file.open),
+    h('button', { class: 'home-nav-item', id: 'home-versions', type: 'button', onclick: openVersions }, t.file.versions),
+    h('button', { class: 'home-nav-item', id: 'home-settings', type: 'button', onclick: openSettings }, t.home.settings),
+    h('button', { class: 'home-nav-item', id: 'home-news', type: 'button', onclick: openWhatsNew }, t.home.whatsNew),
+    h('span', { class: 'home-spacer' }),
+    h('span', { class: 'home-version', id: 'app-version' }, fmt(t.home.version, { version: __APP_VERSION__ })),
+  );
+
+  const main = h(
+    'main',
+    { class: 'home-main' },
+    h('h1', {}, t.home.title),
+    h('p', { class: 'home-sub' }, t.app.tagline),
     h(
       'div',
-      { class: 'home-inner' },
-      h('img', { class: 'home-logo', src: `${import.meta.env.BASE_URL}icon.svg`, alt: '', width: 72, height: 72 }),
-      h('h1', {}, t.app.name),
-      h('p', { class: 'tagline' }, t.app.tagline),
-      h('h2', {}, t.home.title),
-      h(
-        'div',
-        { class: 'home-actions' },
-        h('button', { id: 'home-open', class: 'big primary', onclick: () => void app.openDialog() }, t.home.open),
-        h('button', { id: 'home-combine', class: 'big', disabled: true, title: t.home.combineSoon }, t.home.combine, h('small', {}, t.home.combineSoon)),
-      ),
-      h('p', { class: 'hint' }, t.home.openHint),
-      h('h2', {}, t.home.recents),
-      recents.length ? list : h('p', { class: 'empty', id: 'no-recents' }, t.home.noRecents),
-      h('p', { class: 'hint' }, t.home.recentsPrivacy),
-      recents.length
-        ? h('button', { class: 'link', id: 'clear-recents', onclick: () => void clearRecents().then(() => app.refreshHome()) }, t.home.clearRecents)
-        : null,
-      h('h2', {}, t.home.resume),
-      h('p', { class: 'empty' }, t.home.resumeSoon),
-      h(
-        'footer',
-        { class: 'home-footer' },
-        h('button', { id: 'home-settings', class: 'link', onclick: openSettings }, t.home.settings),
-        h('button', { id: 'home-news', class: 'link', onclick: openWhatsNew }, t.home.whatsNew),
-        h('span', { id: 'app-version' }, fmt(t.home.version, { version: __APP_VERSION__ })),
-      ),
-      h('p', { class: 'hint' }, t.home.offline),
+      { class: 'tiles' },
+      tile('home-open', 'open', t.home.open, t.home.openHint, () => void app.openDialog()),
+      tile('home-combine', 'duplicate', t.home.combine, t.home.combineSoon, undefined, true),
     ),
+    h('h2', {}, t.home.recents),
+    recents.length ? list : h('p', { class: 'empty', id: 'no-recents' }, t.home.noRecents),
+    h('p', { class: 'hint' }, t.home.recentsPrivacy),
+    recents.length ? h('button', { class: 'link', id: 'clear-recents', onclick: () => void clearRecents().then(() => app.refreshHome()) }, t.home.clearRecents) : null,
+    h('p', { class: 'hint' }, t.home.offline),
   );
-  return section;
+
+  return h('section', { id: 'home', class: 'home' }, nav, main);
 }
 
-function openWhatsNew() {
+export function openWhatsNew() {
   const body = h('div', { class: 'news' });
   for (const entry of parseChangelog(changelogMd).slice(0, 8)) {
     body.append(h('h3', {}, `${entry.version} — ${entry.date}`));
@@ -77,7 +84,7 @@ function openWhatsNew() {
   showCustom(t.whatsNew.title, body, t.whatsNew.close, 'dialog-news');
 }
 
-function openSettings() {
+export function openSettings() {
   const s = loadSettings();
   const theme = h(
     'select',
@@ -103,4 +110,30 @@ function openSettings() {
     t.settings.close,
     'dialog-settings',
   );
+}
+
+/** Liste des anciennes versions gardées avant chaque enregistrement qui remplace un fichier. */
+export function openVersions() {
+  const body = h('div', { class: 'versions' }, h('p', { class: 'hint' }, t.versions.hint));
+  const list = h('ul', { class: 'recent-list', id: 'versions-list' });
+  body.append(list);
+  const render = async () => {
+    list.replaceChildren();
+    const items = await listBackups();
+    if (!items.length) list.append(h('li', { class: 'empty' }, t.versions.none));
+    for (const b of items) {
+      list.append(
+        h(
+          'li',
+          { class: 'version-row' },
+          h('span', { class: 'recent-name' }, b.name),
+          h('span', { class: 'recent-meta' }, `${formatSize(b.size)} · ${new Date(b.at).toLocaleString('fr-FR')}`),
+          h('button', { class: 'link', onclick: () => void readBackup(b.id).then((bytes) => (bytes ? downloadBytes(b.name, bytes) : toast(t.versions.none))) }, t.versions.download),
+          h('button', { class: 'link', onclick: () => void deleteBackup(b.id).then(render) }, t.versions.delete),
+        ),
+      );
+    }
+  };
+  void render();
+  showCustom(t.versions.title, body, t.versions.close, 'dialog-versions');
 }

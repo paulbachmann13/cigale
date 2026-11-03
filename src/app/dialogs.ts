@@ -64,4 +64,75 @@ export function showCustom(title: string, body: Node, closeLabel: string, id: st
   dlg.id = id;
 }
 
+/** Question à deux réponses. Renvoie true si l'utilisateur accepte. */
+export function confirmDialog(title: string, message: string, okLabel: string, cancelLabel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let ok = false;
+    const dlg = modal(
+      (close) => [
+        h('h2', {}, title),
+        h('p', { class: 'dialog-text' }, message),
+        h(
+          'div',
+          { class: 'dialog-actions' },
+          h('button', { id: 'confirm-cancel', onclick: close }, cancelLabel),
+          h('button', { id: 'confirm-ok', class: 'primary', onclick: () => ((ok = true), close()) }, okLabel),
+        ),
+      ],
+      () => resolve(ok),
+    );
+    dlg.id = 'dialog-confirm';
+  });
+}
+
+/** « Enregistrer les modifications ? » : trois réponses. */
+export function askUnsaved(name: string): Promise<'save' | 'discard' | 'cancel'> {
+  return new Promise((resolve) => {
+    let answer: 'save' | 'discard' | 'cancel' = 'cancel';
+    const pick = (a: typeof answer, close: () => void) => () => ((answer = a), close());
+    const dlg = modal(
+      (close) => [
+        h('h2', {}, t.confirm.unsavedTitle),
+        h('p', { class: 'dialog-text' }, fmt(t.confirm.unsavedMessage, { name })),
+        h(
+          'div',
+          { class: 'dialog-actions' },
+          h('button', { id: 'unsaved-cancel', onclick: pick('cancel', close) }, t.confirm.cancel),
+          h('button', { id: 'unsaved-discard', onclick: pick('discard', close) }, t.confirm.discard),
+          h('button', { id: 'unsaved-save', class: 'primary', onclick: pick('save', close) }, t.confirm.save),
+        ),
+      ],
+      () => resolve(answer),
+    );
+    dlg.id = 'dialog-unsaved';
+  });
+}
+
+/** Demande un nombre entier entre min et max ; null si annulé. */
+export function askNumber(title: string, label: string, min: number, max: number, initial: number, okLabel: string, cancelLabel: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    let answer: number | null = null;
+    const input = h('input', { type: 'number', id: 'number-input', min, max, value: initial, 'aria-label': label });
+    const form = h(
+      'form',
+      { method: 'dialog' },
+      h('h2', {}, title),
+      h('label', { class: 'dialog-text' }, label, input),
+      h(
+        'div',
+        { class: 'dialog-actions' },
+        h('button', { type: 'button', id: 'number-cancel', onclick: () => dlg.close() }, cancelLabel),
+        h('button', { type: 'submit', class: 'primary', id: 'number-ok' }, okLabel),
+      ),
+    );
+    form.addEventListener('submit', () => {
+      const n = Math.round(Number(input.value));
+      answer = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null;
+    });
+    const dlg = modal(() => [form], () => resolve(answer));
+    dlg.id = 'dialog-number';
+    input.select();
+  });
+}
+
 export { clear };

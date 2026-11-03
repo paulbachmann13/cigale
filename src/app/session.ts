@@ -1,15 +1,26 @@
+import type { History } from '../data/history';
 import type { DocView } from '../pdf/viewer';
-import type { ThumbnailPanel } from './thumbnails';
+import type { PageList } from './pagelist';
 
-/** Un document ouvert dans un onglet. `bytes` garde l'original, jamais modifié (base des futures opérations). */
+/**
+ * Un document ouvert dans un onglet.
+ * `history.current` = document en mémoire (avec les modifications) ; `diskBytes` = ce qui est actuellement sur le disque.
+ * L'original n'est remplacé que par « Enregistrer ».
+ */
 export interface Session {
   id: number;
   name: string;
-  size: number;
-  bytes: Uint8Array;
+  history: History;
+  diskBytes: Uint8Array | null;
+  password?: string;
   handle?: FileSystemFileHandle;
+  signedAcknowledged: boolean;
+  /** Pages sélectionnées (indices à partir de 0). */
+  selection: number[];
+  organizing: boolean;
   view: DocView;
-  thumbs: ThumbnailPanel;
+  thumbs: PageList;
+  grid: PageList | null;
   outline: HTMLElement;
   tab: HTMLElement;
 }

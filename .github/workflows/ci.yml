@@ -30,6 +30,8 @@ jobs:
       - name: Licences (aucune GPL / AGPL / « Pro »)
         run: npm run check:licenses
       - run: npm run typecheck
+      - name: qpdf (contrôle structurel des PDF produits)
+        run: sudo apt-get update && sudo apt-get install -y qpdf
       - name: Tests unitaires
         run: npm test
       - run: npm run fixtures

@@ -1,20 +1,29 @@
+import { History } from '../data/history';
 import { classifyPdfError, hasPdfHeader } from '../data/pdf-files';
-import { formatZoom, parseZoom, stepZoom } from '../data/zoom';
-import { fmt, t } from '../i18n/fr';
+import { formatZoom, stepZoom } from '../data/zoom';
+import { fmt, plural, t } from '../i18n/fr';
 import { loadPdf } from '../pdf/engine';
 import { DocView, type ViewMode } from '../pdf/viewer';
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
-import { askPassword, showMessage } from './dialogs';
+import { askPassword, askUnsaved, showMessage } from './dialogs';
 import { clear, h, toast } from './dom';
+import { Editing } from './editing';
 import { type PickedFile, filesFromDrop, pickPdfs, readFromHandle } from './files';
-import { buildHome } from './home';
+import { buildHome, openSettings, openVersions, openWhatsNew } from './home';
+import { type IconName, icon } from './icons';
+import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
+import { PageList } from './pagelist';
 import type { Session } from './session';
 import { loadSettings } from './settings';
-import { ThumbnailPanel } from './thumbnails';
 
 const FIT_VALUES = ['page-width', 'page-fit', 'page-actual'] as const;
 const ZOOM_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8];
+const PANEL_THUMB = 132;
+const GRID_THUMB_DEFAULT = 170;
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac OS/.test(navigator.userAgent);
+const mod = isMac ? '⌘' : 'Ctrl+';
 
 export class App {
   readonly sessions: Session[] = [];
@@ -22,6 +31,7 @@ export class App {
   private nextId = 1;
   private panelTab: 'thumbnails' | 'bookmarks' = 'thumbnails';
   private fileInput = h('input', { type: 'file', accept: 'application/pdf,.pdf', multiple: true, id: 'file-input', hidden: true });
+  private editing: Editing;
 
   // éléments de l'interface
   private tabsEl = h('div', { class: 'tabs', role: 'tablist', 'aria-label': t.tabs.list });
@@ -41,10 +51,24 @@ export class App {
   private findCase = h('input', { type: 'checkbox', id: 'find-case' });
   private findAccents = h('input', { type: 'checkbox', id: 'find-accents' });
   private loadingEl = h('div', { class: 'loading', id: 'loading', hidden: true, role: 'status' });
+  private statusEl = h('span', { class: 'topbar-status', id: 'status', role: 'status' });
+  private fileButton = h('button', { class: 'topbar-file', id: 'file-menu', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, t.file.menu);
+  private thumbSize = h('input', { type: 'range', id: 'thumb-size', min: 90, max: 320, step: 10, value: GRID_THUMB_DEFAULT, 'aria-label': t.pages.thumbSize });
+  private selectionInfo = h('span', { class: 'selection-info', id: 'selection-info', 'aria-live': 'polite' });
+  private editButtons: Record<string, HTMLButtonElement> = {};
   private findTimer: number | undefined;
 
   constructor(private root: HTMLElement) {
     this.homeEl = buildHome(this);
+    this.editing = new Editing({
+      reload: (s, bytes, selection) => this.reload(s, bytes, selection),
+      openNew: (name, bytes) => this.openBytes(name, bytes, { unsaved: true }),
+      refresh: (s) => this.refreshState(s),
+      busy: (text, onCancel) => this.showOverlay(text, onCancel),
+      idle: () => this.hideLoading(),
+      setStatus: (text) => this.setStatus(text, ''),
+      rememberOpened: (s) => void rememberFile(s.name, s.history.current.length, s.handle).then(() => this.refreshHome()),
+    });
     this.fileInput.addEventListener('change', () => {
       const files = Array.from(this.fileInput.files ?? []).map((file) => ({ file }));
       this.fileInput.value = '';
@@ -57,20 +81,31 @@ export class App {
 
   // ───────────────────────── construction de l'interface ─────────────────────────
 
-  private iconButton(id: string, label: string, text: string, onclick: () => void): HTMLButtonElement {
-    return h('button', { id, class: 'tool', title: label, 'aria-label': label, type: 'button', onclick }, text);
+  private iconButton(id: string, label: string, content: string | IconName, onclick: () => void): HTMLButtonElement {
+    const isIcon = content.length > 1 && /^[a-zA-Z]+$/.test(content);
+    const btn = h('button', { id, class: 'tool', title: label, 'aria-label': label, type: 'button', onclick });
+    btn.append(isIcon ? icon(content as IconName) : document.createTextNode(content));
+    return btn;
+  }
+
+  private editButton(id: string, label: string, name: IconName, run: () => void): HTMLButtonElement {
+    const b = this.iconButton(id, label, name, run);
+    this.editButtons[id] = b;
+    return b;
   }
 
   private buildShell() {
     const homeTab = h('button', { class: 'tab home-tab', id: 'tab-home', role: 'tab', onclick: () => this.showHome() }, t.tabs.home);
     this.tabsEl.append(homeTab);
+    this.fileButton.onclick = () => this.openFileMenu();
 
     const topbar = h(
       'header',
       { class: 'topbar' },
-      h('span', { class: 'brand' }, h('img', { src: `${import.meta.env.BASE_URL}icon.svg`, alt: '', width: 22, height: 22 }), t.app.name),
+      this.fileButton,
+      h('span', { class: 'brand' }, h('img', { src: `${import.meta.env.BASE_URL}icon.svg`, alt: '', width: 20, height: 20 }), t.app.name),
       this.tabsEl,
-      h('button', { id: 'btn-open', class: 'tool text', type: 'button', onclick: () => void this.openDialog() }, t.toolbar.open),
+      this.statusEl,
     );
 
     // barre d'outils du visualiseur
@@ -95,28 +130,49 @@ export class App {
       if (this.active && Number.isFinite(n)) this.active.view.page = n;
     };
 
+    const insertBtn = this.editButton('btn-insert', t.pages.insert, 'insert', () => this.openInsertMenu(insertBtn));
+    this.thumbSize.oninput = () => this.active?.grid?.setWidth(Number(this.thumbSize.value));
+
     const toolbar = h(
       'div',
       { class: 'toolbar', role: 'toolbar', 'aria-label': t.toolbar.label },
-      this.iconButton('btn-panel', t.toolbar.leftPanel, '☰', () => this.togglePanel()),
+      this.iconButton('btn-panel', t.toolbar.leftPanel, 'panel', () => this.togglePanel()),
+      this.iconButton('btn-save', `${t.file.save} (${mod}S)`, 'save', () => void this.save()),
+      this.iconButton('btn-undo', `${t.pages.undo} (${mod}Z)`, 'undo', () => void this.undo()),
+      this.iconButton('btn-redo', `${t.pages.redo} (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`, 'redo', () => void this.redo()),
       h('span', { class: 'sep' }),
-      this.iconButton('btn-prev', t.toolbar.previousPage, '↑', () => this.goRelative(-1)),
-      this.iconButton('btn-next', t.toolbar.nextPage, '↓', () => this.goRelative(1)),
-      this.pageInput,
-      this.pageCount,
+      h('span', { class: 'nav-group' },
+        this.iconButton('btn-prev', t.toolbar.previousPage, '↑', () => this.goRelative(-1)),
+        this.iconButton('btn-next', t.toolbar.nextPage, '↓', () => this.goRelative(1)),
+        this.pageInput,
+        this.pageCount,
+        h('span', { class: 'sep' }),
+        this.iconButton('btn-zoom-out', t.toolbar.zoomOut, '−', () => this.zoomStep(-1)),
+        this.zoomSelect,
+        this.iconButton('btn-zoom-in', t.toolbar.zoomIn, '+', () => this.zoomStep(1)),
+        this.iconButton('btn-fit-width', t.toolbar.fitWidth, '↔', () => this.active?.view.setZoom('page-width')),
+        this.iconButton('btn-fit-page', t.toolbar.fitPage, '⛶', () => this.active?.view.setZoom('page-fit')),
+        h('span', { class: 'sep' }),
+        this.viewSelect,
+        this.iconButton('btn-rotate', t.toolbar.rotate, '⟳', () => this.active?.view.rotate()),
+      ),
       h('span', { class: 'sep' }),
-      this.iconButton('btn-zoom-out', t.toolbar.zoomOut, '−', () => this.zoomStep(-1)),
-      this.zoomSelect,
-      this.iconButton('btn-zoom-in', t.toolbar.zoomIn, '+', () => this.zoomStep(1)),
-      this.iconButton('btn-fit-width', t.toolbar.fitWidth, '↔', () => this.active?.view.setZoom('page-width')),
-      this.iconButton('btn-fit-page', t.toolbar.fitPage, '⛶', () => this.active?.view.setZoom('page-fit')),
+      this.editButton('btn-rot-left', `${t.pages.rotateLeft}`, 'rotateLeft', () => void this.withActive((s) => this.editing.rotate(s, -90))),
+      this.editButton('btn-rot-right', `${t.pages.rotateRight}`, 'rotateRight', () => void this.withActive((s) => this.editing.rotate(s, 90))),
+      this.editButton('btn-duplicate', t.pages.duplicate, 'duplicate', () => void this.withActive((s) => this.editing.duplicate(s))),
+      this.editButton('btn-delete', `${t.pages.delete} (⌫)`, 'trash', () => void this.withActive((s) => this.editing.remove(s))),
+      insertBtn,
+      this.editButton('btn-extract', t.pages.extract, 'extract', () => void this.withActive((s) => this.editing.extract(s))),
       h('span', { class: 'sep' }),
-      this.viewSelect,
-      this.iconButton('btn-rotate', t.toolbar.rotate, '⟳', () => this.active?.view.rotate()),
+      this.iconButton('btn-organize', t.pages.organize, 'grid', () => this.toggleOrganize()),
+      this.thumbSize,
+      this.selectionInfo,
       h('span', { class: 'spacer' }),
-      this.iconButton('btn-search', t.toolbar.search, '⌕', () => this.toggleFind()),
+      this.iconButton('btn-search', t.toolbar.search, 'search', () => this.toggleFind()),
       this.iconButton('btn-fullscreen', t.toolbar.fullscreen, '⤢', () => this.toggleFullscreen()),
     );
+    this.editButtons['btn-organize'] = toolbar.querySelector<HTMLButtonElement>('#btn-organize')!;
+    this.thumbSize.hidden = true;
 
     // volet gauche : miniatures / signets
     const panelTabs = h(
@@ -155,16 +211,73 @@ export class App {
     const center = h('div', { class: 'center' }, this.findBar, this.docsEl);
     this.workspace.append(toolbar, h('div', { class: 'body' }, this.leftPanel, center));
 
-    // fenêtre d'ouverture (progression + annulation)
     this.root.append(topbar, this.homeEl, this.workspace, this.fileInput, this.loadingEl);
     this.setPanelTab('thumbnails');
     if (window.innerWidth < 760) this.leftPanel.classList.add('collapsed');
+  }
+
+  private openFileMenu() {
+    const s = this.active;
+    const has = !!s && !this.workspace.hidden;
+    const items: MenuItem[] = [
+      { id: 'home', label: t.file.home, run: () => this.showHome() },
+      { id: 'open', label: t.file.open, shortcut: `${mod}O`, run: () => void this.openDialog(), separatorBefore: true },
+      { id: 'save', label: t.file.save, shortcut: `${mod}S`, disabled: !has, run: () => void this.save(), separatorBefore: true },
+      { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
+      { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
+      { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
+      { id: 'settings', label: t.home.settings, run: () => openSettings() },
+      { id: 'whats-new', label: t.home.whatsNew, run: () => openWhatsNew() },
+    ];
+    this.fileButton.setAttribute('aria-expanded', 'true');
+    const menu = showMenu(items, this.fileButton, () => this.fileButton.setAttribute('aria-expanded', 'false'));
+    menu.id = 'file-menu-list';
+  }
+
+  private openInsertMenu(anchor: HTMLElement) {
+    const none = (this.active?.selection.length ?? 0) === 0;
+    showMenu(
+      [
+        { id: 'insert-blank-before', label: t.pages.insertBlankBefore, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'before')) },
+        { id: 'insert-blank-after', label: t.pages.insertBlankAfter, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'after')) },
+        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, 'after')), separatorBefore: true },
+      ],
+      anchor,
+    );
+  }
+
+  private showPageMenu(x: number, y: number) {
+    const s = this.active;
+    if (!s) return;
+    showMenu(
+      [
+        { id: 'rot-left', label: t.pages.rotateLeft, run: () => void this.editing.rotate(s, -90) },
+        { id: 'rot-right', label: t.pages.rotateRight, run: () => void this.editing.rotate(s, 90) },
+        { id: 'duplicate', label: t.pages.duplicate, run: () => void this.editing.duplicate(s), separatorBefore: true },
+        { id: 'delete', label: t.pages.delete, shortcut: '⌫', run: () => void this.editing.remove(s) },
+        { id: 'extract', label: t.pages.extract, run: () => void this.editing.extract(s) },
+        { id: 'insert-blank-before', label: t.pages.insertBlankBefore, run: () => void this.editing.insertBlank(s, 'before'), separatorBefore: true },
+        { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.editing.insertBlank(s, 'after') },
+        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.editing.insertFromFile(s, 'after') },
+        { id: 'move-start', label: t.pages.moveStart, run: () => void this.editing.moveToStart(s), separatorBefore: true },
+        { id: 'move-end', label: t.pages.moveEnd, run: () => void this.editing.moveToEnd(s) },
+        { id: 'move-to', label: t.pages.moveTo, run: () => void this.editing.moveTo(s) },
+        { id: 'select-all', label: t.pages.selectAll, shortcut: `${mod}A`, run: () => this.listOf(s).selectAll(), separatorBefore: true },
+      ],
+      { x, y },
+    );
   }
 
   // ───────────────────────── événements globaux ─────────────────────────
 
   private bindGlobalEvents() {
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
+    window.addEventListener('beforeunload', (e) => {
+      if (this.sessions.some((s) => s.history.dirty)) {
+        e.preventDefault();
+        e.returnValue = t.confirm.leavePage;
+      }
+    });
     window.addEventListener('dragover', (e) => {
       if (e.dataTransfer?.types.includes('Files')) {
         e.preventDefault();
@@ -193,17 +306,30 @@ export class App {
     const typing = target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
     if (document.querySelector('dialog[open]')) return;
     const view = this.active?.view;
+    const key = e.key.toLowerCase();
 
-    if (mod && e.key.toLowerCase() === 'o') {
+    if (mod && key === 'o') {
       e.preventDefault();
       void this.openDialog();
-    } else if (mod && e.key.toLowerCase() === 'f' && view && !this.workspace.hidden) {
+    } else if (mod && key === 's' && this.active && !this.workspace.hidden) {
+      e.preventDefault();
+      void (e.shiftKey ? this.saveAs() : this.save());
+    } else if (mod && key === 'z' && this.active && !typing && !this.workspace.hidden) {
+      e.preventDefault();
+      void (e.shiftKey ? this.redo() : this.undo());
+    } else if (mod && key === 'y' && this.active && !typing && !this.workspace.hidden) {
+      e.preventDefault();
+      void this.redo();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active && !typing && !this.workspace.hidden && (target.closest('.thumbs') || this.active.organizing)) {
+      e.preventDefault();
+      void this.editing.remove(this.active);
+    } else if (mod && key === 'f' && view && !this.workspace.hidden) {
       e.preventDefault();
       this.openFind();
-    } else if (mod && e.key.toLowerCase() === 'g' && view && !this.findBar.hidden) {
+    } else if (mod && key === 'g' && view && !this.findBar.hidden) {
       e.preventDefault();
       this.runFind(true, e.shiftKey);
-    } else if (mod && e.shiftKey && e.key.toLowerCase() === 'r' && view) {
+    } else if (mod && e.shiftKey && key === 'r' && view) {
       e.preventDefault();
       view.rotate();
     } else if (mod && view && (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd')) {
@@ -223,7 +349,7 @@ export class App {
       view.setZoom('page-width');
     } else if (e.key === 'Escape' && !this.findBar.hidden) {
       this.closeFind();
-    } else if (view && !typing && !mod && !this.workspace.hidden) {
+    } else if (view && !typing && !mod && !this.workspace.hidden && !target.closest('.thumbs')) {
       // Navigation en mode « page par page » : le défilement natif ne change pas de page.
       if (view.isPagedMode) {
         const next = e.key === 'PageDown' || e.key === 'ArrowRight' || (e.key === ' ' && !e.shiftKey);
@@ -272,7 +398,6 @@ export class App {
 
   private async openFile(file: File, handle: FileSystemFileHandle | undefined, quiet: boolean): Promise<void> {
     const name = file.name;
-    const startedAt = performance.now();
     let bytes: Uint8Array;
     try {
       bytes = new Uint8Array(await file.arrayBuffer());
@@ -286,21 +411,37 @@ export class App {
       else await showMessage(t.errors.title, fmt(t.errors.notPdf, { name }));
       return;
     }
+    const ok = await this.openBytes(name, bytes, { handle });
+    if (ok) void rememberFile(name, bytes.length, handle).then(() => this.refreshHome());
+  }
 
+  /** Ouvre des octets dans un nouvel onglet. `unsaved` : document créé par Cigale (extrait…), jamais enregistré. */
+  async openBytes(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean } = {}): Promise<boolean> {
+    const startedAt = performance.now();
     let cancelled = false;
-    this.showLoading(name, () => {
+    let password: string | undefined;
+    this.showOverlay(fmt(t.loading.opening, { name }), () => {
       cancelled = true;
       handleLoad.cancel();
     });
-    const handleLoad = loadPdf(bytes, { password: (incorrect) => askPassword(name, incorrect) });
+    const handleLoad = loadPdf(bytes, {
+      password: async (incorrect) => {
+        const pw = await askPassword(name, incorrect);
+        if (pw !== null) password = pw;
+        return pw;
+      },
+    });
     try {
       const pdf = await handleLoad.promise;
       this.hideLoading();
-      await this.addSession(name, bytes, handle, pdf, startedAt);
-      void rememberFile(name, bytes.length, handle).then(() => this.refreshHome());
+      await this.addSession(name, bytes, opts, password, pdf, startedAt);
+      return true;
     } catch (err) {
       this.hideLoading();
-      if (cancelled || classifyPdfError(err) === 'password') return void toast(t.loading.cancelled);
+      if (cancelled || classifyPdfError(err) === 'password') {
+        toast(t.loading.cancelled);
+        return false;
+      }
       const kind = classifyPdfError(err);
       const msg =
         kind === 'invalid'
@@ -309,40 +450,117 @@ export class App {
             ? fmt(t.errors.unsupportedEncryption, { name })
             : fmt(t.errors.unknown, { name, detail: String((err as Error)?.message ?? err) });
       await showMessage(t.errors.title, msg);
+      return false;
     }
   }
 
-  private showLoading(name: string, onCancel: () => void) {
+  private showOverlay(text: string, onCancel: () => void) {
     clear(this.loadingEl);
-    this.loadingEl.append(
-      h('div', { class: 'loading-box' }, h('p', {}, fmt(t.loading.opening, { name })), h('progress', {}), h('button', { id: 'loading-cancel', onclick: onCancel }, t.loading.cancel)),
-    );
+    this.loadingEl.append(h('div', { class: 'loading-box' }, h('p', {}, text), h('progress', {}), h('button', { id: 'loading-cancel', onclick: onCancel }, t.loading.cancel)));
     this.loadingEl.hidden = false;
   }
   private hideLoading() {
     this.loadingEl.hidden = true;
   }
 
-  private async addSession(name: string, bytes: Uint8Array, handle: FileSystemFileHandle | undefined, pdf: import('pdfjs-dist').PDFDocumentProxy, startedAt: number) {
+  private makeList(s: Session, layout: 'list' | 'grid', pdf: import('pdfjs-dist').PDFDocumentProxy, width: number): PageList {
+    return new PageList(pdf, {
+      width,
+      layout,
+      onOpen: (page) => {
+        if (layout === 'grid') this.setOrganizing(s, false);
+        s.view.page = page;
+      },
+      onSelectionChange: (sel) => {
+        s.selection = sel;
+        (layout === 'list' ? s.grid : s.thumbs)?.select(sel, true);
+        this.updateEditUi(s);
+      },
+      onMove: (pages, to) => void this.editing.move(s, pages, to),
+      onContextMenu: (x, y) => this.showPageMenu(x, y),
+    });
+  }
+
+  private listOf(s: Session): PageList {
+    return s.organizing && s.grid ? s.grid : s.thumbs;
+  }
+
+  private async addSession(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean }, password: string | undefined, pdf: import('pdfjs-dist').PDFDocumentProxy, startedAt: number) {
     const settings = loadSettings();
     this.homeEl.hidden = true;
     this.workspace.hidden = false;
     this.sessions.forEach((x) => (x.view.root.hidden = true));
     const view = new DocView(pdf, settings.defaultZoom, startedAt, this.docsEl);
     const id = this.nextId++;
-    const thumbs = new ThumbnailPanel(pdf, (n) => (view.page = n));
     const outline = await buildOutline(pdf, view.linkService);
     const tab = h(
       'div',
-      { class: 'tab doc-tab', role: 'tab', 'data-session': id, onauxclick: (e: MouseEvent) => e.button === 1 && this.close(id) },
+      { class: 'tab doc-tab', role: 'tab', 'data-session': id, onauxclick: (e: MouseEvent) => e.button === 1 && void this.close(id) },
       h('button', { class: 'tab-label', onclick: () => this.activate(id), title: name }, name),
-      h('button', { class: 'tab-close', 'aria-label': fmt(t.tabs.close, { name }), onclick: () => this.close(id) }, '✕'),
+      h('button', { class: 'tab-close', 'aria-label': fmt(t.tabs.close, { name }), onclick: () => void this.close(id) }, '✕'),
     );
-    const session: Session = { id, name, size: bytes.length, bytes, handle, view, thumbs, outline, tab };
+    const session = {
+      id,
+      name,
+      history: new History(bytes, !opts.unsaved),
+      diskBytes: opts.unsaved ? null : bytes,
+      password,
+      handle: opts.handle,
+      signedAcknowledged: false,
+      selection: [],
+      organizing: false,
+      view,
+      grid: null,
+      outline,
+      tab,
+    } as unknown as Session;
+    session.thumbs = this.makeList(session, 'list', pdf, PANEL_THUMB);
     this.sessions.push(session);
     this.tabsEl.append(tab);
     this.bindView(session);
     this.activate(id);
+  }
+
+  /** Remplace le contenu affiché par de nouveaux octets (après une opération, annuler ou rétablir). */
+  private async reload(s: Session, bytes: Uint8Array, selection: number[]): Promise<void> {
+    const old = { view: s.view, thumbs: s.thumbs, grid: s.grid };
+    const state = { page: old.view.page, zoom: old.view.scaleValue, mode: old.view.viewMode, rotation: old.view.viewRotation };
+    const handle = loadPdf(bytes, { password: async () => s.password ?? null });
+    const pdf = await handle.promise;
+    const view = new DocView(pdf, state.zoom, performance.now(), this.docsEl);
+    view.root.hidden = this.active !== s;
+    await view.ready;
+    if (state.mode !== 'continuous') view.setViewMode(state.mode);
+    if (state.rotation) view.setRotation(state.rotation);
+    view.page = Math.min(state.page, view.pageCount);
+    s.view = view;
+    s.selection = selection.filter((i) => i < view.pageCount);
+    s.thumbs = this.makeList(s, 'list', pdf, PANEL_THUMB);
+    s.thumbs.select(s.selection, true);
+    s.grid = null;
+    if (s.organizing) this.ensureGrid(s, pdf);
+    s.outline = await buildOutline(pdf, view.linkService);
+    this.bindView(s);
+    old.thumbs.destroy();
+    old.grid?.destroy();
+    old.grid?.el.remove();
+    old.view.destroy();
+    if (this.active === s) {
+      this.renderPanel();
+      this.showCurrentCentre(s);
+      this.updatePageUi(s);
+      this.updateZoomUi(s);
+      s.thumbs.setCurrent(view.page);
+    }
+  }
+
+  private ensureGrid(s: Session, pdf = s.view.pdf) {
+    if (s.grid) return;
+    s.grid = this.makeList(s, 'grid', pdf, Number(this.thumbSize.value));
+    s.grid.el.classList.add('organizer');
+    s.grid.select(s.selection, true);
+    s.grid.el.hidden = !(this.active === s && s.organizing);
+    this.docsEl.append(s.grid.el);
   }
 
   private bindView(s: Session) {
@@ -417,31 +635,119 @@ export class App {
     this.homeEl.hidden = true;
     this.workspace.hidden = false;
     this.root.dataset.view = 'viewer';
-    this.sessions.forEach((x) => (x.view.root.hidden = x !== s));
+    this.sessions.forEach((x) => {
+      x.view.root.hidden = x !== s;
+      if (x.grid) x.grid.el.hidden = !(x === s && x.organizing);
+    });
     this.tabsEl.querySelectorAll('.tab').forEach((el) => el.classList.toggle('active', el === s.tab));
-    document.title = `${s.name} — ${t.app.name}`;
     this.closeFind();
     this.renderPanel();
     this.updatePageUi(s);
     this.updateZoomUi(s);
-    this.viewSelect.value = s.view.isPagedMode ? 'single' : s.view.viewer.spreadMode === 1 ? 'two-pages' : 'continuous';
+    this.viewSelect.value = s.view.viewMode;
+    this.showCurrentCentre(s);
+    this.refreshState(s);
     s.view.viewer.update();
-    s.view.container.focus({ preventScroll: true });
+    if (!s.organizing) s.view.container.focus({ preventScroll: true });
   }
 
-  close(id: number): void {
+  /** Affiche soit le document, soit la grille « Organiser les pages ». */
+  private showCurrentCentre(s: Session) {
+    s.view.root.hidden = this.active !== s || s.organizing;
+    if (s.grid) s.grid.el.hidden = !(this.active === s && s.organizing);
+    this.workspace.classList.toggle('organizing', s.organizing);
+    this.thumbSize.hidden = !s.organizing;
+    this.editButtons['btn-organize'].classList.toggle('on', s.organizing);
+    this.editButtons['btn-organize'].setAttribute('aria-pressed', String(s.organizing));
+    this.editButtons['btn-organize'].title = s.organizing ? t.pages.backToViewer : t.pages.organize;
+  }
+
+  private toggleOrganize() {
+    if (this.active) this.setOrganizing(this.active, !this.active.organizing);
+  }
+
+  private setOrganizing(s: Session, on: boolean) {
+    s.organizing = on;
+    if (on) this.ensureGrid(s);
+    this.showCurrentCentre(s);
+    if (!on) s.view.viewer.update();
+    this.updateEditUi(s);
+  }
+
+  async close(id: number): Promise<void> {
     const i = this.sessions.findIndex((x) => x.id === id);
     if (i < 0) return;
-    const [s] = this.sessions.splice(i, 1);
+    const s = this.sessions[i];
+    if (s.history.dirty) {
+      this.activate(s.id);
+      const answer = await askUnsaved(s.name);
+      if (answer === 'cancel') return;
+      if (answer === 'save' && !(await this.editing.save(s))) return;
+    }
+    this.sessions.splice(i, 1);
     s.thumbs.destroy();
+    s.grid?.destroy();
+    s.grid?.el.remove();
     s.view.destroy();
     s.tab.remove();
     if (this.active === s) {
       this.active = null;
       const next = this.sessions[Math.min(i, this.sessions.length - 1)];
       if (next) this.activate(next.id);
-      else this.showHome();
+      else {
+        this.updateEditUi(null);
+        this.showHome();
+      }
     }
+  }
+
+  // ───────────────────────── modifications et enregistrement ─────────────────────────
+
+  private async withActive(fn: (s: Session) => Promise<unknown>) {
+    if (this.active) await fn(this.active);
+  }
+
+  private async undo() {
+    if (this.active) await this.editing.undo(this.active);
+  }
+  private async redo() {
+    if (this.active) await this.editing.redo(this.active);
+  }
+  private async save() {
+    if (this.active) await this.editing.save(this.active);
+  }
+  private async saveAs() {
+    if (this.active) await this.editing.saveAs(this.active);
+  }
+
+  /** Met à jour tout ce qui dépend de l'état du document : modifié, annuler/rétablir, sélection. */
+  private refreshState(s: Session) {
+    s.tab.classList.toggle('dirty', s.history.dirty);
+    s.tab.querySelector('.tab-label')!.textContent = s.name;
+    if (this.active !== s) return;
+    document.title = `${s.history.dirty ? '• ' : ''}${s.name} — ${t.app.name}`;
+    this.updateEditUi(s);
+    if (s.history.dirty) this.setStatus(t.status.dirty, 'dirty');
+    else this.setStatus(s.diskBytes && s.handle ? fmt(t.status.saved, { time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }) : '', 'saved');
+  }
+
+  private setStatus(text: string, kind: string) {
+    this.statusEl.textContent = text;
+    this.statusEl.dataset.kind = kind;
+  }
+
+  private updateEditUi(s: Session | null) {
+    const n = s?.selection.length ?? 0;
+    const need = ['btn-rot-left', 'btn-rot-right', 'btn-duplicate', 'btn-delete', 'btn-extract'];
+    for (const id of need) this.editButtons[id].disabled = n === 0;
+    const undo = this.workspace.querySelector<HTMLButtonElement>('#btn-undo')!;
+    const redo = this.workspace.querySelector<HTMLButtonElement>('#btn-redo')!;
+    undo.disabled = !s?.history.canUndo;
+    redo.disabled = !s?.history.canRedo;
+    undo.title = s?.history.canUndo ? fmt(t.pages.undoWith, { label: s.history.undoLabel }) : t.pages.nothingToUndo;
+    redo.title = s?.history.canRedo ? fmt(t.pages.redoWith, { label: s.history.redoLabel }) : t.pages.nothingToRedo;
+    this.workspace.querySelector('#btn-save')?.classList.toggle('on', !!s?.history.dirty);
+    this.selectionInfo.textContent = s?.organizing ? (n === 0 ? t.pages.selected.none : plural(n, t.pages.selected)) : '';
   }
 
   // ───────────────────────── panneau, zoom, pages ─────────────────────────
@@ -511,6 +817,7 @@ export class App {
 
   private openFind() {
     if (!this.active) return;
+    if (this.active.organizing) this.setOrganizing(this.active, false);
     this.findBar.hidden = false;
     this.findInput.focus();
     this.findInput.select();

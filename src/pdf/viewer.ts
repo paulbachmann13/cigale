@@ -15,6 +15,8 @@ export class DocView {
   readonly viewer: PDFViewer;
   private rotation = 0;
   firstRenderMs: number | null = null;
+  /** Résolu quand pdf.js a placé les pages (on peut alors restaurer page, mode et rotation). */
+  readonly ready: Promise<void>;
 
   /** `parent` doit déjà être affiché : pdf.js a besoin de mesurer le conteneur pour placer les pages. */
   constructor(readonly pdf: PDFDocumentProxy, defaultZoom: string, private readonly openedAt: number, parent: HTMLElement) {
@@ -43,8 +45,11 @@ export class DocView {
     });
     this.linkService.setViewer(this.viewer);
 
-    this.eventBus.on('pagesinit', () => {
-      this.viewer.currentScaleValue = defaultZoom;
+    this.ready = new Promise<void>((resolve) => {
+      this.eventBus.on('pagesinit', () => {
+        this.viewer.currentScaleValue = defaultZoom;
+        resolve();
+      });
     });
     this.eventBus.on('pagerendered', () => {
       if (this.firstRenderMs === null) this.firstRenderMs = performance.now() - this.openedAt;
@@ -80,8 +85,20 @@ export class DocView {
   }
 
   rotate(): void {
-    this.rotation = (this.rotation + 90) % 360;
+    this.setRotation(this.rotation + 90);
+  }
+
+  get viewRotation(): number {
+    return this.rotation;
+  }
+
+  setRotation(degrees: number): void {
+    this.rotation = ((degrees % 360) + 360) % 360;
     this.viewer.pagesRotation = this.rotation;
+  }
+
+  get viewMode(): ViewMode {
+    return this.isPagedMode ? 'single' : this.viewer.spreadMode === SpreadMode.ODD ? 'two-pages' : 'continuous';
   }
 
   setViewMode(mode: ViewMode): void {

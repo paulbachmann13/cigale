@@ -6,10 +6,10 @@ Composants tiers distribués avec l'application (production) :
 - pdf.js (pdfjs-dist) 6.5.438 — Apache-2.0 — © Mozilla et contributeurs
   Inclut des polices Foxit (voir standard_fonts/LICENSE_FOXIT), Liberation Sans (SIL OFL 1.1),
   OpenJPEG (BSD-2-Clause), JBIG2 (Apache-2.0), QCMS (MIT), cartes de caractères Adobe (BSD-3-Clause).
-- @cantoo/pdf-lib 2.11.1 — MIT (fork de pdf-lib © Andrew Dillon) — utilisé à partir de l'étape 2
+- @cantoo/pdf-lib 2.11.1 — MIT (fork de pdf-lib © Andrew Dillon) — modification des pages (étape 2)
 - fflate 0.8.3 — MIT — © 101arrowz — utilisé à partir de l'étape 3
 
-Outils de développement (non distribués) : Vite, TypeScript, Vitest, Playwright, vite-plugin-pwa, Workbox (MIT / Apache-2.0).
+Outils de développement (non distribués) : qpdf 12 (Apache-2.0, contrôle des PDF produits en test), Vite, TypeScript, Vitest, Playwright, vite-plugin-pwa, Workbox (MIT / Apache-2.0).
 
 Règle du projet : aucune dépendance sous licence GPL ou AGPL, aucun paquet payant. Aucune reprise de code, de logo
 ni d'icône d'Adobe.

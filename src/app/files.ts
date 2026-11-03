@@ -55,3 +55,27 @@ export async function readFromHandle(handle: FileSystemFileHandle): Promise<File
   if (state !== 'granted') return null;
   return handle.getFile();
 }
+
+/** Choisit un seul PDF (sans mémoriser quoi que ce soit) : sélecteur moderne, sinon champ de fichier temporaire. */
+export async function pickOnePdf(): Promise<File | null> {
+  const picker = (window as unknown as { showOpenFilePicker?: Picker }).showOpenFilePicker;
+  if (picker) {
+    try {
+      const [handle] = await picker({ multiple: false, types: [{ description: 'Documents PDF', accept: { 'application/pdf': ['.pdf'] } }] });
+      return handle ? await handle.getFile() : null;
+    } catch (err) {
+      if ((err as DOMException).name === 'AbortError') return null;
+    }
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.id = 'file-input-insert';
+    input.hidden = true;
+    input.addEventListener('change', () => (resolve(input.files?.[0] ?? null), input.remove()));
+    input.addEventListener('cancel', () => (resolve(null), input.remove()));
+    document.body.append(input);
+    input.click();
+  });
+}
