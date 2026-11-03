@@ -6,6 +6,7 @@ import { fmt, plural, t } from '../i18n/fr';
 import { loadPdf } from '../pdf/engine';
 import { listAnnotationsOp } from '../pdf/ops-client';
 import { DocView, type ViewMode } from '../pdf/viewer';
+import { deleteBackupsNamed } from '../storage/backups';
 import { deleteDraft, listDrafts, newDraftId, readDraft, saveDraft } from '../storage/autosave';
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
 import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
@@ -23,7 +24,9 @@ import { printDocument } from './print';
 import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, quitApp, takeStartupOpens, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
+import { openExportImagesDialog } from './export-images';
 import { applyRedaction } from './redact';
+import { askSignature } from './signature';
 import { openCropDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
 import { type Session, isDirty } from './session';
 import { loadSettings } from './settings';
@@ -81,6 +84,7 @@ export class App {
   private editButtons: Record<string, HTMLButtonElement> = {};
   private findTimer: number | undefined;
   private closing = false;
+  private signature: { png: Uint8Array; width: number; height: number } | null = null;
   private formDismissed = new Set<number>();
   private redactApplyBtn = h('button', { class: 'primary', id: 'redact-apply', type: 'button', hidden: true, onclick: () => void this.applyRedactionNow() }, t.docTools.redactApply);
 
@@ -96,6 +100,7 @@ export class App {
       rememberOpened: (s) => void rememberFile(s.name, s.history.current.length, s.handle).then(() => this.refreshHome()),
       pendingSelect: (s, id) => (s.pendingSelect = id),
       author: () => loadSettings().author || t.annot.defaultAuthor,
+      forgetOriginal: (s) => this.forgetOriginal(s),
     });
     this.fileInput.addEventListener('change', () => {
       const files = Array.from(this.fileInput.files ?? []).map((file) => ({ file }));
@@ -283,6 +288,7 @@ export class App {
         { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: () => openHeaderFooterDialog(s, this.editing) },
         { id: 'tool-crop', label: t.docTools.crop, run: () => openCropDialog(s, this.editing) },
         { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
+        { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
       ],
       anchor,
     );
@@ -516,6 +522,16 @@ export class App {
     });
   }
 
+  /** Après un caviardage : l'original n'est plus récupérable ni par « Annuler », ni par les sauvegardes, ni par les copies de sécurité. */
+  private async forgetOriginal(s: Session): Promise<void> {
+    window.clearTimeout(s.draftTimer);
+    s.history = new History(s.history.current, false); // plus d'étapes à annuler ; reste « non enregistré »
+    s.noBackup = true;
+    await deleteBackupsNamed(s.name).catch(() => undefined);
+    await saveDraft(s.draftId, s.name, s.history.current).catch(() => undefined); // le brouillon n'a plus que la version caviardée
+    this.refreshState(s);
+  }
+
   /** Cherche (et propose d'installer) une mise à jour. `silent` : au démarrage, sans rien dire s'il n'y a rien. */
   async checkForUpdates(silent: boolean): Promise<void> {
     if (!isTauri()) return;
@@ -528,6 +544,7 @@ export class App {
   private async saveAllDraftsNow(): Promise<void> {
     for (const s of this.sessions.filter((x) => isDirty(x))) {
       window.clearTimeout(s.draftTimer);
+      await this.editing.flushForm(s); // la saisie en cours entre d'abord dans le document
       await saveDraft(s.draftId, s.name, s.history.current);
     }
   }
@@ -952,6 +969,7 @@ export class App {
     this.annotBar.append(
       mk('select', 'pointer'),
       mk('redact', 'redact'),
+      mk('sign', 'sign'),
       h('span', { class: 'sep' }),
       mk('highlight', 'highlight'),
       mk('underline', 'underline'),
@@ -972,6 +990,17 @@ export class App {
       h('span', { class: 'spacer' }),
       this.redactApplyBtn,
     );
+    this.toolButtons.sign.onclick = () => void this.chooseSignature();
+  }
+
+  /** Outil « Signer » : choisir (dessiner, taper, importer) une signature, puis cliquer sur la page pour la poser. */
+  private async chooseSignature() {
+    const img = await askSignature();
+    if (!img) return;
+    this.sessions.forEach((x) => (x.annotator.signature = img));
+    this.signature = img;
+    this.setAnnotTool('sign');
+    toast(t.sign.placeHint);
   }
 
   private toggleCommentMode() {
@@ -1085,6 +1114,7 @@ export class App {
   private attachAnnotations(s: Session, bytes: Uint8Array) {
     const annotator = new Annotator(s.view, this.annotHost(s));
     annotator.style = this.annotStyle;
+    annotator.signature = this.signature;
     annotator.setTool(this.annotTool);
     s.annotator = annotator;
     const view = s.view;

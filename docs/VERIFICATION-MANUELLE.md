@@ -53,6 +53,14 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 4. **Safari** (le vôtre) : ouvrir, organiser, commenter, combiner ; ⌘S télécharge une copie. **Application Mac** : voir la section suivante.
 5. Un de vos vrais PDF « difficiles » (scan multipage, formulaire, protégé, très gros) : s'ouvre, se modifie, se rouvre dans Acrobat sans message.
 
+## Version 1.1 — Aperçu ET Acrobat
+
+1. **Formulaire** : remplir `formulaire.pdf`, enregistrer sous « rempli.pdf » : Aperçu et Acrobat affichent les valeurs ; dans Acrobat les champs restent modifiables.
+2. **Signature** : poser une signature dessinée sur un PDF, enregistrer : visible à l'identique dans Aperçu et Acrobat ; dans Acrobat c'est un tampon (déplaçable).
+3. **Caviardage** : sur un vrai PDF avec un nom et un montant : marquer, appliquer, enregistrer sous « caviarde.pdf ». Dans Acrobat : Édition > Copier / chercher le mot caviardé : **introuvable**, y compris dans Propriétés (titre, auteur) et dans le volet Pièces jointes / Signets. Ouvrir le fichier dans un éditeur de texte (ou `strings caviarde.pdf | grep mot`) : rien. Vérifier aussi qu'il n'existe pas de fichier « .bak » du document d'origine à côté.
+4. **Filigrane, en-têtes, numérotation, recadrage** sur un PDF mélangeant portrait, paysage et page tournée : position et sens corrects dans Aperçu et Acrobat.
+5. **Export en images** : le .zip s'ouvre ; images nettes à 150 dpi.
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

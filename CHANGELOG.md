@@ -2,6 +2,20 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.1.0] — 2026-11-04
+
+### Ajouté
+- **Formulaires** : les champs d'un formulaire PDF (texte, cases à cocher, boutons radio, listes) se remplissent directement dans la page. La saisie est enregistrée avec le document (⌘S), ou avec « Valider la saisie » ; elle compte comme une modification et s'annule comme le reste.
+- **Signature** (outil « Signer » de la barre Commenter) : dessinez, tapez ou importez l'image de votre signature, puis cliquez sur la page pour la poser ; vous pouvez la déplacer et la redimensionner. Vos signatures sont gardées sur l'ordinateur pour les réutiliser. Il s'agit de l'image d'une signature, pas d'une signature numérique à certificat.
+- **Caviardage réel** (Outils → Caviarder) : marquez des zones, puis « Appliquer le caviardage ». Les pages concernées deviennent des images : le texte, les images d'origine, les champs, les commentaires et les textes cachés disparaissent vraiment du fichier. Options (cochées par défaut) : retirer les informations du document, les signets, les pièces jointes ; effacer l'historique « Annuler » et ne garder aucune copie de l'ancienne version.
+- **Filigrane** (Outils) : texte en diagonale ou horizontal, taille, couleur et opacité réglables, sur toutes les pages, la page affichée, la sélection ou des plages.
+- **En-têtes, pieds de page et numérotation** (Outils) : textes à gauche, au centre et à droite, avec le numéro de page, le nombre de pages, la date et le titre ; fonctionne aussi sur les pages tournées.
+- **Recadrer** (Outils) : retire des marges (en millimètres) sur les pages choisies.
+- **Exporter les pages en images** (Outils) : PNG ou JPEG, 72 à 300 dpi, dans une archive .zip.
+
+### Corrigé
+- Les vérifications automatiques qui contrôlent qu'un contenu supprimé a vraiment disparu du fichier étaient trop faibles (le texte d'un PDF est codé et compressé) : elles sont refaites et elles échouent désormais si une suppression laissait des traces. Le comportement de Cigale n'était pas en cause.
+
 ## [1.0.0] — 2026-11-03
 
 ### Corrigé

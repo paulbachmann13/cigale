@@ -1,6 +1,6 @@
 /** Modèle des annotations et géométrie associée : logique pure (aucun accès au PDF ni au DOM). Coordonnées en espace utilisateur PDF. */
 
-export type AnnotKind = 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp' | 'redact' | 'other';
+export type AnnotKind = 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp' | 'redact' | 'signature' | 'other';
 
 export type Rgb = [number, number, number];
 export type Rect = [number, number, number, number];
@@ -40,7 +40,11 @@ export interface Annot {
 }
 
 /** Ce qu'il faut fournir pour créer une annotation (le reste est rempli à l'écriture). */
-export type AnnotDraft = Omit<Annot, 'id' | 'foreign' | 'author' | 'date'> & { author?: string };
+export type AnnotDraft = Omit<Annot, 'id' | 'foreign' | 'author' | 'date'> & {
+  author?: string;
+  /** Signature : image PNG (avec transparence) dessinée dans l'apparence. */
+  image?: Uint8Array;
+};
 
 /** Ce qu'on peut changer sur une annotation existante. */
 export type AnnotPatch = Partial<Pick<Annot, 'color' | 'fill' | 'opacity' | 'width' | 'contents' | 'rect' | 'quads' | 'strokes' | 'line' | 'fontSize' | 'stamp'>>;

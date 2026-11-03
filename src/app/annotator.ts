@@ -7,7 +7,7 @@ import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
 import { h } from './dom';
 
-export type Tool = 'select' | 'redact' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
@@ -35,12 +35,14 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['redact', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
-const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact']);
+const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature']);
 
 export class Annotator {
   private tool: Tool | null = null;
+  /** Signature choisie, posée par un clic avec l'outil « Signer ». */
+  signature: { png: Uint8Array; width: number; height: number } | null = null;
   style: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved' };
   private annots: Annot[] = [];
   private selectedId: string | null = null;
@@ -275,6 +277,11 @@ export class Annotator {
       const pts = points.map(pdf);
       if (pts.length < 2) pts.push([pts[0][0] + 0.1, pts[0][1]]);
       void this.host.add([{ ...base, kind: 'ink', strokes: [pts], rect: normalizeRect([pts[0][0], pts[0][1], pts[0][0], pts[0][1]]) }]);
+    } else if (tool === 'sign' && this.signature) {
+      const [x, y] = pdf(a);
+      const w = 150;
+      const hgt = (w * this.signature.height) / this.signature.width;
+      void this.host.add([{ ...base, kind: 'signature', color: [0, 0, 0], width: 0, rect: [x - w / 2, y - hgt / 2, x + w / 2, y + hgt / 2], image: this.signature.png }]);
     } else if (tool === 'redact' && dragged) {
       const [p, q] = [pdf(a), pdf(b)];
       const rect = normalizeRect([p[0], p[1], q[0], q[1]]);

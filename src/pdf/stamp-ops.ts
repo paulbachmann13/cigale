@@ -51,7 +51,7 @@ function formatDate(d: Date): string {
 function getVisibleBox(page: PDFPage): { x: number; y: number; width: number; height: number } {
   try {
     const crop = page.getCropBox();
-    if (crop && typeof crop.width === 'number' && typeof crop.height === 'number') {
+    if (crop && crop.width > 0 && crop.height > 0) {
       return crop;
     }
   } catch {

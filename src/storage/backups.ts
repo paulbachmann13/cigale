@@ -43,3 +43,8 @@ async function deleteBackupNow(id: string): Promise<void> {
   await idbDelete(`backup:${id}`).catch(() => undefined);
   await idbSet(INDEX, (await listBackups()).filter((b) => b.id !== id));
 }
+
+/** Supprime toutes les versions précédentes gardées pour un document de ce nom. */
+export async function deleteBackupsNamed(name: string): Promise<void> {
+  for (const b of (await listBackups()).filter((x) => x.name === name)) await deleteBackup(b.id);
+}

@@ -28,6 +28,7 @@ const PATHS = {
   arrow: ['M5 19L19 5', 'M10 5h9v9'],
   stamp: ['M8 4h8v7l3 3v2H5v-2l3-3z', 'M5 20h14'],
   comment: ['M4 4h16v12H9l-5 4z', 'M8 9h8', 'M8 12h5'],
+  sign: ['M3 17c3-6 5-9 6-9s-2 8 0 8 3-4 5-4 1 3 3 3', 'M3 21h18'],
   tools: ['M15 4a4 4 0 0 0-4 5L4 16l4 4 7-7a4 4 0 0 0 5-4l-3 2-2-2 2-3z'],
   redact: ['M4 6h16v12H4z', 'M7 10h10', 'M7 14h6'],
 } as const;

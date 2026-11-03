@@ -188,3 +188,23 @@ describe('zones à caviarder (marques standard /Redact)', () => {
     expect(a).toMatchObject({ kind: 'redact', rect: [50, 600, 250, 640] });
   });
 });
+
+describe('signature (image)', () => {
+  it('s’écrit comme un tampon-image, se relit, et se déplace sans perdre son image', async () => {
+    const { makePng } = await import('./helpers');
+    const png = makePng(60, 20);
+    const { bytes, ids } = await addAnnotations(await makePdf(1), [draft({ kind: 'signature', rect: [100, 600, 250, 650], image: png, width: 0 })], undefined, 1);
+    const [a] = await listAnnotations(bytes);
+    expect(a).toMatchObject({ kind: 'signature', rect: [100, 600, 250, 650] });
+    const apOf = async (b: Uint8Array) => {
+      const doc = await PDFDocument.load(b);
+      const d = doc.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
+      const form = d.lookup(PDFName.of('AP'), PDFDict).lookup(PDFName.of('N')) as unknown as { dict: PDFDict };
+      return form.dict.lookup(PDFName.of('Resources'), PDFDict).lookup(PDFName.of('XObject'), PDFDict).keys().length;
+    };
+    expect(await apOf(bytes)).toBe(1);
+    const moved = await updateAnnotation(bytes, ids[0], { rect: [200, 500, 350, 550] }, undefined, 1);
+    expect(await apOf(moved)).toBe(1); // l'image est toujours là
+    expect((await listAnnotations(moved))[0]).toMatchObject({ kind: 'signature', rect: [200, 500, 350, 550] });
+  });
+});

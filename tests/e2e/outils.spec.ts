@@ -174,6 +174,7 @@ test('caviarder : annuler redonne le texte', async ({ page }) => {
   await page.mouse.move(bb.x + 200, bb.y + bb.height, { steps: 5 });
   await page.mouse.up();
   await page.click('#redact-apply');
+  await page.uncheck('#redact-history'); // garder l'historique pour pouvoir annuler
   await page.click('#redact-go');
   await expect.poll(async () => (await docTitles(page))[0]).toBe('');
   await page.keyboard.press('Meta+z');
@@ -195,4 +196,80 @@ test('recadrer une page tournée : le haut à l’écran est le bord gauche de l
   const after = await page.evaluate(async () => (await (window as any).cigale.app.sessions[0].view.pdf.getPage(4)).view as number[]);
   expect(after[0] - before[0]).toBeCloseTo(20 * (72 / 25.4), 0); // bord gauche (non tourné) = haut (affiché)
   expect(after[1]).toBeCloseTo(before[1], 0);
+});
+
+test('caviarder : par défaut l’historique « Annuler » est effacé', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await page.waitForSelector('.textLayer span');
+  const bb = (await page.locator('.doc-view:not([hidden]) .page[data-page-number="1"] .textLayer span').first().boundingBox())!;
+  await tool(page, 'tool-redact');
+  await page.mouse.move(bb.x, bb.y);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + 200, bb.y + bb.height, { steps: 5 });
+  await page.mouse.up();
+  await page.click('#redact-apply');
+  await expect(page.locator('#redact-history')).toBeChecked();
+  await expect(page.locator('#redact-attachments')).toBeChecked();
+  await page.click('#redact-go');
+  await expect.poll(async () => (await docTitles(page))[0]).toBe('');
+  await expect(page.locator('#btn-undo')).toBeDisabled(); // l'original n'est plus récupérable
+  expect(await isDirty(page)).toBe(true);
+});
+
+test('caviarder sur une page tournée : le noir est à l’endroit marqué', async ({ page }) => {
+  await open(page, 'tailles-mixtes.pdf');
+  await page.locator('.left-panel .thumb[data-page="4"]').click();
+  const pageEl = page.locator('.doc-view:not([hidden]) .page[data-page-number="4"]');
+  await expect(pageEl.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(800);
+  // zone marquée : un rectangle dans la partie de la page visible à l'écran
+  const view = (await page.locator('.doc-view:not([hidden]) .viewer-container').boundingBox())!;
+  const pb = (await pageEl.boundingBox())!;
+  const x1 = Math.max(pb.x, view.x) + 80;
+  const y1 = Math.max(pb.y, view.y) + 60;
+  const w = 140;
+  const h = 90;
+  await tool(page, 'tool-redact');
+  await page.mouse.move(x1, y1);
+  await page.mouse.down();
+  await page.mouse.move(x1 + w, y1 + h, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => (window as any).cigale.app.sessions[0].annots.length)).toBe(1);
+  await page.click('#redact-apply');
+  await page.click('#redact-go');
+  await expect.poll(async () => (await docTitles(page))[3]).toBe('');
+  await expect(pageEl.locator('canvas')).toBeVisible();
+  await expect(page.locator('.doc-view:not([hidden]) .page[data-page-number="4"][data-loaded="true"]')).toHaveCount(1);
+  await page.waitForTimeout(600);
+  const pb2 = (await pageEl.boundingBox())!;
+  const black = await page.evaluate(
+    ({ x, y, w, h }) => {
+      const c = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="4"] canvas') as HTMLCanvasElement;
+      const k = c.width / c.getBoundingClientRect().width;
+      const d = c.getContext('2d')!.getImageData(Math.round(x * k), Math.round(y * k), Math.round(w * k), Math.round(h * k)).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] < 40 && d[i + 1] < 40 && d[i + 2] < 40) n++;
+      return { n, total: d.length / 4 };
+    },
+    { x: x1 - pb2.x - 9 + 8, y: y1 - pb2.y - 9 + 8, w: w - 16, h: h - 16 }, // l'intérieur du rectangle (sans les bords)
+  );
+  expect(black.n).toBeGreaterThan(black.total * 0.9); // le rectangle marqué est noir, à la bonne place malgré la rotation de la page
+});
+
+test('exporter les pages en images : archive .zip de PNG', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await tool(page, 'tool-export-images');
+  await page.selectOption('#img-dpi', '72');
+  await page.check('#scope-range');
+  await page.fill('#scope-range-text', '1-2');
+  const download = page.waitForEvent('download');
+  await page.click('#tool-apply');
+  const file = await download;
+  const { unzipSync } = await import('fflate');
+  const files = unzipSync(new Uint8Array(readFileSync((await file.path())!)));
+  expect(Object.keys(files).sort()).toEqual(['simple-3p - page 1.png', 'simple-3p - page 2.png']);
+  for (const bytes of Object.values(files)) {
+    expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]); // en-tête PNG
+    expect(bytes.length).toBeGreaterThan(2000);
+  }
 });

@@ -10,7 +10,7 @@ import type { Session } from './session';
 const MM = 72 / 25.4;
 
 /** Choix « quelles pages ? » : toutes, page affichée, pages sélectionnées, plages. `read()` renvoie les indices (undefined = toutes), ou null si la saisie est invalide. */
-function scopeControls(s: Session, error: HTMLElement): { el: HTMLElement; read: () => number[] | undefined | null } {
+export function scopeControls(s: Session, error: HTMLElement): { el: HTMLElement; read: () => number[] | undefined | null } {
   const name = `scope-${Math.random().toString(36).slice(2, 7)}`;
   const radio = (id: string, label: string, checked = false, disabled = false) => {
     const input = h('input', { type: 'radio', name, id, checked, disabled });

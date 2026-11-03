@@ -71,6 +71,9 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 - **Mises à jour de l'app Mac** : `src/app/updater.ts` (logique testée), vérification discrète 5 s après le démarrage + Fichier → Rechercher les mises à jour. Publier = pousser l'étiquette `vX.Y.Z` (égale à `package.json`) : le workflow « Application Mac » publie le .dmg, `Cigale_X.Y.Z_universal.app.tar.gz` et `latest.json`. **Clé de signature** : privée dans `~/.tauri/cigale-updater.key` (À SAUVEGARDER) et secret GitHub `TAURI_SIGNING_PRIVATE_KEY` ; publique dans `tauri.conf.json` — ne JAMAIS la changer. Test sans publier : construire deux copies avec `--config` (clé jetable, `endpoints` locaux, `dangerousInsecureTransportProtocol`) et servir `latest.json` avec `python3 -m http.server` (fait le 03/11 : 1.0.0 → 1.0.1 OK).
 
+- **Caviardage / formulaires / signature (1.1)** : voir docs/ARCHITECTURE.md (« version 1.1 »). Tests de fuite : toujours `everything(bytes)` (tests/unit/helpers.ts), jamais une recherche dans les octets bruts. Après un caviardage : `Session.noBackup`, historique remplacé. `isDirty(s)` au lieu de `s.history.dirty`. `flushForm` avant toute opération qui lit `history.current`.
+- Gemini en mode `task --write-in` échoue (permission `read_file` refusée en non interactif) : utiliser `task` en lecture seule avec `--file` et demander les blocs de code dans la réponse ; relire et tester soi-même.
+
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)
 
 - Rendu comparé à Aperçu et à Acrobat avec de vrais scans manuscrits ; Safari (macOS) et iPad réel (tactile : pincer, Apple Pencil).

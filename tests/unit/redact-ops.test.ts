@@ -13,7 +13,7 @@ async function doc3(): Promise<Uint8Array> {
   return doc.save();
 }
 const page2 = (w = 595, h = 842) => ({ index: 1, image: makePng(300, 400), width: w, height: h });
-const OPTS = { stripMetadata: false, removeBookmarks: false };
+const OPTS = { stripMetadata: false, removeBookmarks: false, removeAttachments: false };
 const raw = everything;
 
 describe('caviardage réel', () => {
@@ -44,7 +44,7 @@ describe('caviardage réel', () => {
     const src = await doc3();
     const kept = await applyRedactions(src, [page2()], OPTS);
     expect(raw(kept.bytes)).toContain('Marie Dupont');
-    const r = await applyRedactions(src, [page2()], { stripMetadata: true, removeBookmarks: true });
+    const r = await applyRedactions(src, [page2()], { stripMetadata: true, removeBookmarks: true, removeAttachments: true });
     expect(raw(r.bytes)).not.toContain('Marie Dupont');
     expect(raw(r.bytes)).not.toContain('Rapport confidentiel');
     const re = await PDFDocument.load(r.bytes, { updateMetadata: false });
@@ -56,10 +56,48 @@ describe('caviardage réel', () => {
     expect(raw(r.bytes)).not.toContain('SECRETDEUX');
   });
 
-  it('supprime les marques de caviardage des autres pages', async () => {
+  it('supprime les marques de caviardage restées sur les autres pages', async () => {
     const { addAnnotations, listAnnotations } = await import('../../src/pdf/annot-ops');
-    const withMark = await addAnnotations(await doc3(), [{ page: 0, kind: 'rect', rect: [10, 10, 50, 50], color: [1, 0, 0], fill: null, opacity: 1, width: 1, contents: '' }], undefined, 3);
-    expect(await listAnnotations(withMark.bytes)).toHaveLength(1);
+    const marked = await addAnnotations(await doc3(), [{ page: 0, kind: 'redact', rect: [10, 10, 50, 50], color: [1, 0, 0], fill: [0, 0, 0], opacity: 1, width: 1, contents: 'NOTEMARQUE', quads: [[10, 10, 50, 50]] }], undefined, 3);
+    expect(await listAnnotations(marked.bytes)).toHaveLength(1);
+    const r = await applyRedactions(marked.bytes, [page2()], OPTS, undefined, 3);
+    expect(await listAnnotations(r.bytes)).toEqual([]);
+    expect(raw(r.bytes)).not.toContain('NOTEMARQUE');
+  });
+
+  it('les champs de formulaire, commentaires et textes alternatifs des pages caviardées disparaissent', async () => {
+    const { PDFName, PDFString } = await import('@cantoo/pdf-lib');
+    const doc = await PDFDocument.create();
+    doc.addPage([595, 842]);
+    const page = doc.addPage([595, 842]);
+    doc.addPage([595, 842]);
+    const form = doc.getForm();
+    const f = form.createTextField('salaire');
+    f.setText('VALEURCHAMP4200');
+    f.addToPage(page, { x: 50, y: 700, width: 200, height: 22 });
+    const ctx = doc.context;
+    // texte alternatif dans la structure logique, et commentaire sur la page
+    const elem = ctx.register(ctx.obj({ Type: 'StructElem', S: 'P', Alt: PDFString.of('ALTCONFIDENTIEL') }));
+    doc.catalog.set(PDFName.of('StructTreeRoot'), ctx.obj({ Type: 'StructTreeRoot', K: [elem] }));
+    const bytes = await doc.save();
+    expect(raw(bytes)).toContain('VALEURCHAMP4200');
+    expect(raw(bytes)).toContain('ALTCONFIDENTIEL');
+    const r = await applyRedactions(bytes, [{ index: 1, image: makePng(50, 50), width: 595, height: 842 }], OPTS, undefined, 3);
+    expect(raw(r.bytes)).not.toContain('VALEURCHAMP4200');
+    expect(raw(r.bytes)).not.toContain('ALTCONFIDENTIEL');
+  });
+
+  it('retire les pièces jointes à la demande', async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage([595, 842]);
+    doc.addPage([595, 842]);
+    await doc.attach(new TextEncoder().encode('CONTENUPIECEJOINTE'), 'secret.txt', { mimeType: 'text/plain' });
+    const bytes = await doc.save();
+    expect(raw(bytes)).toContain('CONTENUPIECEJOINTE');
+    const kept = await applyRedactions(bytes, [{ index: 0, image: makePng(50, 50), width: 595, height: 842 }], OPTS);
+    expect(raw(kept.bytes)).toContain('CONTENUPIECEJOINTE');
+    const r = await applyRedactions(bytes, [{ index: 0, image: makePng(50, 50), width: 595, height: 842 }], { ...OPTS, removeAttachments: true });
+    expect(raw(r.bytes)).not.toContain('CONTENUPIECEJOINTE');
   });
 
   it('document protégé : reste protégé', async () => {
@@ -78,7 +116,7 @@ describe('caviardage réel', () => {
   it('les octets d’entrée ne changent pas', async () => {
     const src = await doc3();
     const copy = src.slice();
-    await applyRedactions(src, [page2()], { stripMetadata: true, removeBookmarks: true });
+    await applyRedactions(src, [page2()], { stripMetadata: true, removeBookmarks: true, removeAttachments: true });
     expect(src).toEqual(copy);
   });
 });

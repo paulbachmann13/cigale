@@ -39,7 +39,7 @@ export async function collectFormValues(pdf: PDFDocumentProxy): Promise<FormValu
       const value = v.value;
       switch (w.type) {
         case 'checkbox':
-          out.push({ name, kind: 'checkbox', value: !!value });
+          out.push({ name, kind: 'checkbox', value: typeof value === 'string' ? value !== '' && value !== 'Off' : !!value });
           break;
         case 'radiobutton':
           if (value) radio = (Array.isArray(w.exportValues) ? w.exportValues[0] : w.exportValues) ?? String(value);
@@ -55,5 +55,8 @@ export async function collectFormValues(pdf: PDFDocumentProxy): Promise<FormValu
     }
     if (radio !== undefined) out.push({ name, kind: 'radio', value: radio });
   }
-  return out;
+  // un champ partagé par plusieurs widgets ne doit être écrit qu'une fois (dernière valeur)
+  const last = new Map<string, FormValue>();
+  for (const v of out) last.set(`${v.name}\u0000${v.kind}`, v);
+  return [...last.values()];
 }

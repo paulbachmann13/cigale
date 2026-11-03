@@ -14,24 +14,31 @@ const DPI = 200;
 interface Choice {
   stripMetadata: boolean;
   removeBookmarks: boolean;
+  removeAttachments: boolean;
+  /** Effacer l'historique Annuler et les copies de sécurité de ce document (elles contiennent le texte d'origine). */
+  clearHistory: boolean;
 }
 
 function confirmRedaction(n: number, m: number): Promise<Choice | null> {
   return new Promise((resolve) => {
     let answer: Choice | null = null;
     const meta = h('input', { type: 'checkbox', id: 'redact-meta', checked: true });
-    const marks = h('input', { type: 'checkbox', id: 'redact-bookmarks' });
+    const marks = h('input', { type: 'checkbox', id: 'redact-bookmarks', checked: true });
+    const files = h('input', { type: 'checkbox', id: 'redact-attachments', checked: true });
+    const hist = h('input', { type: 'checkbox', id: 'redact-history', checked: true });
     modal(
       (close) => [
         h('h2', {}, t.docTools.redactTitle),
         h('p', { class: 'dialog-text' }, fmt(t.docTools.redactMessage, { n, m })),
         h('label', { class: 'check' }, meta, t.docTools.redactMeta),
         h('label', { class: 'check' }, marks, t.docTools.redactBookmarks),
+        h('label', { class: 'check' }, files, t.docTools.redactAttachments),
+        h('label', { class: 'check' }, hist, t.docTools.redactHistory),
         h(
           'div',
           { class: 'dialog-actions' },
           h('button', { type: 'button', id: 'redact-cancel', onclick: close }, t.docTools.cancel),
-          h('button', { type: 'button', id: 'redact-go', class: 'primary', onclick: () => ((answer = { stripMetadata: meta.checked, removeBookmarks: marks.checked }), close()) }, t.docTools.redactGo),
+          h('button', { type: 'button', id: 'redact-go', class: 'primary', onclick: () => ((answer = { stripMetadata: meta.checked, removeBookmarks: marks.checked, removeAttachments: files.checked, clearHistory: hist.checked }), close()) }, t.docTools.redactGo),
         ),
       ],
       () => resolve(answer),
@@ -61,8 +68,8 @@ export async function applyRedaction(s: Session, editing: Editing, overlay: (tex
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
-      // annotationMode 0 : ni les marques rouges ni les commentaires ne sont dessinés ; on part de la page nue
-      await page.render({ canvas, viewport, annotationMode: 0 }).promise;
+      // annotationMode 1 : les commentaires, tampons et champs remplis hors zone restent visibles ; les marques rouges sont recouvertes par le noir
+      await page.render({ canvas, viewport, annotationMode: 1 }).promise;
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = '#000';
       for (const a of list) {
@@ -84,5 +91,5 @@ export async function applyRedaction(s: Session, editing: Editing, overlay: (tex
     return;
   }
   idle();
-  if (await editing.redact(s, pages, choice)) toast(fmt(t.docTools.redactDone, { n: pages.length }));
+  if (await editing.redact(s, pages, choice, choice.clearHistory)) toast(fmt(t.docTools.redactDone, { n: pages.length }));
 }

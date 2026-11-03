@@ -18,7 +18,8 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Ouvrir un PDF protégé par mot de passe | Oui | Reste protégé après modification |
 | Combiner des fichiers | Oui | PDF et images, plages par fichier, signets conservés |
 | Créer un PDF depuis une image | Oui | Via « Combiner » (JPEG, PNG, WebP…) |
-| Exporter vers Word, Excel, images | Non | 1.x (limité) |
+| Exporter vers images | Oui | PNG / JPEG en .zip |
+| Exporter vers Word, Excel | Non | Hors périmètre |
 
 ## Affichage
 
@@ -42,9 +43,10 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Commande Acrobat | Cigale | Note |
 |---|---|---|
 | Réordonner (glisser-déposer, grille), pivoter, supprimer, dupliquer, insérer (vierge ou autre PDF), extraire | Oui | Étape 2 |
-| Remplacer des pages, recadrer | Non | 1.x |
+| Recadrer | Oui | Marges en mm |
+| Remplacer des pages | Non | 1.x |
 | Diviser un document | Oui | Plages, tous les N pages, signets ; .zip ou onglets |
-| Numéros de page, en-têtes, pieds, filigrane | Non | 1.x |
+| Numéros de page, en-têtes, pieds, filigrane | Oui | Texte par-dessus ; Helvetica |
 
 ## Commenter
 
@@ -58,9 +60,10 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 
 | Commande Acrobat | Cigale | Note |
 |---|---|---|
-| Remplir et signer, formulaires | Non | 1.x |
-| Signature numérique | Non | 1.x |
-| Caviarder | Non | 1.x (réel) |
+| Remplir un formulaire (texte, cases, radios, listes) | Oui | Sans calculs JavaScript |
+| Signer (image de signature : dessin, texte, image) | Oui | Pas de signature numérique à certificat |
+| Signature numérique (certificat) | Non | 1.x |
+| Caviarder (marques + appliquer) | Oui | Pages rasterisées ; purge des métadonnées/signets/pièces jointes |
 | Reconnaissance de texte (OCR) | Non | 1.x |
 | Compresser | Non | 1.x |
 | Comparer deux fichiers | Non | 1.x |

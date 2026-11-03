@@ -261,11 +261,12 @@ export async function normalizeDocument(bytes: Uint8Array, password?: string): P
  * fichier. Pour un document confidentiel c'est inacceptable : on repart de la racine et on garde seulement ce qui est
  * atteignable. Les références vers une page supprimée (signets, liens) ne sont pas suivies : elles deviennent « nulles ».
  */
-export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = []): number {
+export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = [], alsoDead: PDFRef[] = []): number {
   const ctx = doc.context;
   const live = new Set<PDFRef>(doc.getPages().map((p) => p.ref));
   // pages qui existaient avant l'opération et ont disparu : on ne les suit jamais, même si leur /Type manque
   const dead = new Set<PDFRef>(pagesBefore.filter((r) => !live.has(r)));
+  for (const r of alsoDead) dead.add(r); // objets à ne jamais suivre (ex. champs de formulaire d'une page caviardée)
   const keep = new Set<PDFRef>();
   const stack: PDFObject[] = [];
   for (const root of [ctx.trailerInfo.Root, ctx.trailerInfo.Info, ctx.trailerInfo.Encrypt]) if (root) stack.push(root);
@@ -285,7 +286,7 @@ export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = []): 
   while (stack.length) {
     const obj = stack.pop()!;
     if (obj instanceof PDFRef) {
-      if (keep.has(obj)) continue;
+      if (keep.has(obj) || (dead.has(obj) && !live.has(obj))) continue;
       const target = ctx.lookup(obj);
       if (isDeadPage(obj, target as PDFObject | undefined)) continue; // page supprimée : on ne la suit pas
       if (isOrphanAnnotation(target as PDFObject | undefined)) continue;

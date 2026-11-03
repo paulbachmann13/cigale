@@ -107,3 +107,28 @@ test('⌘⇧S propose « Enregistrer sous » et ne touche pas l’original', asy
   expect((await PDFDocument.load(Uint8Array.from(await readOpfs(page, 'copie.pdf')))).getPageCount()).toBe(2);
   await expect(page.locator('.tab.doc-tab.active .tab-label')).toContainText('copie.pdf');
 });
+
+test('caviardage : enregistrer ne garde aucune copie de l’ancienne version (elle contiendrait le texte caviardé)', async ({ page }) => {
+  await gotoHome(page);
+  const original = [...readFileSync(fixture('simple-3p.pdf'))];
+  await openFromOpfs(page, 'confidentiel.pdf', original);
+  await page.waitForSelector('.textLayer span');
+  const bb = (await page.locator('.doc-view:not([hidden]) .page[data-page-number="1"] .textLayer span').first().boundingBox())!;
+  await page.click('#btn-tools');
+  await page.click('[data-id="tool-redact"]');
+  await page.mouse.move(bb.x, bb.y);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + 300, bb.y + bb.height, { steps: 5 });
+  await page.mouse.up();
+  await page.click('#redact-apply');
+  await page.click('#redact-go');
+  await expect.poll(() => page.evaluate(async () => (await (await (window as any).cigale.app.sessions[0].view.pdf.getPage(1)).getTextContent()).items.length)).toBe(0);
+  await page.keyboard.press('Meta+s');
+  await expect(page.locator('#toast')).toContainText('enregistré');
+  await expect(page.locator('#toast')).not.toContainText('ancienne version');
+  // le fichier a bien été remplacé, et aucune version précédente n'est gardée dans Cigale
+  expect(await readOpfs(page, 'confidentiel.pdf')).not.toEqual(original);
+  await page.click('#file-menu');
+  await page.click('[data-id="versions"]');
+  await expect(page.locator('#versions-list li.empty')).toHaveCount(1);
+});

@@ -22,6 +22,8 @@ export interface RedactOptions {
   stripMetadata: boolean;
   /** Supprimer tous les signets (leurs titres peuvent être confidentiels). */
   removeBookmarks: boolean;
+  /** Supprimer les pièces jointes du document. */
+  removeAttachments: boolean;
 }
 
 export interface RedactResult {
@@ -33,13 +35,41 @@ export interface RedactResult {
 const N = (s: string) => PDFName.of(s);
 const isJpeg = (b: Uint8Array) => b[0] === 0xff && b[1] === 0xd8;
 
+/** Retire des champs de formulaire (récursivement) ceux dont tous les widgets sont sur des pages caviardées. */
+function pruneFields(arr: PDFArray, dead: Set<PDFRef>): void {
+  for (let i = arr.size() - 1; i >= 0; i--) {
+    const ref = arr.get(i);
+    const dict = arr.lookupMaybe(i, PDFDict);
+    if (!(ref instanceof PDFRef) || !dict) continue;
+    if (dead.has(ref)) {
+      arr.remove(i);
+      continue;
+    }
+    const kids = dict.lookupMaybe(N('Kids'), PDFArray);
+    if (kids) {
+      pruneFields(kids, dead);
+      if (kids.size() === 0) arr.remove(i); // plus aucun widget : le champ (et sa valeur) part aussi
+    }
+  }
+}
+
 export async function applyRedactions(bytes: Uint8Array, pages: RedactedPage[], opts: RedactOptions, password?: string, expectedPages?: number): Promise<RedactResult> {
   const doc = await loadForEdit(bytes, password);
   if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new PageOpError('structure');
   const count = doc.getPageCount();
   const before = doc.getPages().map((p) => p.ref);
+  const originals = doc.getPages();
   const unique = new Map<number, RedactedPage>();
   for (const p of pages) if (p.index >= 0 && p.index < count) unique.set(p.index, p);
+  // Tout ce qui est attaché aux pages remplacées (annotations, champs de formulaire…) disparaît avec elles, même s'il est aussi référencé ailleurs.
+  const alsoDead: PDFRef[] = [];
+  for (const idx of unique.keys()) {
+    const annots = originals[idx].node.lookupMaybe(N('Annots'), PDFArray);
+    for (let i = 0; annots && i < annots.size(); i++) {
+      const r = annots.get(i);
+      if (r instanceof PDFRef) alsoDead.push(r);
+    }
+  }
   for (const p of unique.values()) {
     const image = isJpeg(p.image) ? await doc.embedJpg(p.image) : await doc.embedPng(p.image);
     // La nouvelle page prend la place de l'ancienne ; l'ancienne (et tout ce qu'elle référence) est supprimée puis purgée.
@@ -56,13 +86,23 @@ export async function applyRedactions(bytes: Uint8Array, pages: RedactedPage[], 
       if (d?.get(N('Subtype')) === N('Redact')) arr.remove(i);
     }
   }
+  const fields = doc.catalog.lookupMaybe(N('AcroForm'), PDFDict)?.lookupMaybe(N('Fields'), PDFArray);
+  if (fields) pruneFields(fields, new Set(alsoDead));
+  // Structure logique (texte alternatif, ActualText) et fils d'articles : ils peuvent répéter le texte caviardé.
+  doc.catalog.delete(N('StructTreeRoot'));
+  doc.catalog.delete(N('MarkInfo'));
+  doc.catalog.delete(N('Threads'));
   if (opts.removeBookmarks) doc.catalog.delete(N('Outlines'));
+  if (opts.removeAttachments) {
+    doc.catalog.delete(N('AF'));
+    doc.catalog.lookupMaybe(N('Names'), PDFDict)?.delete(N('EmbeddedFiles'));
+  }
   if (opts.stripMetadata) {
     doc.catalog.delete(N('Metadata'));
     const info = doc.context.trailerInfo.Info;
     if (info instanceof PDFRef) doc.context.delete(info);
     delete doc.context.trailerInfo.Info;
   }
-  pruneUnreachable(doc, before);
+  pruneUnreachable(doc, before, alsoDead);
   return { bytes: await saveDoc(doc), replaced: unique.size };
 }

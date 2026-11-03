@@ -1,6 +1,6 @@
 # Fonctionnalités et limites connues
 
-État : **version 1.0** (étapes 1 à 5 + application Mac).
+État : **version 1.1** (1.0 + formulaires, signature, caviardage, filigrane, en-têtes, recadrage, export en images).
 
 ## Fonctionnalités
 
@@ -22,6 +22,12 @@
 - **Annuler / rétablir** (⌘Z, ⇧⌘Z) sans limite pratique (octets complets gardés, plafonnés à 400 Mo).
 - Toutes les opérations tournent dans un **Web Worker** (annulables) ; le document n'est adopté que si le résultat s'ouvre correctement et a le bon nombre de pages.
 - Conservés : signets (ils suivent leurs pages), liens, métadonnées d'origine (titre, producteur…), pièces jointes, XMP, chiffrement (le document reste protégé par le même mot de passe).
+
+### Formulaires, signature, caviardage, outils de page (1.1)
+- **Remplir un formulaire** (AcroForm) : champs texte, cases, radios, listes déroulantes, directement dans la page (pdf.js) ; la saisie est écrite dans les champs avec leur apparence (`fillForm`, seuls les champs modifiés sont redessinés) à ⌘S, « Valider la saisie » ou avant toute autre opération ; une étape annuler/rétablir. Les formulaires XFA sont conservés, pas modifiés.
+- **Signature (image)** : dessin à la souris / au stylet, texte en écriture cursive, image importée (fond blanc rendu transparent) ; posée comme un tampon-image (vraie annotation /Stamp avec l'image dans l'apparence), déplaçable et redimensionnable ; 6 signatures gardées dans IndexedDB. **Pas de signature numérique à certificat** (limite).
+- **Caviardage** : marques standard /Redact (visibles dans Acrobat), puis « Appliquer » : les pages marquées sont rendues à 200 dpi avec les zones noircies et **remplacent** les pages d'origine ; purge de tout ce qui les référençait (champs de formulaire, annotations, structure logique, fils d'articles) ; options : informations du document, signets, pièces jointes, historique « Annuler » et copies de sécurité (par défaut oui). Après un caviardage, « Enregistrer » ne garde aucune copie de l'ancienne version. Vérifié sur page tournée.
+- **Filigrane**, **en-têtes / pieds de page / numérotation** (jetons {page} {pages} {date} {title}), **recadrage** (marges comme à l'écran, pages tournées comprises), **export en images** (PNG/JPEG → .zip). Portée : toutes les pages, page affichée, sélection ou plages. Chaque outil est une étape annuler/rétablir.
 
 ### Fiabilité (étape 5)
 - **Documents protégés** : un PDF ouvert avec mot de passe reste protégé après toute opération (modifier, commenter, extraire, diviser, combiner) : même mot de passe d'ouverture, mêmes restrictions, AES-256. Avertissement avant la première modification (l'ancien mot de passe propriétaire est remplacé). Un PDF à restrictions seules (copie interdite, sans mot de passe d'ouverture) se modifie aussi et garde ses restrictions.
@@ -77,6 +83,11 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Commentaires d'autres logiciels | Modifiables, mais si on change leur couleur ou leur forme, Cigale redessine leur apparence à sa façon | — |
 | États de révision | Pas de statut (accepté / refusé) ni de réponse à une réponse dans l'interface | Étape 5 |
 | Notes | Le texte s'affiche en bulle dans les autres lecteurs ; dans Cigale, au survol et dans le panneau | — |
+| Caviardage | Les pages caviardées deviennent des images (texte non sélectionnable, liens et commentaires perdus) ; le texte des AUTRES pages reste ; un .bak déjà présent à côté du fichier n'est pas supprimé par Cigale ; aucune comparaison avec le contenu « invisible » d'images scannées (OCR) | — |
+| Signature | Image seulement, pas de certificat ; les polices cursives dépendent de l'ordinateur | 1.x |
+| Filigrane / en-têtes | Police Helvetica, caractères hors Latin-1 remplacés par « ? » ; texte posé par-dessus le contenu (pas en dessous) | 1.x |
+| Recadrer | Réduit la zone visible sans supprimer le contenu (utiliser le caviardage pour supprimer) | — |
+| Formulaires | Pas de création de champs, pas de calculs JavaScript ni de validation de formats ; signature numérique des champs de signature non prise en charge | 1.x |
 | Fusion : formulaires | Les champs de formulaire des fichiers combinés ne sont pas repris (le contenu affiché l'est) | Étape 5 |
 | Découpe : signets | Les parties ne reprennent pas les signets | Étape 5 |
 | Fichier ajouté à « Combiner » | Le garde-fou de structure (pdf-lib / pdf.js comptent autant de pages) ne s'applique qu'au document déjà ouvert | Étape 5 |

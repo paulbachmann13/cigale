@@ -261,3 +261,15 @@ textarea.annot-text { width: 100%; padding: 8px; border: 1px solid var(--border)
 .form-banner { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--hover); border-bottom: 1px solid var(--border); font-size: 13px; }
 .form-banner span { flex: 1; }
 .form-banner .primary { padding: 4px 12px; }
+
+.sig-pad { width: 100%; max-width: 520px; aspect-ratio: 520 / 190; border: 1px solid var(--border); border-radius: 8px; background: #fff; touch-action: none; cursor: crosshair; display: block; margin: 8px 0; }
+.sig-tools { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.sig-saved { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.sig-item { display: inline-flex; align-items: center; gap: 2px; }
+.sig-use { padding: 2px 6px; background: #fff; border: 1px solid var(--border); border-radius: 6px; }
+.sig-thumb { height: 34px; display: block; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 12px; }
+.hf-row { display: grid; grid-template-columns: 90px repeat(3, 1fr); gap: 8px; align-items: end; margin: 6px 0; }
+.hf-row strong { padding-bottom: 8px; }
+fieldset.scope { border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }

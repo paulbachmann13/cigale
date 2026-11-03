@@ -39,6 +39,8 @@ export interface Session {
   formModified: boolean;
   /** Le document a des champs de formulaire. */
   hasForm: boolean;
+  /** Caviardage appliqué : aucune copie de l'ancienne version (elle contient le texte caviardé) n'est gardée à l'enregistrement. */
+  noBackup?: boolean;
 }
 
 /** Modifié = historique modifié OU saisie de formulaire en attente. */

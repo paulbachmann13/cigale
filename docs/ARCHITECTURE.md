@@ -90,6 +90,14 @@ tests/unit, e2e, fixtures/out (générées)
 - **Défense contre les PDF abîmés** : garde-fou « pdf-lib et pdf.js comptent le même nombre de pages » (étape 2), corpus et mutations aléatoires (`corpus.test.ts`) ; le test échoue si une opération renvoie un document qui se rouvre avec un autre nombre de pages.
 - **Safari** : le projet Playwright `webkit` exécute tous les tests (seuls les tests d'enregistrement sur place, qui exigent `createWritable`, sont ignorés).
 
+## Décisions de la version 1.1
+
+- **Formulaires** : pdf.js affiche déjà les champs en HTML (`annotationMode: ENABLE_FORMS`) et garde les saisies dans `annotationStorage`. On les lit (`src/app/forms.ts`, `collectFormValues` : noms complets via `getFieldObjects`, boutons radio par `exportValues`) et on les écrit avec pdf-lib (`src/pdf/form-ops.ts`) ; `Editing.flushForm` est appelé avant toute autre opération, l'enregistrement, l'impression, la fusion/découpe et avant la sauvegarde pour mise à jour. `isDirty(s)` = historique modifié OU saisie en attente.
+- **Signature** : annotation /Stamp nommée `Cigale-signature`, PNG intégré (`embedPng`) et dessiné dans l'apparence ; déplacer/redimensionner ne reconstruit pas l'apparence (le lecteur étire l'image dans le nouveau rectangle).
+- **Caviardage** (`src/pdf/redact-ops.ts`, `src/app/redact.ts`) : marques /Redact standard ; le rendu se fait dans l'interface (canevas pdf.js, `annotationMode: 1`, noir par-dessus), le worker remplace les pages (`insertPage` + `removePage`) et purge (`pruneUnreachable` avec les annotations des pages remplacées comme « mortes », retrait des champs orphelins de `/AcroForm/Fields`, suppression de `/StructTreeRoot`, `/MarkInfo`, `/Threads`, option signets / métadonnées / pièces jointes). Côté interface : historique Annuler remplacé, copies de sécurité du même nom supprimées, brouillon réécrit, `Session.noBackup` (aucune copie de l'ancienne version à l'enregistrement, ni .bak ni IndexedDB).
+- **Filigrane et en-têtes** : `src/pdf/stamp-ops.ts` a été écrit par Gemini (consigne précise + fichiers de référence), relu et validé par tests ET par des mesures de position dans le navigateur (viewport pdf.js, pages tournées). **Recadrage** : `src/pdf/crop-ops.ts` (le test sur page tournée a trouvé une inversion haut/gauche que mon raisonnement avait manquée).
+- **Tests de fuite** : `tests/unit/helpers.ts` → `everything(bytes)` décompresse les flux et décode le texte hexadécimal / UTF-16 de pdf-lib ; sans cela, les tests « le contenu a disparu » ne prouvaient rien (on les a vérifiés en désactivant volontairement la purge : ils échouent).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

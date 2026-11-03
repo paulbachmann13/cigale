@@ -145,6 +145,10 @@ function readAnnot(doc: PDFDocument, pageIndex: number, ref: PDFRef, d: PDFDict)
   } else if (kind === 'stamp') {
     const name = d.lookupMaybe(N('Name'), PDFName)?.decodeText() ?? '';
     a.stamp = name.startsWith('Cigale-') ? name.slice(7) : undefined;
+    if (name === 'Cigale-signature') {
+      a.kind = 'signature';
+      a.stamp = undefined;
+    }
   }
   const irt = d.get(N('IRT'));
   if (irt instanceof PDFRef) a.replyTo = idOf(irt);
@@ -346,6 +350,7 @@ const SUBTYPE_OF: Record<AnnotKind, string> = {
   arrow: 'Line',
   stamp: 'Stamp',
   redact: 'Redact',
+  signature: 'Stamp',
   other: '',
 };
 
@@ -426,12 +431,18 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
       dict.set(N('DR'), ctx.obj({ Font: { Helv: fonts.helv.ref } })); // ressources par défaut : Acrobat peut régénérer l'apparence
     }
     if (draft.kind === 'note') dict.set(N('Name'), N('Note'));
+    if (draft.kind === 'signature') dict.set(N('Name'), N('Cigale-signature'));
     if (draft.kind === 'stamp') dict.set(N('Name'), N(`Cigale-${draft.stamp && STAMPS[draft.stamp] ? draft.stamp : 'custom'}`));
     if (draft.replyTo) {
       dict.set(N('IRT'), refOf(draft.replyTo));
       dict.set(N('RT'), N('R'));
       dict.set(N('Name'), N('Comment'));
       setAppearance(doc, dict, { content: '', bbox: [0, 0, 1, 1], resources: {} }); // aucune icône : seule la liste des commentaires l'affiche
+    } else if (draft.kind === 'signature' && draft.image) {
+      // l'image de la signature est intégrée au document et dessinée dans l'apparence
+      const img = await doc.embedPng(draft.image);
+      const [x1, y1, x2, y2] = a.rect;
+      setAppearance(doc, dict, { content: `q ${f(x2 - x1)} 0 0 ${f(y2 - y1)} ${f(x1)} ${f(y1)} cm /Img Do Q`, bbox: a.rect, resources: { XObject: { Img: img.ref } } });
     } else {
       setAppearance(doc, dict, buildAppearance(a, fonts));
     }
@@ -496,7 +507,7 @@ export async function updateAnnotation(bytes: Uint8Array, id: string, patch: Ann
   // Un commentaire d'un autre logiciel simplement DÉPLACÉ garde son apparence d'origine (le lecteur la replace dans le nouveau rectangle).
   const sameSize = !!patch.rect && Math.abs(patch.rect[2] - patch.rect[0] - (current.rect[2] - current.rect[0])) < 0.01 && Math.abs(patch.rect[3] - patch.rect[1] - (current.rect[3] - current.rect[1])) < 0.01;
   const translateOnly = current.foreign && !styleChanged && patch.width === undefined && sameSize;
-  const redraw = !translateOnly && (geometryChanged || styleChanged || (patch.contents !== undefined && (next.kind === 'freetext' || next.kind === 'stamp'))) && next.kind !== 'other' && !next.replyTo;
+  const redraw = !translateOnly && (geometryChanged || styleChanged || (patch.contents !== undefined && (next.kind === 'freetext' || next.kind === 'stamp'))) && next.kind !== 'other' && next.kind !== 'signature' && !next.replyTo; // une signature garde son image : le lecteur l'étire dans le nouveau rectangle
   if (patch.stamp !== undefined && next.kind === 'stamp') hit.dict.set(N('Name'), N(`Cigale-${STAMPS[patch.stamp] ? patch.stamp : 'custom'}`));
   if (redraw) setAppearance(doc, hit.dict, buildAppearance(next, await fontsFor(doc)));
   pruneUnreachable(doc); // l'ancien flux d'apparence et les polices inutilisées ne restent pas dans le fichier

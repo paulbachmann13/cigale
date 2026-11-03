@@ -36,6 +36,8 @@ export interface EditHost {
   rememberOpened(s: Session): void;
   /** Sélectionner ce commentaire dès que la liste est relue. */
   pendingSelect(s: Session, id: string | null): void;
+  /** Après un caviardage : efface l'historique Annuler, les copies de sécurité et les sauvegardes qui contiennent encore le texte d'origine. */
+  forgetOriginal(s: Session): Promise<void>;
   author(): string;
 }
 
@@ -219,8 +221,10 @@ export class Editing {
   }
 
   /** Applique le caviardage : les pages (déjà noircies, en images) remplacent les pages d'origine. */
-  redact(s: Session, pages: RedactedPage[], options: RedactOptions): Promise<boolean> {
-    return this.annotOp(s, t.docTools.labels.redact, async () => (await redactOp(s.history.current, pages, options, s.password, s.view.pageCount).promise).bytes);
+  async redact(s: Session, pages: RedactedPage[], options: RedactOptions, clearHistory: boolean): Promise<boolean> {
+    const ok = await this.annotOp(s, t.docTools.labels.redact, async () => (await redactOp(s.history.current, pages, options, s.password, s.view.pageCount).promise).bytes);
+    if (ok && clearHistory) await this.host.forgetOriginal(s);
+    return ok;
   }
 
   // ───────────── formulaires ─────────────
@@ -243,6 +247,7 @@ export class Editing {
       const r = await fillFormOp(s.history.current, values, s.password, s.view.pageCount).promise;
       await this.host.reload(s, r.bytes, s.selection, s.view.pageCount);
       s.history.push(r.bytes, t.annot.labels.fillForm);
+      s.formModified = false;
       this.host.refresh(s);
       if (r.skipped.length) toast(fmt(t.form.skipped, { n: r.skipped.length }));
       return true;
@@ -355,7 +360,7 @@ export class Editing {
       if (!(await ensureWritable(handle))) throw new Error(t.save.permission);
       // On garde l'ancienne version avant d'écraser (sauf si on écrit dans un nouveau fichier).
       let backedUp = false;
-      if (!isNewFile && loadSettings().keepVersions && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
+      if (!s.noBackup && !isNewFile && loadSettings().keepVersions && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
         await addBackup(s.name, s.diskBytes).then(() => (backedUp = true)).catch(() => undefined);
       }
       // Application Mac : vraie copie « nom.pdf.bak » à côté du fichier, avant de le remplacer.
@@ -363,7 +368,7 @@ export class Editing {
       let bak = '';
       let bakFailed = false;
       // « Enregistrer sous » vers un fichier qui existe déjà le remplace aussi : même copie .bak
-      if (path && (isNewFile || (s.diskBytes && !sameBytes(s.diskBytes, bytes)))) {
+      if (!s.noBackup && path && (isNewFile || (s.diskBytes && !sameBytes(s.diskBytes, bytes)))) {
         try {
           if (await writeBackupCopy(path)) bak = baseName(backupPathFor(path));
         } catch {
