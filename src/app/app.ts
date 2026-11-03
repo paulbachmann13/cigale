@@ -837,7 +837,7 @@ export class App {
 
   private setAnnotTool(tool: Tool | null) {
     this.annotTool = tool;
-    if (tool && tool !== 'select') this.annotStyle.color = this.toolColors[tool] ?? this.annotStyle.color;
+    if (tool && tool !== 'select') this.annotStyle.color = this.toolColors[tool] ?? COLORS[3].rgb; // chaque outil retrouve sa couleur (rouge par défaut)
     this.sessions.forEach((x) => (x.annotator.style = this.annotStyle));
     this.annotBar.hidden = tool === null;
     this.editButtons['btn-comment']?.classList.toggle('on', tool !== null);
