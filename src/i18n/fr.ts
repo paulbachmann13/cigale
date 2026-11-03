@@ -1,0 +1,105 @@
+/**
+ * Textes de l'interface Cigale (français).
+ * Pour ajouter une langue : copier ce fichier (ex. en.ts) en gardant les mêmes clés.
+ */
+export const fr = {
+  app: { name: 'Cigale', tagline: 'Éditeur PDF local et gratuit', untitled: 'Sans titre' },
+  home: {
+    title: 'Que voulez-vous faire ?',
+    open: 'Ouvrir un PDF…',
+    openHint: 'ou glissez un fichier PDF dans cette fenêtre',
+    combine: 'Combiner des fichiers',
+    combineSoon: 'Bientôt (étape 3)',
+    recents: 'Récents',
+    noRecents: 'Aucun fichier récent.',
+    recentsPrivacy: 'Seuls les noms sont gardés, sur cet appareil. Rien ne quitte votre ordinateur.',
+    clearRecents: 'Effacer la liste',
+    resume: 'Reprendre',
+    resumeSoon: 'Les travaux non enregistrés apparaîtront ici (étape 5).',
+    settings: 'Paramètres',
+    whatsNew: 'Nouveautés',
+    version: 'Version {version}',
+    offline: '100 % local : vos documents ne sont jamais envoyés.',
+  },
+  tabs: { home: 'Accueil', close: 'Fermer « {name} »', list: 'Documents ouverts' },
+  toolbar: {
+    label: 'Barre d’outils',
+    leftPanel: 'Afficher / masquer le panneau latéral',
+    page: 'Page',
+    pageOf: 'sur {total}',
+    goToPage: 'Aller à la page',
+    previousPage: 'Page précédente',
+    nextPage: 'Page suivante',
+    zoomOut: 'Zoom arrière',
+    zoomIn: 'Zoom avant',
+    zoom: 'Niveau de zoom',
+    fitWidth: 'Ajuster à la largeur',
+    fitPage: 'Ajuster à la page',
+    actualSize: 'Taille réelle',
+    rotate: 'Pivoter l’affichage de 90° (⌘ ⇧ R)',
+    view: 'Mode d’affichage',
+    viewContinuous: 'Défilement continu',
+    viewSingle: 'Page par page',
+    viewTwoPages: 'Deux pages',
+    search: 'Rechercher dans le document (⌘F)',
+    fullscreen: 'Plein écran',
+    open: 'Ouvrir',
+    theme: 'Thème',
+  },
+  panels: {
+    label: 'Panneau latéral',
+    thumbnails: 'Miniatures',
+    bookmarks: 'Signets',
+    noBookmarks: 'Ce document n’a pas de signets.',
+    thumbnailOf: 'Page {n}',
+  },
+  find: {
+    placeholder: 'Rechercher dans le document',
+    previous: 'Occurrence précédente',
+    next: 'Occurrence suivante',
+    close: 'Fermer la recherche',
+    matchCase: 'Respecter la casse',
+    diacritics: 'Respecter les accents',
+    count: '{current} sur {total}',
+    notFound: 'Aucun résultat',
+    pending: 'Recherche…',
+  },
+  loading: { opening: 'Ouverture de « {name} »…', cancel: 'Annuler', cancelled: 'Ouverture annulée.' },
+  password: {
+    title: 'Document protégé',
+    message: 'Saisissez le mot de passe pour ouvrir « {name} ».',
+    wrong: 'Mot de passe incorrect. Réessayez.',
+    label: 'Mot de passe',
+    ok: 'Ouvrir',
+    cancel: 'Annuler',
+  },
+  errors: {
+    title: 'Impossible d’ouvrir le fichier',
+    invalid: '« {name} » n’est pas un PDF valide, ou il est endommagé. Aucune réparation automatique n’a abouti : le fichier d’origine n’a pas été modifié.',
+    notPdf: '« {name} » n’est pas un fichier PDF.',
+    empty: '« {name} » est vide.',
+    unsupportedEncryption: '« {name} » utilise un chiffrement que Cigale ne sait pas lire. Le fichier n’a pas été modifié.',
+    unknown: 'Une erreur inattendue s’est produite en ouvrant « {name} » : {detail}',
+    permission: 'Cigale n’a pas la permission de relire « {name} ». Rouvrez-le avec « Ouvrir ».',
+    ok: 'Fermer',
+  },
+  toast: { notPdf: '« {name} » n’est pas un PDF : ignoré.', updateReady: 'Une nouvelle version de Cigale est prête.', reload: 'Recharger' },
+  settings: {
+    title: 'Paramètres',
+    theme: 'Thème',
+    themeAuto: 'Automatique (système)',
+    themeLight: 'Clair',
+    themeDark: 'Sombre',
+    defaultZoom: 'Zoom à l’ouverture',
+    close: 'Fermer',
+  },
+  whatsNew: { title: 'Nouveautés', close: 'Fermer', added: 'Ajouté', fixed: 'Corrigé', changed: 'Modifié' },
+  shortcuts: { open: '⌘O' },
+};
+
+/** Remplace {clé} par la valeur correspondante. */
+export function fmt(text: string, vars: Record<string, string | number> = {}): string {
+  return text.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
+}
+
+export const t = fr;

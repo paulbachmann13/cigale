@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev-dist/
+public/pdfjs/
+tests/fixtures/out/
+test-results/
+playwright-report/
+*.log
+.DS_Store
