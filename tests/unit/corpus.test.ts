@@ -167,6 +167,19 @@ describe('chiffrement : une modification ne retire JAMAIS la protection', () => 
     expect(await pdfjsCount(r.bytes, 'secret')).toBe(3);
   });
 
+  it('fusion d’un document « restrictions seules » et d’un document avec mot de passe : le mot de passe est gardé', async () => {
+    const restricted = await build({ encrypt: { ownerPassword: 'chef', permissions: { copying: false } } });
+    const withPw = await protectedDoc();
+    for (const order of [[restricted, withPw], [withPw, restricted]] as const) {
+      const sources = order.map((bytes, i) => ({ name: `f${i}.pdf`, bytes, password: bytes === withPw ? 'secret' : undefined }));
+      const merged = (await mergeSources(sources, { keepBookmarks: false })).bytes;
+      expect(await pdfjsCount(merged), 'sans mot de passe').toBeNull();
+      expect(await pdfjsCount(merged, 'secret')).toBe(8);
+      const P = (await encryptionOf(merged)).P! | 0;
+      expect(P & 16, 'copie interdite par l’un des deux').toBe(0);
+    }
+  });
+
   it('un document non protégé reste non protégé', async () => {
     const r = await applyOp(await build(), { op: 'rotate', pages: [0], delta: 90 }, undefined, 4);
     expect((await encryptionOf(r.bytes)).encrypted).toBe(false);

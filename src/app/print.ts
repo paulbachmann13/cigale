@@ -64,11 +64,14 @@ function askPages(s: Session): Promise<number[] | null> {
 export async function printDocument(s: Session, overlay: (text: string, onCancel: () => void) => (f: number) => void, idle: () => void): Promise<void> {
   const pages = await askPages(s);
   if (!pages || pages.length === 0) return;
+  document.getElementById('print-root')?.remove(); // une impression précédente non nettoyée
+  document.getElementById('print-style')?.remove();
   let cancelled = false;
   const progress = overlay(t.print.preparing, () => (cancelled = true));
   const root = h('div', { id: 'print-root', 'aria-hidden': 'true' });
   document.body.append(root);
   const urls: string[] = [];
+  let firstSize: [number, number] = [595, 842];
   const cleanup = () => {
     root.remove();
     urls.forEach((u) => URL.revokeObjectURL(u));
@@ -80,12 +83,17 @@ export async function printDocument(s: Session, overlay: (text: string, onCancel
       if (cancelled) return cleanup();
       const page = await pdf.getPage(index + 1);
       const base = page.getViewport({ scale: 1 });
+      if (k === 0) firstSize = [base.width, base.height];
       const scale = Math.min(DPI / 72, Math.sqrt(2 ** 25 / (base.width * base.height))); // pas plus de 33 Mpx par page
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
-      await page.render({ canvas, viewport, annotationMode: 2 }).promise;
+      try {
+        await page.render({ canvas, viewport, annotationMode: 2 }).promise;
+      } finally {
+        page.cleanup();
+      }
       const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.92));
       canvas.width = canvas.height = 0;
       if (!blob) throw new Error('image');
@@ -94,15 +102,12 @@ export async function printDocument(s: Session, overlay: (text: string, onCancel
       const img = h('img', { src: url, alt: '' });
       img.style.aspectRatio = `${base.width} / ${base.height}`;
       root.append(img);
-      page.cleanup();
       progress((k + 1) / pages.length);
     }
     // Les images doivent être décodées avant d'imprimer, sinon des pages sortent blanches.
     await Promise.all(Array.from(root.querySelectorAll('img')).map((i) => i.decode().catch(() => undefined)));
     if (cancelled) return cleanup();
-    const first = await s.view.pdf.getPage(pages[0] + 1);
-    const vp = first.getViewport({ scale: 1 });
-    const style = h('style', { id: 'print-style' }, `@page { size: ${(vp.width / 72).toFixed(3)}in ${(vp.height / 72).toFixed(3)}in; margin: 0 }`);
+    const style = h('style', { id: 'print-style' }, `@page { size: ${(firstSize[0] / 72).toFixed(3)}in ${(firstSize[1] / 72).toFixed(3)}in; margin: 0 }`);
     document.head.append(style);
     idle();
     window.addEventListener('afterprint', cleanup, { once: true });

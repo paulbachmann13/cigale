@@ -30,8 +30,33 @@ export const setProtection = (doc: PDFDocument, p: Protection): void => void reg
 /** Le document `to` (créé à partir de pages de `from`) hérite de sa protection, s'il n'en a pas déjà une. */
 export function inheritProtection(to: PDFDocument, from: PDFDocument): void {
   const p = registry.get(from);
-  if (p && !registry.has(to)) registry.set(to, p);
+  if (!p) return;
+  const cur = registry.get(to);
+  if (!cur) return void registry.set(to, p);
+  // Plusieurs sources protégées (fusion) : le résultat garde un mot de passe d'ouverture s'il y en a un, et les restrictions de toutes.
+  registry.set(to, { password: cur.password || p.password, permissions: intersect(cur.permissions, p.permissions) });
 }
+
+const level = (v: Permissions['printing']) => (v === 'highResolution' || v === true ? 2 : v === 'lowResolution' ? 1 : 0);
+
+function intersect(a: Permissions, b: Permissions): Permissions {
+  const and = (x?: boolean, y?: boolean) => !!x && !!y;
+  const printing = Math.min(level(a.printing), level(b.printing));
+  return {
+    printing: printing === 2 ? 'highResolution' : printing === 1 ? 'lowResolution' : false,
+    modifying: and(a.modifying, b.modifying),
+    copying: and(a.copying, b.copying),
+    annotating: and(a.annotating, b.annotating),
+    fillingForms: and(a.fillingForms, b.fillingForms),
+    contentAccessibility: and(a.contentAccessibility, b.contentAccessibility),
+    documentAssembly: and(a.documentAssembly, b.documentAssembly),
+  };
+}
+
+/** Si /P est illisible : on préfère trop restreindre que lever des restrictions sans le savoir. */
+export const RESTRICTIVE: Permissions = { printing: false, modifying: false, copying: false, annotating: false, fillingForms: false, contentAccessibility: true, documentAssembly: false };
+
+const unrestricted = (p: Permissions) => level(p.printing) === 2 && !!p.modifying && !!p.copying && !!p.annotating && !!p.fillingForms && !!p.contentAccessibility && !!p.documentAssembly;
 
 /** Décode la valeur /P d'un dictionnaire de chiffrement (entier signé de 32 bits) en autorisations. */
 export function permissionsFromP(p: number): Permissions {
@@ -59,9 +84,9 @@ export async function saveDoc(doc: PDFDocument): Promise<Uint8Array> {
   if (p) {
     doc.encrypt({
       userPassword: p.password,
-      // Ouvert avec le mot de passe d'ouverture : on ne connaît pas le propriétaire. S'il n'y a pas de mot de passe
-      // d'ouverture (restrictions seules), un propriétaire aléatoire garde les restrictions effectives.
-      ownerPassword: p.password || randomOwnerPassword(),
+      // Propriétaire inconnu. Sans restriction, le mot de passe d'ouverture sert aussi de propriétaire (rien à protéger de plus) ;
+      // avec des restrictions, un propriétaire aléatoire les garde effectives : connaître le mot de passe d'ouverture ne les lève pas.
+      ownerPassword: p.password && unrestricted(p.permissions) ? p.password : randomOwnerPassword(),
       permissions: p.permissions,
     });
   }

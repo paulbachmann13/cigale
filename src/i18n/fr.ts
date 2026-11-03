@@ -311,7 +311,7 @@ export const fr = {
     signedTitle: 'Document signé numériquement',
     signedMessage: '« {name} » contient une signature numérique. Toute modification la rendra invalide.',
     encryptedTitle: 'Document protégé par mot de passe',
-    encryptedMessage: '« {name} » est protégé. Cigale le garde protégé : même mot de passe d’ouverture, mêmes restrictions (impression, copie…), chiffrement AES-256. En revanche l’ancien mot de passe « propriétaire » (celui qui lève les restrictions) n’est plus valable : il est remplacé. Continuer ?',
+    encryptedMessage: '« {name} » est protégé. Cigale le garde protégé : le mot de passe que vous avez saisi reste (ou devient) le mot de passe d’ouverture, les restrictions (impression, copie…) sont conservées, chiffrement AES-256. En revanche l’ancien mot de passe « propriétaire » (celui qui lève les restrictions) n’est plus valable : il est remplacé. Continuer ?',
     encryptedGo: 'Continuer',
     signedGo: 'Modifier quand même',
     signedCancel: 'Annuler',

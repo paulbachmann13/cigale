@@ -19,7 +19,7 @@ import {
   degrees,
 } from '@cantoo/pdf-lib';
 import { moveOrder, normalizeSelection } from '../data/page-order';
-import { getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
+import { type Permissions, RESTRICTIVE, getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
 
 export type PageOp =
   | { op: 'rotate'; pages: number[]; delta: 90 | -90 | 180 }
@@ -71,7 +71,7 @@ export async function loadForEdit(bytes: Uint8Array, password?: string): Promise
   }
   // pdf-lib déchiffre à l'ouverture : on retient comment le protéger de nouveau à l'enregistrement.
   if (doc.context.isDecrypted && pw !== undefined) {
-    let permissions = {};
+    let permissions: Permissions = RESTRICTIVE;
     try {
       const raw = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
       const enc = raw.context.lookup(raw.context.trailerInfo.Encrypt, PDFDict);

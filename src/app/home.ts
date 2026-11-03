@@ -32,7 +32,8 @@ export function buildHome(app: App): HTMLElement {
   }
 
   const drafts = h('ul', { class: 'recent-list', id: 'drafts-list' });
-  void listDrafts().then((items) => {
+  void listDrafts().then((all) => {
+    const items = all.filter((d) => !app.hasDraft(d.id));
     if (!items.length) drafts.append(h('li', { class: 'empty', id: 'no-drafts' }, t.home.resumeNone));
     for (const d of items) {
       drafts.append(
@@ -63,7 +64,7 @@ export function buildHome(app: App): HTMLElement {
     h('button', { class: 'home-nav-item active', type: 'button' }, t.file.home),
     h('button', { class: 'home-nav-item', id: 'home-nav-open', type: 'button', onclick: () => void app.openDialog() }, t.file.open),
     h('button', { class: 'home-nav-item', id: 'home-versions', type: 'button', onclick: openVersions }, t.file.versions),
-    h('button', { class: 'home-nav-item', id: 'home-settings', type: 'button', onclick: openSettings }, t.home.settings),
+    h('button', { class: 'home-nav-item', id: 'home-settings', type: 'button', onclick: () => openSettings(app) }, t.home.settings),
     h('button', { class: 'home-nav-item', id: 'home-news', type: 'button', onclick: openWhatsNew }, t.home.whatsNew),
     h('span', { class: 'home-spacer' }),
     h('span', { class: 'home-version', id: 'app-version' }, fmt(t.home.version, { version: __APP_VERSION__ })),
@@ -105,7 +106,7 @@ export function openWhatsNew() {
   showCustom(t.whatsNew.title, body, t.whatsNew.close, 'dialog-news');
 }
 
-export function openSettings() {
+export function openSettings(app: App) {
   const s = loadSettings();
   const theme = h(
     'select',
@@ -128,7 +129,10 @@ export function openSettings() {
   const author = h('input', { type: 'text', id: 'setting-author', value: s.author, placeholder: t.annot.defaultAuthor });
   author.onchange = () => saveSettings({ ...loadSettings(), author: author.value.trim() });
   const auto = h('input', { type: 'checkbox', id: 'setting-autosave', checked: s.autosave });
-  auto.onchange = () => saveSettings({ ...loadSettings(), autosave: auto.checked });
+  auto.onchange = () => {
+    saveSettings({ ...loadSettings(), autosave: auto.checked });
+    void app.autosaveChanged(auto.checked);
+  };
   const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
   keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(

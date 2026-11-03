@@ -256,7 +256,7 @@ export class App {
       { id: 'print', label: t.file.print, shortcut: `${mod}P`, disabled: !has, run: () => void this.print() },
       { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
       { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
-      { id: 'settings', label: t.home.settings, run: () => openSettings() },
+      { id: 'settings', label: t.home.settings, run: () => openSettings(this) },
       { id: 'whats-new', label: t.home.whatsNew, run: () => openWhatsNew() },
     ];
     this.fileButton.setAttribute('aria-expanded', 'true');
@@ -531,7 +531,7 @@ export class App {
   }
 
   /** Ouvre des octets dans un nouvel onglet. `unsaved` : document créé par Cigale (extrait…), jamais enregistré. */
-  async openBytes(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean } = {}): Promise<boolean> {
+  async openBytes(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean; draftId?: string } = {}): Promise<boolean> {
     const startedAt = performance.now();
     let cancelled = false;
     let password: string | undefined;
@@ -606,7 +606,7 @@ export class App {
     return s.organizing && s.grid ? s.grid : s.thumbs;
   }
 
-  private async addSession(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean }, password: string | undefined, pdf: import('pdfjs-dist').PDFDocumentProxy, startedAt: number) {
+  private async addSession(name: string, bytes: Uint8Array, opts: { handle?: FileSystemFileHandle; unsaved?: boolean; draftId?: string }, password: string | undefined, pdf: import('pdfjs-dist').PDFDocumentProxy, startedAt: number) {
     const settings = loadSettings();
     this.homeEl.hidden = true;
     this.workspace.hidden = false;
@@ -636,7 +636,7 @@ export class App {
       tab,
       annots: [],
       pendingSelect: null,
-      draftId: newDraftId(),
+      draftId: opts.draftId ?? newDraftId(),
     } as unknown as Session;
     session.comments = new CommentsPanel(this.commentsHost(session));
     session.thumbs = this.makeList(session, 'list', pdf, PANEL_THUMB);
@@ -1070,10 +1070,20 @@ export class App {
       return;
     }
     // Pas de lien avec le fichier d'origine (il a pu changer depuis) : « Enregistrer » demandera où écrire.
-    if (await this.openBytes(name, bytes, { unsaved: true })) {
-      await deleteDraft(id);
-      this.refreshHome();
-    }
+    // Le document garde l'identifiant de sa sauvegarde : elle n'est supprimée qu'à l'enregistrement ou à la fermeture.
+    if (await this.openBytes(name, bytes, { unsaved: true, draftId: id })) this.refreshHome();
+  }
+
+  /** Cette sauvegarde appartient-elle à un document ouvert en ce moment ? (elle n'est alors pas proposée dans « Reprendre ») */
+  hasDraft(id: string): boolean {
+    return this.sessions.some((x) => x.draftId === id);
+  }
+
+  /** Réglage « sauvegarde automatique » : décoché, tout ce qui était gardé est effacé tout de suite. */
+  async autosaveChanged(enabled: boolean): Promise<void> {
+    if (enabled) return void this.sessions.forEach((x) => this.scheduleDraft(x));
+    this.sessions.forEach((x) => window.clearTimeout(x.draftTimer));
+    for (const d of await listDrafts()) await deleteDraft(d.id);
   }
 
   private setStatus(text: string, kind: string) {
