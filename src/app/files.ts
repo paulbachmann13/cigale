@@ -1,3 +1,5 @@
+import { isTauri, tauriPickOpen } from './tauri-files';
+
 /** Sélecteur de fichiers : API « File System Access » si disponible (Chrome, Edge), sinon <input type=file>. */
 export interface PickedFile {
   file: File;
@@ -7,6 +9,10 @@ export interface PickedFile {
 type Picker = (opts: unknown) => Promise<FileSystemFileHandle[]>;
 
 export async function pickPdfs(input: HTMLInputElement): Promise<PickedFile[]> {
+  if (isTauri()) {
+    const handles = await tauriPickOpen(true);
+    return Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle })));
+  }
   const picker = (window as unknown as { showOpenFilePicker?: Picker }).showOpenFilePicker;
   if (picker) {
     try {
@@ -58,6 +64,7 @@ export async function readFromHandle(handle: FileSystemFileHandle): Promise<File
 
 /** Choisit un seul PDF (sans mémoriser quoi que ce soit) : sélecteur moderne, sinon champ de fichier temporaire. */
 export async function pickOnePdf(): Promise<File | null> {
+  if (isTauri()) return (await tauriPickOpen(false))[0]?.getFile() ?? null;
   const picker = (window as unknown as { showOpenFilePicker?: Picker }).showOpenFilePicker;
   if (picker) {
     try {
@@ -84,6 +91,7 @@ const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.
 
 /** Choisit plusieurs fichiers PDF et images (pour « Combiner »). */
 export async function pickPdfsAndImages(): Promise<File[]> {
+  if (isTauri()) return Promise.all((await tauriPickOpen(true, true)).map((h) => h.getFile()));
   const picker = (window as unknown as { showOpenFilePicker?: Picker }).showOpenFilePicker;
   if (picker) {
     try {

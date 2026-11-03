@@ -1,4 +1,5 @@
 import { type RecentEntry, addRecent, parseRecents, removeRecent } from '../data/recent';
+import { pathOfHandle, tauriHandleFromPath } from '../app/tauri-files';
 import { idbClear, idbDelete, idbGet, idbSet } from './idb';
 
 const KEY = 'cigale-recents';
@@ -25,7 +26,9 @@ export async function rememberFile(name: string, size: number, handle?: FileSyst
   save(addRecent(loadRecents(), { id, name, size, openedAt: Date.now() }));
   if (handle) {
     try {
-      await idbSet(`handle:${id}`, handle);
+      // Application Mac : on garde le chemin (le « handle » maison n'est pas stockable)
+      const path = pathOfHandle(handle);
+      await idbSet(`handle:${id}`, path ?? handle);
     } catch {
       /* ignoré */
     }
@@ -43,5 +46,6 @@ export async function clearRecents(): Promise<void> {
 }
 
 export async function recentHandle(id: string): Promise<FileSystemFileHandle | undefined> {
-  return idbGet<FileSystemFileHandle>(`handle:${id}`).catch(() => undefined);
+  const stored = await idbGet<FileSystemFileHandle | string>(`handle:${id}`).catch(() => undefined);
+  return typeof stored === 'string' ? tauriHandleFromPath(stored) : stored;
 }

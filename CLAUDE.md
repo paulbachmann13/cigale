@@ -29,6 +29,8 @@ npm run fixtures       # PDF de test → tests/fixtures/out/ (non versionné)
 npm run test:e2e       # Playwright sur le build de production sous /cigale/ ; Chromium + WebKit iPad (smoke)
 npm run build          # build de production
 npm run check:licenses
+npm run tauri dev      # application Mac en développement (Rust requis)
+npm run build:mac      # .dmg universel (Mac avec Rust ; sinon GitHub Actions → « Application Mac »)
 ```
 
 Avant de pousser : `npm run typecheck && npm test && npm run fixtures && npm run test:e2e`.
@@ -51,7 +53,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Feuille de route
 
-1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri. Détail dans `docs/PLAN.md`.
+1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement (v1.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri ✔ (0.5.0). Détail dans `docs/PLAN.md`.
 
 - **Modifier un PDF** : toute opération passe par `Editing.run` (worker, file d'attente, adoption seulement si le résultat s'ouvre avec le bon nombre de pages). Ne jamais appeler `removePage`/`insertPage` pour réordonner (arbre cassé) : voir `reorderPages`. Toujours `updateMetadata: false`. Après suppression, `pruneUnreachable` (sinon le contenu reste dans le fichier). Pas de `.bak` voisin dans un navigateur : `storage/backups.ts`.
 - **Interface = famille Grillon** (barre à 36 px, bouton « Fichier » plein couleur, accueil à colonne colorée) ; couleur propre : terracotta.
@@ -61,8 +63,10 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 - **Commentaires** : toute annotation passe par `Editing.addAnnots/updateAnnot/removeAnnots` (jamais d'écriture directe) ; `annot-ops.ts` est pur et testé (`tests/unit/annot-ops.test.ts`, `qpdf`). Les zones cliquables (`.annot-hit`) n'existent que pour l'outil « Sélectionner ». pdf.js intercepte les clics avec ses propres sections d'annotation : voir la règle CSS `.annotating .annotationLayer section`. Après `reload`, `attachAnnotations` recrée l'`Annotator` et relit la liste (`listAnnotationsOp`). Les tests e2e vérifient le **rendu** par pixels (`countPixels`).
 
+- **Application Mac** : `src/app/tauri-files.ts` (handle maison, écriture atomique, `.bak`, ouvrir avec). Ne jamais importer `@tauri-apps/*` en haut de fichier (imports dynamiques seulement : le code tourne aussi dans le navigateur). Version identique dans `package.json`, `tauri.conf.json`, `Cargo.toml` (test). Pas de service worker dans Tauri. `dragDropEnabled: false` (sinon les miniatures ne se glissent plus). Test local : `npx tauri build --debug --bundles app` puis `open -a …/Cigale.app fichier.pdf`.
+
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)
 
 - Rendu comparé à Aperçu et à Acrobat avec de vrais scans manuscrits ; Safari (macOS) et iPad réel (tactile : pincer, Apple Pencil).
-- Installation PWA et « Ouvrir avec » depuis le Finder.
+- Installation PWA ; application Mac : installation du .dmg, premier lancement non signé, double-clic sur un PDF, ⌘S avec création du .bak, fermeture avec modifications.
 - Les PDF produits dans Aperçu et Acrobat (voir « Étape 2 » dans docs/VERIFICATION-MANUELLE.md) ; Chrome réel avec un fichier du Mac (les tests utilisent l'espace privé du navigateur).

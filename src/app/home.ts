@@ -140,7 +140,7 @@ export function openVersions() {
           { class: 'version-row' },
           h('span', { class: 'recent-name' }, b.name),
           h('span', { class: 'recent-meta' }, `${formatSize(b.size)} · ${new Date(b.at).toLocaleString('fr-FR')}`),
-          h('button', { class: 'link', onclick: () => void readBackup(b.id).then((bytes) => (bytes ? downloadBytes(b.name, bytes) : toast(t.versions.none))) }, t.versions.download),
+          h('button', { class: 'link', onclick: () => void readBackup(b.id).then((bytes) => (bytes ? void downloadBytes(b.name, bytes) : toast(t.versions.none))) }, t.versions.download),
           h('button', { class: 'link', onclick: () => void deleteBackup(b.id).then(render) }, t.versions.delete),
         ),
       );

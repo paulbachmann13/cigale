@@ -2,6 +2,16 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [0.5.0] — 2026-11-03
+
+### Ajouté
+- **Application Mac** : Cigale s'installe maintenant comme une vraie application (fichier .dmg, Mac Intel et Apple Silicon), à côté de la version dans le navigateur.
+- Double-clic sur un PDF dans le Finder, ou « Ouvrir avec Cigale » : le document s'ouvre dans un nouvel onglet.
+- Boîtes « Ouvrir » et « Enregistrer sous » du Mac, et enregistrement sur place sans autorisation à redemander.
+- **Vraie copie de sécurité** : en enregistrant, l'ancienne version est gardée à côté du fichier (« rapport.pdf.bak »).
+- Quand vous fermez la fenêtre avec des modifications non enregistrées, Cigale demande quoi faire.
+- Barre des menus du Mac en français.
+
 ## [0.4.0] — 2026-11-03
 
 ### Ajouté

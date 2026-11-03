@@ -15,7 +15,8 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "worker-src 'self' blob:",
-  "connect-src 'self' data: blob:",
+  // ipc: = canal interne de l'application Mac (Tauri) ; rien d'externe
+  "connect-src 'self' data: blob: ipc: http://ipc.localhost",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

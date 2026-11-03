@@ -17,6 +17,7 @@ import { buildHome, openSettings, openVersions, openWhatsNew } from './home';
 import { type IconName, icon } from './icons';
 import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
+import { isTauri, onCloseRequested, onFinderOpen, takeStartupOpens, destroyWindow, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import type { Session } from './session';
@@ -419,6 +420,45 @@ export class App {
     void (async () => {
       for (const f of files) await this.openFile(f.file, f.handle, files.length > 1);
     })();
+  }
+
+  /** Application Mac : ouvre des chemins (double-clic dans le Finder, « Ouvrir avec »). */
+  async openPaths(paths: string[]): Promise<void> {
+    const files: PickedFile[] = [];
+    for (const path of paths) {
+      try {
+        const handle = tauriHandleFromPath(path);
+        files.push({ file: await handle.getFile(), handle });
+      } catch (err) {
+        await showMessage(t.errors.title, fmt(t.errors.unknown, { name: path.split('/').pop() ?? path, detail: String((err as Error).message ?? err) }));
+      }
+    }
+    this.openPicked(files);
+  }
+
+  /** Branche ce qui n'existe que dans l'application Mac : fichiers du Finder et fermeture de la fenêtre. */
+  async setupDesktop(): Promise<void> {
+    if (!isTauri()) return;
+    await onFinderOpen((paths) => void this.openPaths(paths));
+    const startup = await takeStartupOpens();
+    if (startup.length) void this.openPaths(startup);
+    // Fermer la fenêtre (⌘W, bouton rouge, ⌘Q) : le navigateur n'affiche pas « beforeunload » ici, donc on demande nous-mêmes.
+    await onCloseRequested(async (prevent) => {
+      if (!this.sessions.some((x) => x.history.dirty)) return;
+      prevent();
+      if (await this.confirmCloseAll()) await destroyWindow();
+    });
+  }
+
+  /** Pour chaque document modifié : « Enregistrer / Ne pas enregistrer / Annuler ». Faux si l'utilisateur annule. */
+  async confirmCloseAll(): Promise<boolean> {
+    for (const s of this.sessions.filter((x) => x.history.dirty)) {
+      this.activate(s.id);
+      const answer = await askUnsaved(s.name);
+      if (answer === 'cancel') return false;
+      if (answer === 'save' && !(await this.editing.save(s))) return false;
+    }
+    return true;
   }
 
   /** Rouvre un fichier de la liste « Récents ». */

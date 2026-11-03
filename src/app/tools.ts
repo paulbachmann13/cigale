@@ -287,8 +287,7 @@ export function openSplitDialog(host: ToolsHost, s: Session): void {
         const zip = await zipHandle.promise;
         host.idle();
         const zipName = `${sanitizeFileName(nameInput.value, base)}.zip`;
-        downloadBytes(zipName, zip, 'application/zip');
-        toast(fmt(t.split.zipDone, { name: zipName, n: result.length }));
+        if (await downloadBytes(zipName, zip, 'application/zip')) toast(fmt(t.split.zipDone, { name: zipName, n: result.length }));
       } else {
         host.idle();
         for (const p of result) await host.openNew(p.name, p.bytes);

@@ -1,3 +1,5 @@
+import { isTauri, tauriPickSave, tauriSaveBytes } from './tauri-files';
+
 /** Écriture des fichiers : enregistrement sur place (File System Access) avec vérification, ou téléchargement. */
 
 type SavePicker = (opts: unknown) => Promise<FileSystemFileHandle>;
@@ -37,6 +39,7 @@ export async function writeVerified(handle: FileSystemFileHandle, bytes: Uint8Ar
 
 /** Boîte « Enregistrer sous ». `undefined` : le navigateur n'en a pas ; `null` : annulée. */
 export async function pickSaveHandle(suggestedName: string): Promise<FileSystemFileHandle | null | undefined> {
+  if (isTauri()) return tauriPickSave(suggestedName);
   const picker = (window as unknown as { showSaveFilePicker?: SavePicker }).showSaveFilePicker;
   if (!picker) return undefined;
   try {
@@ -47,7 +50,8 @@ export async function pickSaveHandle(suggestedName: string): Promise<FileSystemF
   }
 }
 
-export function downloadBytes(name: string, bytes: Uint8Array, mime = 'application/pdf'): void {
+export async function downloadBytes(name: string, bytes: Uint8Array, mime = 'application/pdf'): Promise<boolean> {
+  if (isTauri()) return tauriSaveBytes(name, bytes, name.split('.').pop() || 'pdf');
   const url = URL.createObjectURL(new Blob([bytes.slice()], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
@@ -56,6 +60,7 @@ export function downloadBytes(name: string, bytes: Uint8Array, mime = 'applicati
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return true;
 }
 
 export function withPdfExtension(name: string): string {

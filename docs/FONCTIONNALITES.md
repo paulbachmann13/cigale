@@ -1,6 +1,6 @@
 # Fonctionnalités et limites connues
 
-État : **étape 4 (annotations et commentaires)**, version 0.4.0.
+État : **étape 4 (annotations et commentaires)** + application Mac, version 0.5.0.
 
 ## Fonctionnalités
 
@@ -22,6 +22,14 @@
 - **Annuler / rétablir** (⌘Z, ⇧⌘Z) sans limite pratique (octets complets gardés, plafonnés à 400 Mo).
 - Toutes les opérations tournent dans un **Web Worker** (annulables) ; le document n'est adopté que si le résultat s'ouvre correctement et a le bon nombre de pages.
 - Conservés : signets (ils suivent leurs pages), liens, métadonnées d'origine (titre, producteur…), pièces jointes, XMP, chiffrement (le document reste protégé par le même mot de passe).
+
+### Application Mac (.dmg)
+- Même code que la version web, dans une fenêtre native (Tauri 2). Installation : ouvrir le .dmg, glisser Cigale dans Applications.
+- **Ouvrir avec** : double-clic sur un PDF du Finder (ou « Ouvrir avec → Cigale »), qu'elle soit déjà lancée ou non.
+- Boîtes « Ouvrir » / « Enregistrer sous » natives ; ⌘S **réécrit le fichier de façon atomique** (fichier temporaire puis renommage) puis relit et compare ; **vrai `.bak`** à côté (« nom.pdf.bak », la version d'avant le dernier enregistrement), en plus des versions gardées dans Cigale.
+- Fermeture de la fenêtre avec des modifications : question « Enregistrer / Ne pas enregistrer / Annuler ».
+- Les récents gardent le chemin du fichier : rouverture directe.
+- Application **non signée** (pas de compte développeur Apple) : au premier lancement, clic droit sur Cigale → Ouvrir. Pas de mise à jour automatique pour l'instant : télécharger le nouveau .dmg (Releases GitHub).
 
 ### Commenter (étape 4)
 - **Outils** : surligner / souligner / barrer (d'après le texte sélectionné, une zone par ligne), note, zone de texte (texte qui passe à la ligne, taille réglable), dessin à main levée, rectangle, ellipse, ligne, flèche, tampons (6 modèles dessinés par Cigale). Couleur (7 teintes, mémorisée par outil) et épaisseur.
@@ -67,7 +75,9 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Fichier ajouté à « Combiner » | Le garde-fou de structure (pdf-lib / pdf.js comptent autant de pages) ne s'applique qu'au document déjà ouvert | Étape 5 |
 | Images HEIC, TIFF | Acceptées seulement si le navigateur sait les décoder (Safari : HEIC ; Chrome : non) ; sinon message clair | — |
 | Combiner : glisser-déposer | Réordonner avec ↑ ↓ (pas de glisser) ; pas de dépôt de fichiers dans la boîte | Étape 5 |
-| « .bak » à côté du fichier | Un navigateur ne peut pas créer de fichier voisin : l'ancienne version est gardée dans Cigale (Accueil → Versions précédentes). L'application Mac pourra écrire un vrai .bak | App Mac |
+| « .bak » à côté du fichier | Navigateur : impossible (un seul fichier choisi), l'ancienne version est gardée dans Cigale (Accueil → Versions précédentes). **Application Mac : vrai .bak** | — |
+| Application Mac : glisser-déposer d'un fichier de l'extérieur | Le Mac ne donne pas le chemin du fichier : il s'ouvre mais « Enregistrer » demande où écrire. Préférer « Ouvrir » ou le double-clic dans le Finder | — |
+| Application Mac : mises à jour | Pas de mise à jour automatique ; non signée (voir ci-dessus) | Étape 5 |
 | Safari / Firefox | Pas d'enregistrement sur place : copie téléchargée | — |
 | Extraire | Le nouveau document ne reprend ni les signets ni les formulaires | Étape 5 |
 | Signets et liens vers une page supprimée | Ne mènent plus nulle part (comme dans Acrobat) ; le contenu de la page supprimée n'est plus dans le fichier | — |

@@ -7,10 +7,14 @@ Site : https://paulbachmann13.github.io/cigale/ — même philosophie que [Grill
 
 ## État
 
-Version 0.4.0 (étapes 2 à 4) : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
+Version 0.5.0 (étapes 2 à 4 + application Mac) : ouvrir et afficher (onglets, miniatures, signets, zoom, recherche, PDF chiffrés), **organiser les pages**
 (pivoter, supprimer, dupliquer, déplacer, insérer, extraire, vue grille), **annuler/rétablir** et **enregistrer** (⌘S vérifié, version précédente gardée), **combiner** des PDF et des images, **diviser** (plages, tous les N, signets, .zip), **commenter** (surlignage, notes, zones de texte, dessin, formes, tampons, panneau Commentaires avec réponses). Les étapes suivantes
 (durcissement 1.0, application Mac) sont décrites dans [docs/PLAN.md](docs/PLAN.md) ; l'état détaillé et les limites dans
 [docs/FONCTIONNALITES.md](docs/FONCTIONNALITES.md) ; la comparaison avec Acrobat dans [docs/ACROBAT-COMPARAISON.md](docs/ACROBAT-COMPARAISON.md).
+
+## Application Mac (.dmg)
+
+Téléchargez le `.dmg` dans les [Releases](https://github.com/paulbachmann13/cigale/releases) (ou dans GitHub → Actions → « Application Mac »), ouvrez-le et glissez Cigale dans Applications. Application non signée : au premier lancement, clic droit sur Cigale → Ouvrir.
 
 ## Installer l'application (PWA)
 

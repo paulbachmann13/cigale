@@ -45,6 +45,16 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 4. Impression en PDF depuis Aperçu : les commentaires sont imprimés (drapeau « imprimer » posé).
 5. Avec un scan réel : rectangle et dessin au stylet (iPad / Apple Pencil) fonctionnent ; le tracé suit le doigt sans retard sensible.
 
+## Application Mac (.dmg)
+
+1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).
+2. Ouvrir le .dmg, glisser Cigale dans Applications ; premier lancement : clic droit → Ouvrir (application non signée).
+3. Double-clic sur un PDF du Bureau avec « Ouvrir avec → Cigale » : il s'ouvre dans un onglet. Refaire avec Cigale déjà lancée : nouvel onglet, pas de deuxième fenêtre.
+4. Pivoter une page, ⌘S : « Enregistré », le fichier `.bak` est apparu à côté (ouvrir le .bak : c'est l'ancienne version) ; le PDF enregistré s'ouvre dans Aperçu.
+5. Modifier, puis ⌘W ou ⌘Q : la question « Enregistrer les modifications ? » apparaît ; « Annuler » garde la fenêtre.
+6. « Ouvrir » et « Enregistrer sous » : boîtes natives ; les récents rouvrent le fichier directement.
+7. Diviser en .zip : la boîte « Enregistrer sous » propose le nom ; le zip s'ouvre dans l'Archive Utility.
+
 ## Étapes suivantes (à compléter au fur et à mesure)
 
 - **Étapes 2 et 3** : pour chaque PDF produit (réorganisé, extrait, fusionné, découpé) — s'ouvre sans message d'erreur dans Aperçu **et** Acrobat ; nombre et ordre des pages ; signets et liens conservés ; Acrobat ne propose pas d'« enregistrer les modifications » à la fermeture sans raison.

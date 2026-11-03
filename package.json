@@ -1,7 +1,7 @@
 {
   "name": "cigale",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Cigale — éditeur PDF local et gratuit (PWA)",
   "license": "Apache-2.0",
   "type": "module",
@@ -13,18 +13,24 @@
     "fixtures": "node --experimental-strip-types scripts/make-fixtures.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:licenses": "node scripts/check-licenses.mjs"
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "tauri": "tauri",
+    "build:mac": "tauri build --target universal-apple-darwin"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "2.11.1",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/plugin-dialog": "2.8.4",
+    "@tauri-apps/plugin-fs": "2.7.1",
     "fflate": "0.8.3",
     "pdfjs-dist": "6.5.438"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
+    "@tauri-apps/cli": "2.12.4",
     "@types/node": "26.6.6",
     "@vite-pwa/assets-generator": "2.0.0",
     "typescript": "7.0.2",

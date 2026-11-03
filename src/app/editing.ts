@@ -14,6 +14,7 @@ import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
 import { toast } from './dom';
 import { loadSettings } from './settings';
+import { backupPathFor, baseName, pathOfHandle, writeBackupCopy } from './tauri-files';
 import { pickOnePdf } from './files';
 import { downloadBytes, ensureWritable, pickSaveHandle, withPdfExtension, writeVerified } from './save';
 import type { Session } from './session';
@@ -295,6 +296,13 @@ export class Editing {
       if (!isNewFile && loadSettings().keepVersions && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
         await addBackup(s.name, s.diskBytes).then(() => (backedUp = true)).catch(() => undefined);
       }
+      // Application Mac : vraie copie « nom.pdf.bak » à côté du fichier, avant de le remplacer.
+      const path = pathOfHandle(handle);
+      let bak = '';
+      if (path && !isNewFile && s.diskBytes && !sameBytes(s.diskBytes, bytes)) {
+        await writeBackupCopy(path);
+        bak = baseName(backupPathFor(path));
+      }
       const ok = await writeVerified(handle, bytes);
       if (!ok) throw new Error(t.save.verifyFailed);
       // Succès seulement : la session ne bascule sur le nouveau fichier qu'après une écriture vérifiée.
@@ -304,7 +312,7 @@ export class Editing {
       s.history.markSaved();
       this.host.refresh(s);
       this.host.rememberOpened(s);
-      toast(fmt(t.save.done, { name: s.name }) + (backedUp ? ` ${t.save.backupNote}` : ''));
+      toast(fmt(t.save.done, { name: s.name }) + (bak ? ` ${fmt(t.save.bakNote, { bak })}` : backedUp ? ` ${t.save.backupNote}` : ''));
       return true;
     } catch (err) {
       this.host.refresh(s);

@@ -67,6 +67,19 @@ tests/unit, e2e, fixtures/out (générées)
 - **Auteur** : réglage local (Paramètres), « Utilisateur » par défaut.
 - **Icônes de notes de pdf.js** : on copie seulement `annotation-*.svg` dans `public/pdfjs/images/` (aucune requête externe) et on masque l'icône (notre apparence est dessinée dans le fichier).
 
+## Décisions de l'application Mac (Tauri)
+
+- **Même architecture que Grillon** : `src-tauri/` (Tauri 2, Rust), plugins `dialog` et `fs`, workflow GitHub `mac.yml` (.dmg universel Intel + Apple Silicon, publié dans les Releases quand on pousse une étiquette `vX.Y.Z`), signature « ad hoc » (`signingIdentity: "-"`), pas de notarisation (pas de compte développeur Apple).
+- **Une seule fenêtre à onglets** (Grillon ouvre une fenêtre par classeur) : les documents sont déjà des onglets.
+- **Un « handle » maison** (`src/app/tauri-files.ts`) imite `FileSystemFileHandle` (`getFile`, `createWritable`) : tout le code d'enregistrement (`writeVerified`, relecture, comparaison SHA-256) est le même que dans le navigateur. L'écriture est atomique (`fichier.cigale-tmp` puis `rename`) ; jamais d'écriture directe.
+- **Vrai `.bak`** (`writeBackupCopy`) avant le remplacement, en plus des versions gardées dans IndexedDB.
+- **Ouvrir avec** : l'événement `RunEvent::Opened` de macOS est mis en attente côté Rust tant que l'interface n'a pas appelé `take_pending_opens`, puis émis (`cigale://open`) ; l'interface ouvre chaque chemin dans un onglet.
+- **Glisser-déposer** : `dragDropEnabled: false`, sinon WKWebView coupe le glisser-déposer HTML des miniatures de pages ; un fichier déposé de l'extérieur n'a donc pas de chemin (limite documentée).
+- **Fermeture** : `onCloseRequested` → question sur les documents modifiés (`beforeunload` n'existe pas dans la fenêtre Tauri).
+- **CSP** : la balise meta du build autorise `ipc:` et `http://ipc.localhost` (canal interne de Tauri), rien d'externe. **Pas de service worker** dans l'application (tout est embarqué).
+- **Pas de mise à jour automatique** (elle demande une clé de signature secrète dans les secrets GitHub) : prévu en étape 5.
+- **Version** : `package.json`, `src-tauri/tauri.conf.json` et `src-tauri/Cargo.toml` doivent être identiques (testé).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

@@ -9,6 +9,8 @@ Composants tiers distribués avec l'application (production) :
 - @cantoo/pdf-lib 2.11.1 — MIT (fork de pdf-lib © Andrew Dillon) — modification des pages (étape 2)
 - fflate 0.8.3 — MIT — © 101arrowz — utilisé à partir de l'étape 3
 
+- Tauri 2 (Rust) et ses modules dialog / fs — Apache-2.0 ou MIT — application Mac uniquement (voir src-tauri/Cargo.lock pour les crates)
+
 Outils de développement (non distribués) : qpdf 12 (Apache-2.0, contrôle des PDF produits en test), Vite, TypeScript, Vitest, Playwright, vite-plugin-pwa, Workbox (MIT / Apache-2.0).
 
 Règle du projet : aucune dépendance sous licence GPL ou AGPL, aucun paquet payant. Aucune reprise de code, de logo
