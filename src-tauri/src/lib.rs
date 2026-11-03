@@ -22,6 +22,38 @@ fn take_pending_opens(state: tauri::State<Opens>) -> Vec<String> {
     std::mem::take(&mut *state.pending.lock().unwrap())
 }
 
+/// Redémarre Cigale après une mise à jour, sans deuxième icône dans le Dock. Le redémarrage de Tauri lance `open -n` (une nouvelle
+/// instance) pendant que l'ancienne tourne encore : le Dock montre deux icônes, et celle en trop peut rester. Ici, un petit script
+/// détaché attend la fin de ce processus, puis rouvre l'application (sans `-n` : une seule instance, la même icône).
+#[tauri::command]
+fn relaunch_app(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::process::CommandExt;
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        // …/Cigale.app/Contents/MacOS/cigale → …/Cigale.app
+        let bundle = exe.ancestors().nth(3).filter(|b| b.extension().is_some_and(|e| e == "app")).ok_or("application hors d'un .app")?;
+        let script = format!("while kill -0 {pid} 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$1\"", pid = std::process::id());
+        std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .arg("cigale")
+            .arg(bundle)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .process_group(0)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        app.exit(0);
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        app.restart()
+    }
+}
+
 /// Quitte vraiment l'application (appelée par l'interface une fois les modifications réglées).
 #[tauri::command]
 fn quit_app(app: AppHandle) {
@@ -80,8 +112,10 @@ pub fn run() {
         .menu(|app| french_menu(app))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // Mises à jour automatiques (Releases GitHub signées) : vérification et installation depuis l'interface.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Opens::default())
-        .invoke_handler(tauri::generate_handler![take_pending_opens, quit_app])
+        .invoke_handler(tauri::generate_handler![take_pending_opens, quit_app, relaunch_app])
         .build(tauri::generate_context!())
         .expect("erreur au démarrage de Cigale")
         .run(|app, event| {

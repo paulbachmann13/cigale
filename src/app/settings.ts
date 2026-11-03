@@ -10,10 +10,12 @@ export interface Settings {
   author: string;
   /** Garder une copie du travail non enregistré (reprise après une fermeture imprévue). */
   autosave: boolean;
+  /** Application Mac : chercher une mise à jour au démarrage. */
+  autoUpdate: boolean;
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true };
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true };
 
 export function loadSettings(): Settings {
   try {

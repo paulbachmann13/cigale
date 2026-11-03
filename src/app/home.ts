@@ -9,6 +9,7 @@ import changelogMd from '../../CHANGELOG.md?raw';
 import type { App } from './app';
 import { showCustom } from './dialogs';
 import { h, toast } from './dom';
+import { isTauri } from './tauri-files';
 import { type IconName, icon } from './icons';
 import { type DefaultZoom, type ThemeChoice, loadSettings, saveSettings } from './settings';
 
@@ -133,6 +134,8 @@ export function openSettings(app: App) {
     saveSettings({ ...loadSettings(), autosave: auto.checked });
     void app.autosaveChanged(auto.checked);
   };
+  const autoUp = h('input', { type: 'checkbox', id: 'setting-autoupdate', checked: s.autoUpdate });
+  autoUp.onchange = () => saveSettings({ ...loadSettings(), autoUpdate: autoUp.checked });
   const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
   keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(
@@ -143,6 +146,7 @@ export function openSettings(app: App) {
       h('label', {}, t.settings.theme, theme),
       h('label', {}, t.settings.defaultZoom, zoom),
       h('label', {}, t.settings.author, author),
+      isTauri() ? h('label', { class: 'check' }, autoUp, t.settings.autoUpdate) : null,
       h('label', { class: 'check' }, auto, t.settings.autosave),
       h('p', { class: 'hint' }, t.settings.autosaveHint),
       h('label', { class: 'check' }, keep, t.settings.keepVersions),

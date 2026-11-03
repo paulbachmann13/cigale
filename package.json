@@ -25,6 +25,7 @@
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/plugin-dialog": "2.8.4",
     "@tauri-apps/plugin-fs": "2.7.1",
+    "@tauri-apps/plugin-updater": "2.14.1",
     "fflate": "0.8.3",
     "pdfjs-dist": "6.5.438"
   },

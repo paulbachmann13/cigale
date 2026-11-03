@@ -36,7 +36,7 @@
 - Boîtes « Ouvrir » / « Enregistrer sous » natives ; ⌘S **réécrit le fichier de façon atomique** (fichier temporaire puis renommage) puis relit et compare ; **vrai `.bak`** à côté (« nom.pdf.bak », la version d'avant le dernier enregistrement), en plus des versions gardées dans Cigale.
 - Fermeture de la fenêtre avec des modifications : question « Enregistrer / Ne pas enregistrer / Annuler ».
 - Les récents gardent le chemin du fichier : rouverture directe.
-- Application **non signée** (pas de compte développeur Apple) : au premier lancement, clic droit sur Cigale → Ouvrir. Pas de mise à jour automatique pour l'instant : télécharger le nouveau .dmg (Releases GitHub).
+- Application **non signée** (pas de compte développeur Apple) : au premier lancement, clic droit sur Cigale → Ouvrir. **Mises à jour automatiques** : vérification discrète 5 s après le démarrage (réglable) et Fichier → Rechercher les mises à jour ; notes de la version, téléchargement avec progression, installation, redémarrage sans deuxième icône dans le Dock ; le travail non enregistré est sauvegardé avant le redémarrage ; refus propre si Cigale est lancée depuis le .dmg ou Téléchargements ; signature vérifiée.
 
 ### Commenter (étape 4)
 - **Outils** : surligner / souligner / barrer (d'après le texte sélectionné, une zone par ligne), note, zone de texte (texte qui passe à la ligne, taille réglable), dessin à main levée, rectangle, ellipse, ligne, flèche, tampons (6 modèles dessinés par Cigale). Couleur (7 teintes, mémorisée par outil) et épaisseur.
@@ -84,7 +84,7 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Combiner : glisser-déposer | Réordonner avec ↑ ↓ (pas de glisser) ; pas de dépôt de fichiers dans la boîte | Étape 5 |
 | « .bak » à côté du fichier | Navigateur : impossible (un seul fichier choisi), l'ancienne version est gardée dans Cigale (Accueil → Versions précédentes). **Application Mac : vrai .bak** | — |
 | Application Mac : glisser-déposer d'un fichier de l'extérieur | Le Mac ne donne pas le chemin du fichier : il s'ouvre mais « Enregistrer » demande où écrire. Préférer « Ouvrir » ou le double-clic dans le Finder | — |
-| Application Mac : mises à jour | Pas de mise à jour automatique ; non signée (voir ci-dessus) | Étape 5 |
+| Application Mac : signature Apple | Non signée par Apple (pas de compte développeur) : premier lancement par clic droit → Ouvrir. Les mises à jour, elles, sont signées (clé propre à Cigale) | — |
 | Safari / Firefox | Pas d'enregistrement sur place : copie téléchargée | — |
 | Extraire | Le nouveau document ne reprend ni les signets ni les formulaires | Étape 5 |
 | Signets et liens vers une page supprimée | Ne mènent plus nulle part (comme dans Acrobat) ; le contenu de la page supprimée n'est plus dans le fichier | — |

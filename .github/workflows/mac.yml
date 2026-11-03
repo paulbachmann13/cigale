@@ -29,7 +29,10 @@ jobs:
       - run: npm ci
       - name: Licences
         run: npm run check:licenses
-      - name: Construire le .dmg universel
+      - name: Construire le .dmg universel (et l'archive de mise à jour signée)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         run: npm run build:mac
       - name: Préparer les fichiers à publier
         run: |
@@ -42,6 +45,10 @@ jobs:
           fi
           mkdir -p out
           cp "$B"/dmg/*.dmg out/
+          cp "$B/macos/Cigale.app.tar.gz" "out/Cigale_${VERSION}_universal.app.tar.gz"
+          cp "$B/macos/Cigale.app.tar.gz.sig" "out/Cigale_${VERSION}_universal.app.tar.gz.sig"
+          node scripts/make-latest-json.mjs "$VERSION" "out/Cigale_${VERSION}_universal.app.tar.gz.sig" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cigale_${VERSION}_universal.app.tar.gz" CHANGELOG.md > out/latest.json
           ls -la out
       - uses: actions/upload-artifact@v4
         with:
@@ -53,4 +60,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" out/*.dmg --title "Cigale ${{ github.ref_name }}" --notes "Application Mac (Intel et Apple Silicon). Non signée : au premier lancement, clic droit sur Cigale → Ouvrir, ou Réglages Système → Confidentialité et sécurité → « Ouvrir quand même »."
+          gh release create "${{ github.ref_name }}" out/*.dmg out/*.app.tar.gz out/latest.json --title "Cigale ${{ github.ref_name }}" --notes "Application Mac (Intel et Apple Silicon). Non signée : au premier lancement, clic droit sur Cigale → Ouvrir, ou Réglages Système → Confidentialité et sécurité → « Ouvrir quand même ». Les versions suivantes se mettent à jour toutes seules (Fichier → Rechercher les mises à jour…)."

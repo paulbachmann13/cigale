@@ -10,6 +10,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - Les documents dont les restrictions s'appliquent sans mot de passe d'ouverture (copie ou impression interdites) peuvent maintenant être modifiés.
 
 ### Ajouté
+- **Mises à jour automatiques de l'application Mac** : Cigale cherche discrètement une nouvelle version au démarrage (réglable) et dans Fichier → Rechercher les mises à jour. Elle affiche ce que la version apporte, télécharge, installe, puis redémarre toute seule ; votre travail non enregistré est mis de côté et proposé dans « Reprendre ». Les mises à jour sont signées : une copie falsifiée serait refusée.
 - **Sauvegarde automatique** : votre travail non enregistré est gardé sur l'ordinateur ; après une fermeture imprévue il réapparaît dans « Reprendre » (accueil). Réglable dans les paramètres.
 - **Imprimer** (⌘P) : toutes les pages, la page affichée ou des plages, commentaires compris ; la boîte du système permet aussi « Enregistrer au format PDF ».
 - Vérifié sur un ensemble de PDF difficiles (fichiers abîmés, tronqués, chiffrés de plusieurs façons, structures inhabituelles) et sur 200 fichiers volontairement détériorés : Cigale ne plante pas et ne produit jamais un document faux ; elle refuse ou explique.

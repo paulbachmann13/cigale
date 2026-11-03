@@ -62,6 +62,7 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 5. Modifier, puis ⌘W ou ⌘Q : la question « Enregistrer les modifications ? » apparaît ; « Annuler » garde la fenêtre.
 6. « Ouvrir » et « Enregistrer sous » : boîtes natives ; les récents rouvrent le fichier directement.
 7. Diviser en .zip : la boîte « Enregistrer sous » propose le nom ; le zip s'ouvre dans l'Archive Utility.
+8. **Mise à jour** : installer la version N dans Applications, publier N+1 (étiquette), lancer Cigale N : 5 s après, la fenêtre « Installer et redémarrer » montre les nouveautés ; accepter : progression, redémarrage, une seule icône dans le Dock ; Accueil → Nouveautés. Avec un document modifié non enregistré avant la mise à jour : il est proposé dans « Reprendre » au retour. Depuis le .dmg monté (sans copier dans Applications) : message qui demande de déplacer l'application.
 
 ## Étapes suivantes (à compléter au fur et à mesure)
 

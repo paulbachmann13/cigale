@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "core:event:allow-listen",
+    "updater:default",
     "core:window:allow-destroy",
     "core:window:allow-close",
     "core:webview:allow-print",

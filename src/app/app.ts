@@ -255,6 +255,7 @@ export class App {
       { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
       { id: 'print', label: t.file.print, shortcut: `${mod}P`, disabled: !has, run: () => void this.print() },
       { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
+      ...(isTauri() ? [{ id: 'update', label: t.update.check, run: () => void this.checkForUpdates(false), separatorBefore: true }] : []),
       { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
       { id: 'settings', label: t.home.settings, run: () => openSettings(this) },
       { id: 'whats-new', label: t.home.whatsNew, run: () => openWhatsNew() },
@@ -449,7 +450,10 @@ export class App {
 
   /** Branche ce qui n'existe que dans l'application Mac : fichiers du Finder et fermeture de la fenêtre. */
   async setupDesktop(): Promise<void> {
+    this.announceNewVersion();
     if (!isTauri()) return;
+    // vérification discrète des mises à jour, peu après le démarrage
+    if (loadSettings().autoUpdate) window.setTimeout(() => void this.checkForUpdates(true), 5000);
     await onFinderOpen((paths) => void this.openPaths(paths));
     const startup = await takeStartupOpens();
     if (startup.length) void this.openPaths(startup);
@@ -475,6 +479,33 @@ export class App {
         this.closing = false;
       }
     });
+  }
+
+  /** Cherche (et propose d'installer) une mise à jour. `silent` : au démarrage, sans rien dire s'il n'y a rien. */
+  async checkForUpdates(silent: boolean): Promise<void> {
+    if (!isTauri()) return;
+    const { runUpdateCheck, tauriDeps } = await import('./updater');
+    const deps = await tauriDeps(() => this.saveAllDraftsNow());
+    await runUpdateCheck(deps, silent);
+  }
+
+  /** Avant un redémarrage (mise à jour) : le travail non enregistré est mis de côté, même si la sauvegarde automatique est réglée sur « non ». */
+  private async saveAllDraftsNow(): Promise<void> {
+    for (const s of this.sessions.filter((x) => x.history.dirty)) {
+      window.clearTimeout(s.draftTimer);
+      await saveDraft(s.draftId, s.name, s.history.current);
+    }
+  }
+
+  /** Après une mise à jour : une fois, un message qui renvoie vers les nouveautés. */
+  announceNewVersion(): void {
+    try {
+      const last = localStorage.getItem('cigale-last-version');
+      localStorage.setItem('cigale-last-version', __APP_VERSION__);
+      if (last && last !== __APP_VERSION__) toast(fmt(t.update.updatedTo, { version: __APP_VERSION__ }), { label: t.update.seeNews, run: () => openWhatsNew() });
+    } catch {
+      /* stockage indisponible : pas d'annonce */
+    }
   }
 
   /** Pour chaque document modifié : « Enregistrer / Ne pas enregistrer / Annuler ». Faux si l'utilisateur annule. */
