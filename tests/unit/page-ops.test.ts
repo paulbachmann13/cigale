@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PDFDict, PDFDocument, PDFName, PDFNumber } from '@cantoo/pdf-lib';
 import { applyOp, extractPages, inspect, normalizeDocument } from '../../src/pdf/page-ops';
 import { makePdf, readPages } from './helpers';
+import { everything } from './helpers';
 
 const texts = async (b: Uint8Array) => (await readPages(b)).map((p) => p.text);
 
@@ -28,7 +29,7 @@ describe('opérations sur les pages', () => {
     const r = await applyOp(src, { op: 'delete', pages: [1, 2] });
     expect(await texts(r.bytes)).toEqual(['marque1', 'marque4']);
     // le contenu supprimé n’est plus lisible dans les octets (flux non compressés par pdf-lib : on le cherche)
-    const raw = new TextDecoder('latin1').decode(r.bytes);
+    const raw = everything(r.bytes);
     expect(raw).not.toContain('marque2');
     expect(raw).not.toContain('marque3');
     expect(r.bytes.length).toBeLessThan(src.length);
@@ -137,7 +138,7 @@ describe('conservation du reste du document', () => {
     expect(outline.find((o) => o.title === 'Un')?.page).toBe(1);
     expect(outline.find((o) => o.title === 'Trois')?.page).toBe(2);
     expect(outline.find((o) => o.title === 'Quatre')?.page).toBe(3);
-    expect(new TextDecoder('latin1').decode(r.bytes)).not.toContain('marque2');
+    expect(everything(r.bytes)).not.toContain('marque2');
   });
 
   it('garde la taille et la rotation héritées d’un nœud intermédiaire quand on réordonne', async () => {
@@ -197,9 +198,9 @@ describe('purge des pages supprimées (cas difficiles)', () => {
     doc.getPage(1).node.set(PDFName.of('Annots'), ctx.obj([widgetRef]));
     doc.catalog.set(PDFName.of('AcroForm'), ctx.obj({ Fields: [widgetRef] }));
     const src = await doc.save({ useObjectStreams: false });
-    expect(new TextDecoder('latin1').decode(src)).toContain('CONFIDENTIEL-PAGE-DEUX');
+    expect(everything(src)).toContain('CONFIDENTIEL-PAGE-DEUX');
     const r = await applyOp(src, { op: 'delete', pages: [1] });
-    expect(new TextDecoder('latin1').decode(r.bytes)).not.toContain('CONFIDENTIEL-PAGE-DEUX');
+    expect(everything(r.bytes)).not.toContain('CONFIDENTIEL-PAGE-DEUX');
     expect((await readPages(r.bytes)).length).toBe(2);
   });
 

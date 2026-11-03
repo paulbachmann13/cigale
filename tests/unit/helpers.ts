@@ -105,3 +105,40 @@ export function makePng(w: number, h: number): Uint8Array {
   ihdr[9] = 0; // gris
   return new Uint8Array(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
 }
+
+import { unzlibSync } from 'fflate';
+
+/**
+ * Tout le texte lisible d'un PDF : les octets bruts ET le contenu de tous les flux compressés (pdf-lib compresse les pages
+ * et les objets). Sert à vérifier qu'un contenu supprimé ou caviardé a VRAIMENT disparu du fichier.
+ */
+export function everything(bytes: Uint8Array): string {
+  const latin = new TextDecoder('latin1');
+  const raw = latin.decode(bytes);
+  const parts = [raw];
+  const re = /stream\r?\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw))) {
+    const start = m.index + m[0].length;
+    const end = raw.indexOf('endstream', start);
+    if (end < 0) break;
+    try {
+      parts.push(latin.decode(unzlibSync(bytes.subarray(start, end))));
+    } catch {
+      /* flux non compressé ou autre filtre : déjà dans le texte brut */
+    }
+    re.lastIndex = end + 9; // après « endstream »
+  }
+  const all = parts.join('\n');
+  // pdf-lib écrit le texte en hexadécimal (« <53454352…> Tj ») : on ajoute aussi sa version lisible
+  const decoded: string[] = [];
+  for (const h of all.matchAll(/<([0-9A-Fa-f\s]{6,})>/g)) {
+    const hex = h[1].replace(/\s+/g, '');
+    if (hex.length % 2) continue;
+    let out = '';
+    for (let i = 0; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+    if (out.startsWith('\xfe\xff')) out = Array.from({ length: (out.length - 2) >> 1 }, (_, i) => String.fromCharCode((out.charCodeAt(2 + 2 * i) << 8) | out.charCodeAt(3 + 2 * i))).join(''); // UTF-16BE (titres, auteurs, signets)
+    decoded.push(out);
+  }
+  return `${all}\n${decoded.join('\n')}`;
+}

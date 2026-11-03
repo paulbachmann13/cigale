@@ -3,6 +3,7 @@ import { PDFArray, PDFDict, PDFDocument, PDFName, StandardFonts } from '@cantoo/
 import { unzipSync } from 'fflate';
 import { jpegOrientation, mergeSources, splitDocument, topLevelBookmarks, zipParts } from '../../src/pdf/doc-ops';
 import { addFlatOutline, makePdf, makePng, readOutline, readPages } from './helpers';
+import { everything } from './helpers';
 
 const texts = async (b: Uint8Array) => (await readPages(b)).map((p) => p.text);
 
@@ -100,7 +101,7 @@ describe('fusion', () => {
     expect(r.pageCount).toBe(1);
     expect((await readPages(r.bytes)).length).toBe(1);
     // le contenu des pages non gardées ne doit pas être resté dans le fichier
-    const raw = new TextDecoder('latin1').decode(r.bytes);
+    const raw = everything(r.bytes);
     expect(raw).not.toContain('SECRET5');
     expect(raw).not.toContain('SECRET3');
   });
