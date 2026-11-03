@@ -8,11 +8,12 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
-import { Cancelled, addAnnotationsOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
+import { Cancelled, addAnnotationsOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
 import { toast } from './dom';
+import { collectFormValues } from './forms';
 import { loadSettings } from './settings';
 import { backupPathFor, baseName, pathOfHandle, writeBackupCopy } from './tauri-files';
 import { pickOnePdf } from './files';
@@ -55,6 +56,7 @@ export class Editing {
   }
 
   private async runNow(s: Session, op: PageOp, labelKey: keyof typeof t.pages.labels): Promise<boolean> {
+    if (!(await this.flushFormInner(s))) return false; // la saisie en cours entre d'abord dans le document
     if (!(await this.confirmRisks(s))) return false;
     const handle = applyOperation(s.history.current, op, s.password, s.view.pageCount);
     this.host.busy(t.busy.working, () => handle.cancel());
@@ -171,6 +173,7 @@ export class Editing {
   /** Extrait la sélection dans un nouveau document (nouvel onglet, pas encore enregistré). */
   extract(s: Session): Promise<boolean> {
     return this.withSelection(s, async (pages) => {
+      if (!(await this.flushForm(s))) return false;
       const handle = extractOperation(s.history.current, pages, s.password, s.view.pageCount);
       this.host.busy(t.busy.working, () => handle.cancel());
       try {
@@ -198,6 +201,35 @@ export class Editing {
     return fn(s.selection);
   }
 
+  // ───────────── formulaires ─────────────
+
+  /** Écrit dans le document les champs remplis à l'écran (une étape annuler/rétablir). */
+  flushForm(s: Session): Promise<boolean> {
+    return this.serial(() => this.flushFormInner(s));
+  }
+
+  private async flushFormInner(s: Session): Promise<boolean> {
+    if (!s.formModified) return true;
+    try {
+      const values = await collectFormValues(s.view.pdf);
+      if (values.length === 0) {
+        s.formModified = false;
+        this.host.refresh(s);
+        return true;
+      }
+      if (!(await this.confirmRisks(s))) return false;
+      const r = await fillFormOp(s.history.current, values, s.password, s.view.pageCount).promise;
+      await this.host.reload(s, r.bytes, s.selection, s.view.pageCount);
+      s.history.push(r.bytes, t.annot.labels.fillForm);
+      this.host.refresh(s);
+      if (r.skipped.length) toast(fmt(t.form.skipped, { n: r.skipped.length }));
+      return true;
+    } catch (err) {
+      await showMessage(t.editErrors.title, fmt(t.annot.failed, { name: s.name, detail: describe(err) }));
+      return false;
+    }
+  }
+
   // ───────────── commentaires ─────────────
 
   addAnnots(s: Session, drafts: AnnotDraft[], label: keyof typeof t.annot.labels = 'add'): Promise<boolean> {
@@ -223,6 +255,7 @@ export class Editing {
   /** Même chemin que les pages : file d'attente, document adopté seulement s'il s'ouvre, historique, aucune écriture disque. */
   private annotOp(s: Session, label: keyof typeof t.annot.labels, work: () => Promise<Uint8Array>): Promise<boolean> {
     return this.serial(async () => {
+      if (!(await this.flushFormInner(s))) return false;
       if (!(await this.confirmRisks(s))) return false;
       try {
         const bytes = await work();
@@ -249,6 +282,7 @@ export class Editing {
   }
 
   private async step(s: Session, dir: 'undo' | 'redo'): Promise<void> {
+    if (!(await this.flushFormInner(s))) return;
     const bytes = dir === 'undo' ? s.history.undo() : s.history.redo();
     if (!bytes) return;
     try {
@@ -265,11 +299,13 @@ export class Editing {
 
   /** ⌘S : remplace le fichier d'origine (après avoir gardé l'ancienne version). Sans accès au fichier : « Enregistrer sous ». */
   async save(s: Session): Promise<boolean> {
+    if (!(await this.flushForm(s))) return false;
     if (!s.handle) return this.saveAs(s);
     return this.writeTo(s, s.handle, false);
   }
 
   async saveAs(s: Session): Promise<boolean> {
+    if (!(await this.flushForm(s))) return false;
     const suggested = withPdfExtension(s.name);
     let handle: FileSystemFileHandle | null | undefined;
     try {

@@ -5,6 +5,7 @@
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { Range } from '../data/page-ranges';
 import type { AddResult } from './annot-ops';
+import type { FillResult, FormValue } from './form-ops';
 import type { MergeOptions, MergeSource, Part } from './doc-ops';
 import type { MergeResult, WorkerRequest, WorkerResponse } from './ops.worker';
 import type { Inspection, OpResult, PageOp } from './page-ops';
@@ -68,3 +69,4 @@ export const listAnnotationsOp = (bytes: Uint8Array, password?: string, expected
 export const addAnnotationsOp = (bytes: Uint8Array, drafts: AnnotDraft[], password: string | undefined, expectedPages: number, author: string) => run<AddResult>({ kind: 'annotAdd', bytes, drafts, password, expectedPages, author });
 export const updateAnnotationOp = (bytes: Uint8Array, id: string, patch: AnnotPatch, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdate', bytes, id, patch, password, expectedPages });
 export const deleteAnnotationsOp = (bytes: Uint8Array, ids: string[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotDelete', bytes, ids, password, expectedPages });
+export const fillFormOp = (bytes: Uint8Array, values: FormValue[], password: string | undefined, expectedPages: number) => run<FillResult>({ kind: 'formFill', bytes, values, password, expectedPages });

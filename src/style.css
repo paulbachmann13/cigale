@@ -257,3 +257,7 @@ textarea.annot-text { width: 100%; padding: 8px; border: 1px solid var(--border)
   #print-root img { display: block; width: 100%; height: auto; page-break-after: always; break-after: page; }
   #print-root img:last-child { page-break-after: auto; break-after: auto; }
 }
+
+.form-banner { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--hover); border-bottom: 1px solid var(--border); font-size: 13px; }
+.form-banner span { flex: 1; }
+.form-banner .primary { padding: 4px 12px; }

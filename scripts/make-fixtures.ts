@@ -167,3 +167,28 @@ function grayPng(w: number, h: number, seed: number): Uint8Array {
   write('vide.pdf', '');
 }
 console.log('Fixtures générées dans tests/fixtures/out/');
+
+// 9. Formulaire : texte, case à cocher, boutons radio, liste déroulante
+{
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage(A4);
+  page.drawText('Formulaire de test', { x: 50, y: 780, size: 22, font });
+  const form = doc.getForm();
+  const label = (t: string, y: number) => page.drawText(t, { x: 50, y: y + 6, size: 12, font });
+  label('Nom', 720);
+  form.createTextField('nom').addToPage(page, { x: 160, y: 715, width: 220, height: 22 });
+  label('Prénom', 680);
+  form.createTextField('prenom').addToPage(page, { x: 160, y: 675, width: 220, height: 22 });
+  label('J’accepte', 640);
+  form.createCheckBox('accord').addToPage(page, { x: 160, y: 637, width: 18, height: 18 });
+  label('Civilité', 600);
+  const radio = form.createRadioGroup('civilite');
+  radio.addOptionToPage('madame', page, { x: 160, y: 597, width: 16, height: 16 });
+  radio.addOptionToPage('monsieur', page, { x: 200, y: 597, width: 16, height: 16 });
+  label('Ville', 560);
+  const dd = form.createDropdown('ville');
+  dd.addOptions(['Lyon', 'Paris', 'Marseille']);
+  dd.addToPage(page, { x: 160, y: 555, width: 160, height: 22 });
+  write('formulaire.pdf', await doc.save());
+}

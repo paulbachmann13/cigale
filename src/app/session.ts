@@ -35,4 +35,11 @@ export interface Session {
   /** Identifiant de la sauvegarde automatique de ce document. */
   draftId: string;
   draftTimer?: number;
+  /** Des champs de formulaire ont été remplis à l'écran mais pas encore écrits dans le document. */
+  formModified: boolean;
+  /** Le document a des champs de formulaire. */
+  hasForm: boolean;
 }
+
+/** Modifié = historique modifié OU saisie de formulaire en attente. */
+export const isDirty = (s: Pick<Session, 'history' | 'formModified'>): boolean => s.history.dirty || s.formModified;

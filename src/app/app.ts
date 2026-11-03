@@ -10,6 +10,7 @@ import { deleteDraft, listDrafts, newDraftId, readDraft, saveDraft } from '../st
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
 import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
 import { CommentsPanel } from './comments';
+import { hasFormFields } from './forms';
 import { askPassword, askUnsaved, showMessage } from './dialogs';
 import { clear, h, toast } from './dom';
 import { Editing } from './editing';
@@ -22,7 +23,7 @@ import { printDocument } from './print';
 import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, quitApp, takeStartupOpens, tauriHandleFromPath } from './tauri-files';
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
-import type { Session } from './session';
+import { type Session, isDirty } from './session';
 import { loadSettings } from './settings';
 
 const FIT_VALUES = ['page-width', 'page-fit', 'page-actual'] as const;
@@ -30,6 +31,7 @@ const ZOOM_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8];
 const PANEL_THUMB = 132;
 const GRID_THUMB_DEFAULT = 170;
 
+const isDirtyForm = (s: Session) => s.formModified;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac OS/.test(navigator.userAgent);
 const mod = isMac ? '⌘' : 'Ctrl+';
 
@@ -69,6 +71,7 @@ export class App {
   private findCase = h('input', { type: 'checkbox', id: 'find-case' });
   private findAccents = h('input', { type: 'checkbox', id: 'find-accents' });
   private loadingEl = h('div', { class: 'loading', id: 'loading', hidden: true, role: 'status' });
+  private formBanner = h('div', { class: 'form-banner', id: 'form-banner', hidden: true, role: 'status' });
   private statusEl = h('span', { class: 'topbar-status', id: 'status', role: 'status' });
   private fileButton = h('button', { class: 'topbar-file', id: 'file-menu', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, t.file.menu);
   private thumbSize = h('input', { type: 'range', id: 'thumb-size', min: 90, max: 320, step: 10, value: GRID_THUMB_DEFAULT, 'aria-label': t.pages.thumbSize });
@@ -76,6 +79,7 @@ export class App {
   private editButtons: Record<string, HTMLButtonElement> = {};
   private findTimer: number | undefined;
   private closing = false;
+  private formDismissed = new Set<number>();
 
   constructor(private root: HTMLElement) {
     this.homeEl = buildHome(this);
@@ -235,7 +239,7 @@ export class App {
       this.iconButton('find-close', t.find.close, '✕', () => this.closeFind()),
     );
 
-    const center = h('div', { class: 'center' }, this.findBar, this.docsEl);
+    const center = h('div', { class: 'center' }, this.formBanner, this.findBar, this.docsEl);
     this.workspace.append(toolbar, this.annotBar, h('div', { class: 'body' }, this.leftPanel, center));
 
     this.root.append(topbar, this.homeEl, this.workspace, this.fileInput, this.loadingEl);
@@ -274,11 +278,13 @@ export class App {
   }
 
   /** « Combiner des fichiers » : part du document affiché, s'il y en a un. */
-  openCombine(): void {
+  async openCombine(): Promise<void> {
+    if (this.active && isDirtyForm(this.active)) await this.editing.flushForm(this.active);
     openCombineDialog(this.toolsHost(), !this.workspace.hidden ? (this.active ?? undefined) : undefined);
   }
 
-  private openSplit(): void {
+  private async openSplit(): Promise<void> {
+    if (this.active && isDirtyForm(this.active)) await this.editing.flushForm(this.active);
     if (this.active) openSplitDialog(this.toolsHost(), this.active);
   }
 
@@ -324,7 +330,7 @@ export class App {
       if (document.visibilityState === 'hidden') this.sessions.forEach((x) => this.scheduleDraft(x, true));
     });
     window.addEventListener('beforeunload', (e) => {
-      if (this.sessions.some((s) => s.history.dirty)) {
+      if (this.sessions.some((s) => isDirty(s))) {
         e.preventDefault();
         e.returnValue = t.confirm.leavePage;
       }
@@ -459,7 +465,7 @@ export class App {
     if (startup.length) void this.openPaths(startup);
     // Fermer la fenêtre (⌘W, bouton rouge, ⌘Q) : le navigateur n'affiche pas « beforeunload » ici, donc on demande nous-mêmes.
     await onCloseRequested(async (prevent) => {
-      if (!this.sessions.some((x) => x.history.dirty)) return;
+      if (!this.sessions.some((x) => isDirty(x))) return;
       prevent();
       if (this.closing) return; // une question est déjà à l'écran
       this.closing = true;
@@ -491,7 +497,7 @@ export class App {
 
   /** Avant un redémarrage (mise à jour) : le travail non enregistré est mis de côté, même si la sauvegarde automatique est réglée sur « non ». */
   private async saveAllDraftsNow(): Promise<void> {
-    for (const s of this.sessions.filter((x) => x.history.dirty)) {
+    for (const s of this.sessions.filter((x) => isDirty(x))) {
       window.clearTimeout(s.draftTimer);
       await saveDraft(s.draftId, s.name, s.history.current);
     }
@@ -510,7 +516,7 @@ export class App {
 
   /** Pour chaque document modifié : « Enregistrer / Ne pas enregistrer / Annuler ». Faux si l'utilisateur annule. */
   async confirmCloseAll(): Promise<boolean> {
-    for (const s of this.sessions.filter((x) => x.history.dirty)) {
+    for (const s of this.sessions.filter((x) => isDirty(x))) {
       this.activate(s.id);
       const answer = await askUnsaved(s.name);
       if (answer === 'cancel') return false;
@@ -668,6 +674,8 @@ export class App {
       annots: [],
       pendingSelect: null,
       draftId: opts.draftId ?? newDraftId(),
+      formModified: false,
+      hasForm: false,
     } as unknown as Session;
     session.comments = new CommentsPanel(this.commentsHost(session));
     session.thumbs = this.makeList(session, 'list', pdf, PANEL_THUMB);
@@ -813,6 +821,7 @@ export class App {
     this.viewSelect.value = s.view.viewMode;
     this.setBadge(s.annots);
     this.syncStyleUi();
+    this.updateFormBanner(s);
     this.showCurrentCentre(s);
     this.refreshState(s);
     s.view.viewer.update();
@@ -847,7 +856,7 @@ export class App {
     const i = this.sessions.findIndex((x) => x.id === id);
     if (i < 0) return;
     const s = this.sessions[i];
-    if (s.history.dirty) {
+    if (isDirty(s)) {
       this.activate(s.id);
       const answer = await askUnsaved(s.name);
       if (answer === 'cancel') return;
@@ -967,6 +976,23 @@ export class App {
     this.syncStyleUi();
   }
 
+  /** Bandeau « formulaire » : indication, puis bouton « Valider la saisie » dès que des champs sont remplis. */
+  private updateFormBanner(s: Session | null) {
+    const b = this.formBanner;
+    if (!s || this.active !== s || !s.hasForm || this.formDismissed.has(s.id)) {
+      b.hidden = true;
+      return;
+    }
+    b.hidden = false;
+    b.replaceChildren(
+      ...[
+        h('span', {}, s.formModified ? t.form.pending : t.form.hint),
+        s.formModified ? h('button', { class: 'primary', id: 'form-commit', type: 'button', onclick: () => void this.editing.flushForm(s) }, t.form.commit) : null,
+        h('button', { class: 'link', id: 'form-close', type: 'button', onclick: () => (this.formDismissed.add(s.id), this.updateFormBanner(s)) }, t.form.close),
+      ].filter((x): x is HTMLElement => x !== null),
+    );
+  }
+
   private setBadge(list: Annot[]) {
     const n = list.filter((a) => !a.replyTo).length;
     this.commentsBadge.textContent = String(n);
@@ -1029,6 +1055,20 @@ export class App {
     annotator.setTool(this.annotTool);
     s.annotator = annotator;
     const view = s.view;
+    // Formulaire : savoir quand des champs sont remplis, et si le document en a
+    s.formModified = false;
+    s.hasForm = false;
+    (view.pdf.annotationStorage as unknown as { onSetModified: (() => void) | null }).onSetModified = () => {
+      if (s.view !== view || s.formModified) return;
+      s.formModified = true;
+      this.refreshState(s);
+      this.updateFormBanner(s);
+    };
+    void hasFormFields(view.pdf).then((has) => {
+      if (s.view !== view) return;
+      s.hasForm = has;
+      this.updateFormBanner(s);
+    });
     void listAnnotationsOp(bytes, s.password, view.pageCount).promise.then(
       (list) => {
         if (s.view !== view) return; // un rechargement plus récent a pris le relais
@@ -1057,6 +1097,7 @@ export class App {
     if (this.active) await this.editing.redo(this.active);
   }
   private async print() {
+    if (this.active) await this.editing.flushForm(this.active);
     if (this.active) await printDocument(this.active, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading());
   }
   private async save() {
@@ -1069,12 +1110,12 @@ export class App {
   /** Met à jour tout ce qui dépend de l'état du document : modifié, annuler/rétablir, sélection. */
   private refreshState(s: Session) {
     this.scheduleDraft(s);
-    s.tab.classList.toggle('dirty', s.history.dirty);
+    s.tab.classList.toggle('dirty', isDirty(s));
     s.tab.querySelector('.tab-label')!.textContent = s.name;
     if (this.active !== s) return;
-    document.title = `${s.history.dirty ? '• ' : ''}${s.name} — ${t.app.name}`;
+    document.title = `${isDirty(s) ? '• ' : ''}${s.name} — ${t.app.name}`;
     this.updateEditUi(s);
-    if (s.history.dirty) this.setStatus(t.status.dirty, 'dirty');
+    if (isDirty(s)) this.setStatus(t.status.dirty, 'dirty');
     else this.setStatus(s.diskBytes && s.handle ? fmt(t.status.saved, { time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }) : '', 'saved');
   }
 
@@ -1132,7 +1173,7 @@ export class App {
     redo.disabled = !s?.history.canRedo;
     undo.title = s?.history.canUndo ? fmt(t.pages.undoWith, { label: s.history.undoLabel }) : t.pages.nothingToUndo;
     redo.title = s?.history.canRedo ? fmt(t.pages.redoWith, { label: s.history.redoLabel }) : t.pages.nothingToRedo;
-    this.workspace.querySelector('#btn-save')?.classList.toggle('on', !!s?.history.dirty);
+    this.workspace.querySelector('#btn-save')?.classList.toggle('on', !!(s && isDirty(s)));
     this.selectionInfo.textContent = s?.organizing ? (n === 0 ? t.pages.selected.none : plural(n, t.pages.selected)) : '';
   }
 

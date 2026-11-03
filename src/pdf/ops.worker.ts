@@ -2,6 +2,7 @@
 import type { Range } from '../data/page-ranges';
 import { type MergeOptions, type MergeSource, type Part, mergeSources, splitDocument, topLevelBookmarks, zipParts } from './doc-ops';
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
+import { type FillResult, type FormValue, fillForm } from './form-ops';
 import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation } from './annot-ops';
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
 
@@ -17,12 +18,13 @@ export type WorkerRequest =
   | { kind: 'annotList'; bytes: Uint8Array; password?: string; expectedPages?: number }
   | { kind: 'annotAdd'; bytes: Uint8Array; drafts: AnnotDraft[]; password?: string; expectedPages?: number; author: string }
   | { kind: 'annotUpdate'; bytes: Uint8Array; id: string; patch: AnnotPatch; password?: string; expectedPages?: number }
+  | { kind: 'formFill'; bytes: Uint8Array; values: FormValue[]; password?: string; expectedPages?: number }
   | { kind: 'annotDelete'; bytes: Uint8Array; ids: string[]; password?: string; expectedPages?: number };
 
 export type MergeResult = { bytes: Uint8Array; pageCount: number };
 
 export type WorkerResponse =
-  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | Annot[] | { title: string; page: number }[] }
+  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | FillResult | Annot[] | { title: string; page: number }[] }
   | { ok: false; error: string; name: string; file?: string }
   | { progress: number };
 
@@ -69,6 +71,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       case 'annotUpdate': {
         const bytes = await updateAnnotation(req.bytes, req.id, req.patch, req.password, req.expectedPages);
         return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'formFill': {
+        const result = await fillForm(req.bytes, req.values, req.password, req.expectedPages);
+        return post({ ok: true, result }, buffers(result.bytes));
       }
       case 'annotDelete': {
         const bytes = await deleteAnnotations(req.bytes, req.ids, req.password, req.expectedPages);

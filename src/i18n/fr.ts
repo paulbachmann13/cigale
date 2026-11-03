@@ -256,6 +256,7 @@ export const fr = {
       move: 'déplacer un commentaire',
       delete: 'supprimer un commentaire',
       reply: 'répondre à un commentaire',
+      fillForm: 'remplir le formulaire',
     },
     noSelection: 'Sélectionnez d’abord du texte à marquer, puis relâchez la souris.',
     noteWrite: 'Votre note',
@@ -277,6 +278,13 @@ export const fr = {
     failed: 'Cigale n’a pas pu modifier les commentaires de « {name} » : {detail}\n\nLe document n’a pas été touché.',
     emptyText: 'Le texte est vide : rien n’a été ajouté.',
     unicodeNote: 'Certains caractères ne peuvent pas être dessinés dans la zone de texte (ils sont remplacés par « ? » à l’affichage) ; le texte exact reste dans le commentaire.',
+  },
+  form: {
+    hint: 'Ce document est un formulaire : cliquez dans un champ pour le remplir.',
+    pending: 'Vous avez rempli des champs : ils seront enregistrés avec le document.',
+    commit: 'Valider la saisie',
+    skipped: '{n} champ(s) n’ont pas pu être remplis (type inconnu ou valeur refusée).',
+    close: 'Masquer',
   },
   print: {
     title: 'Imprimer',
