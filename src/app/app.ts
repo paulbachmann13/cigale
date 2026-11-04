@@ -25,6 +25,7 @@ import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, 
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
+import { openOcrDialog } from './ocr';
 import { applyRedaction } from './redact';
 import { askSignature } from './signature';
 import { openCropDialog, openProtectDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
@@ -294,6 +295,7 @@ export class App {
         { id: 'tool-protect', label: t.docTools.protect, run: () => openProtectDialog(s, this.editing), separatorBefore: true },
         { id: 'tool-unprotect', label: t.docTools.unprotect, run: () => void this.confirmUnprotect(s) },
         { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
+        { id: 'tool-ocr', label: t.docTools.ocr, run: () => openOcrDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()), separatorBefore: true },
         { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
       ],
       anchor,

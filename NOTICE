@@ -8,6 +8,8 @@ Composants tiers distribués avec l'application (production) :
   OpenJPEG (BSD-2-Clause), JBIG2 (Apache-2.0), QCMS (MIT), cartes de caractères Adobe (BSD-3-Clause).
 - @cantoo/pdf-lib 2.11.1 — MIT (fork de pdf-lib © Andrew Dillon) — modification des pages (étape 2)
 - fflate 0.8.3 — MIT — © 101arrowz — utilisé à partir de l'étape 3
+- tesseract.js 7.0.0 et tesseract.js-core 7.0.0 — Apache-2.0 — © Jerome Wu, Balearica et contributeurs ; moteur Tesseract OCR (Apache-2.0, © Google et contributeurs)
+- Données de langue Tesseract « best_int » français et anglais (@tesseract.js-data/fra et eng 1.0.0, paquets MIT ; données tessdata Apache-2.0 © Google)
 
 - Tauri 2 (Rust) et ses modules dialog / fs — Apache-2.0 ou MIT — application Mac uniquement (voir src-tauri/Cargo.lock pour les crates)
 

@@ -64,7 +64,7 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Signer (image de signature : dessin, texte, image) | Oui | Pas de signature numérique à certificat |
 | Signature numérique (certificat) | Non | 1.x |
 | Caviarder (marques + appliquer) | Oui | Pages rasterisées ; purge des métadonnées/signets/pièces jointes |
-| Reconnaissance de texte (OCR) | Non | 1.x |
+| Reconnaissance de texte (OCR) | Oui (1.2) | Français et anglais ; pas de redressement des pages de travers |
 | Compresser | Non | 1.x |
 | Comparer deux fichiers | Non | 1.x |
 | Modifier le texte | Non | 1.x (limité) |

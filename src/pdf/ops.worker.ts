@@ -6,6 +6,7 @@ import { type ProtectOptions, type ProtectResult, protectDocument, unprotectDocu
 import { type CropMargins, type CropResult, cropPages } from './crop-ops';
 import { type RedactOptions, type RedactResult, type RedactedPage, applyRedactions } from './redact-ops';
 import { type HeaderFooterOptions, type WatermarkOptions, addHeaderFooter, addWatermark } from './stamp-ops';
+import { type OcrPage, addTextLayer } from './ocr-ops';
 import { type FillResult, type FormValue, fillForm } from './form-ops';
 import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation } from './annot-ops';
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
@@ -24,6 +25,7 @@ export type WorkerRequest =
   | { kind: 'annotUpdate'; bytes: Uint8Array; id: string; patch: AnnotPatch; password?: string; expectedPages?: number }
   | { kind: 'formFill'; bytes: Uint8Array; values: FormValue[]; password?: string; expectedPages?: number }
   | { kind: 'watermark'; bytes: Uint8Array; options: WatermarkOptions; password?: string; expectedPages?: number }
+  | { kind: 'ocrLayer'; bytes: Uint8Array; pages: OcrPage[]; password?: string; expectedPages?: number }
   | { kind: 'headerFooter'; bytes: Uint8Array; options: HeaderFooterOptions; password?: string; expectedPages?: number }
   | { kind: 'crop'; bytes: Uint8Array; margins: CropMargins; pages?: number[]; password?: string; expectedPages?: number }
   | { kind: 'redact'; bytes: Uint8Array; pages: RedactedPage[]; options: RedactOptions; password?: string; expectedPages?: number }
@@ -88,6 +90,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'watermark': {
         const bytes = await addWatermark(req.bytes, req.options, req.password, req.expectedPages);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'ocrLayer': {
+        const bytes = await addTextLayer(req.bytes, req.pages, req.password, req.expectedPages);
         return post({ ok: true, result: bytes }, buffers(bytes));
       }
       case 'headerFooter': {

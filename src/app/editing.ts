@@ -11,8 +11,9 @@ import type { AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
+import type { OcrPage } from '../pdf/ocr-ops';
 import type { ProtectOptions } from '../pdf/protect-ops';
-import { Cancelled, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
+import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -214,6 +215,11 @@ export class Editing {
 
   watermark(s: Session, options: WatermarkOptions): Promise<boolean> {
     return this.annotOp(s, t.docTools.labels.watermark, () => watermarkOp(s.history.current, options, s.password, s.view.pageCount).promise);
+  }
+
+  /** Ajoute la couche de texte invisible issue de la reconnaissance de texte (OCR). */
+  ocrLayer(s: Session, pages: OcrPage[]): Promise<boolean> {
+    return this.annotOp(s, t.docTools.labels.ocr, () => ocrLayerOp(s.history.current, pages, s.password, s.view.pageCount).promise);
   }
 
   headerFooter(s: Session, options: HeaderFooterOptions): Promise<boolean> {

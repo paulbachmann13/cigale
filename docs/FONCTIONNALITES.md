@@ -73,11 +73,15 @@ Même disposition que Grillon : colonne colorée (Accueil, Ouvrir, Versions pré
 ### Confidentialité et hors-ligne
 Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ; service worker : fonctionne sans connexion après la première visite.
 
+### Reconnaissance de texte (OCR, 1.2)
+- **Outils → Reconnaître le texte (OCR)** : chaque page est dessinée à 300 dpi par pdf.js, lue par tesseract.js (moteur LSTM, WebAssembly, données « best_int » français et anglais), puis le texte est ajouté **invisible** (mode de rendu 3) à l'emplacement exact de chaque mot : recherche, sélection et copie fonctionnent ; l'aspect des pages ne change pas. Pages tournées et recadrées prises en charge. Option (cochée) : ignorer les pages qui ont déjà du texte. Une étape annuler/rétablir. Tout est local et hors ligne (≈ 7,5 Mo de ressources mises en cache).
+
 ## Limites connues
 
 | Limite | Détail | Prévu |
 |---|---|---|
-| Surlignage de scans | Surligner / souligner / barrer exigent du texte sélectionnable : sur un scan, utiliser un rectangle (OCR prévu) | 1.x |
+| Surlignage de scans | Surligner / souligner / barrer exigent du texte sélectionnable : sur un scan, lancer d'abord Outils → Reconnaître le texte | — |
+| OCR | Français et anglais seulement ; pages scannées à l'envers ou de travers non redressées ; écriture manuscrite mal reconnue ; caractères hors Latin-1 écrits « ? » dans la couche de texte ; environ 3 à 10 s par page selon l'ordinateur ; un texte reconnu ne se « dé-reconnaît » qu'avec Annuler | 1.x |
 | Zone de texte | Seuls les caractères du jeu Windows Latin-1 (accents français, œ, €…) sont dessinés ; les autres s'affichent « ? » (le texte exact reste dans le commentaire). Pages tournées : le texte tourne avec la page | 1.x |
 | Formes | Pas de polygone, de nuage ni de gomme ; extrémités d'une ligne non modifiables (on la déplace ou on la refait) ; redimensionnement des seuls rectangle, ellipse, zone de texte, tampon | Étape 5 |
 | Tampons | Six modèles fixes, pas de tampon image personnalisé ni de date | 1.x |

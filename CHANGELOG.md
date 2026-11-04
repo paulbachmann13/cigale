@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.2.0] — 2026-11-04
+
+### Ajouté
+- **Reconnaître le texte (OCR)** (Outils) : sur un document numérisé, Cigale lit le texte des pages et l'ajoute, invisible, sous l'image. Vous pouvez ensuite chercher, sélectionner et copier ce texte, comme dans Acrobat. L'aspect des pages ne change pas, et l'opération s'annule comme les autres. Langues : français, anglais, ou les deux. Les pages qui contiennent déjà du texte sont ignorées (option). Tout se fait sur l'ordinateur, même hors ligne : rien n'est envoyé.
+
 ## [1.1.0] — 2026-11-04
 
 ### Ajouté

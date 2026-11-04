@@ -98,6 +98,11 @@ tests/unit, e2e, fixtures/out (générées)
 - **Filigrane et en-têtes** : `src/pdf/stamp-ops.ts` a été écrit par Gemini (consigne précise + fichiers de référence), relu et validé par tests ET par des mesures de position dans le navigateur (viewport pdf.js, pages tournées). **Recadrage** : `src/pdf/crop-ops.ts` (le test sur page tournée a trouvé une inversion haut/gauche que mon raisonnement avait manquée).
 - **Tests de fuite** : `tests/unit/helpers.ts` → `everything(bytes)` décompresse les flux et décode le texte hexadécimal / UTF-16 de pdf-lib ; sans cela, les tests « le contenu a disparu » ne prouvaient rien (on les a vérifiés en désactivant volontairement la purge : ils échouent).
 
+## Décisions de la version 1.2 (OCR)
+
+- **Moteur** : tesseract.js 7 (Apache-2.0), seul OCR libre qui tourne dans le navigateur ET dans WKWebView sans serveur. Pas de modèle « IA » distant (confidentialité). Ressources copiées par `scripts/copy-pdfjs-assets.mjs` dans `public/ocr/` (gitignoré) : `worker.min.js`, **un seul** cœur `tesseract-core-simd-lstm.wasm.js` (SIMD : Safari 16.4+, Chrome 91+ ; le choix automatique de tesseract en aurait fait précharger trois), `fra`/`eng` `best_int` (0,7 + 2,9 Mo). Préchargées par le service worker (`gz` ajouté aux motifs) : l'OCR marche hors ligne dès la première fois. `workerBlobURL: false` (pas de blob:), `cacheMethod: 'none'` (pas de copie dans IndexedDB). tesseract.js n'est importé qu'à la première utilisation (import dynamique).
+- **Découpage** : `src/app/ocr.ts` (interface : rendu pdf.js 300 dpi plafonné à 16 Mpx, `annotationMode: 0` car les commentaires ont déjà leur texte ; mots de confiance < 20 ignorés ; Annuler = `worker.terminate()`) ; `src/pdf/ocr-ops.ts` (pur, testé : `addTextLayer`, texte Helvetica invisible `3 Tr`, taille = hauteur du mot, échelle horizontale `Tz` = largeur de la boîte, mêmes conversions écran → page que `stamp-ops` pour les pages tournées/recadrées). Passe par `Editing.ocrLayer` (worker des opérations, adoption seulement si le résultat se rouvre, une étape Annuler).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

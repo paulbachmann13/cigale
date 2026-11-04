@@ -2,6 +2,7 @@ node_modules/
 dist/
 dev-dist/
 public/pdfjs/
+public/ocr/
 tests/fixtures/out/
 test-results/
 playwright-report/
