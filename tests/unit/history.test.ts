@@ -54,3 +54,31 @@ describe('historique', () => {
     expect(h.canUndo).toBe(true);
   });
 });
+
+describe('enregistrement pendant que l’on continue à modifier', () => {
+  it('le document reste « modifié » si une étape a été ajoutée pendant l’écriture', () => {
+    const h = new History(new Uint8Array([1]), true);
+    h.push(new Uint8Array([2]), 'a');
+    const written = h.current; // octets envoyés au disque
+    h.push(new Uint8Array([3]), 'b'); // pendant l'écriture, l'utilisateur modifie encore
+    h.markSaved(written);
+    expect(h.dirty).toBe(true);
+    h.undo(); // revenir à l'état écrit : plus rien à enregistrer
+    expect(h.dirty).toBe(false);
+  });
+  it('annuler pendant l’écriture : l’état écrit reste le bon', () => {
+    const h = new History(new Uint8Array([1]), true);
+    h.push(new Uint8Array([2]), 'a');
+    const written = h.current;
+    h.undo();
+    h.markSaved(written);
+    expect(h.dirty).toBe(true);
+    h.redo();
+    expect(h.dirty).toBe(false);
+  });
+  it('état écrit oublié (limite de mémoire) : toujours « modifié »', () => {
+    const h = new History(new Uint8Array([1]), false);
+    h.markSaved(new Uint8Array([9]));
+    expect(h.dirty).toBe(true);
+  });
+});

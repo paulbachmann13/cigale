@@ -4,7 +4,7 @@
  * avec mot de passe, ce qu'il faut pour le protéger de nouveau (même mot de passe d'ouverture, mêmes restrictions) :
  * `saveDoc` remplace `doc.save()` partout.
  */
-import type { PDFDocument } from '@cantoo/pdf-lib';
+import { PDFDict, type PDFDocument, PDFName, PDFStream } from '@cantoo/pdf-lib';
 
 export interface Permissions {
   printing?: boolean | 'lowResolution' | 'highResolution';
@@ -87,10 +87,30 @@ function randomOwnerPassword(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * pdf-lib ne chiffre que les chaînes des objets INDIRECTS : celles d'un dictionnaire direct du catalogue (arbre des noms des
+ * pièces jointes, par exemple) restent en clair et deviennent illisibles à la relecture. On rend donc indirects les
+ * dictionnaires directs du catalogue et de son arbre des noms avant de chiffrer.
+ */
+function promoteDirectDictionaries(doc: PDFDocument): void {
+  const promote = (parent: PDFDict, depth: number) => {
+    for (const key of parent.keys()) {
+      const value = parent.get(key);
+      if (!(value instanceof PDFDict) || value instanceof PDFStream) continue;
+      if (depth > 0) promote(value, depth - 1);
+      parent.set(key, doc.context.register(value));
+    }
+  };
+  const names = doc.catalog.get(PDFName.of('Names'));
+  if (names instanceof PDFDict) promote(names, 1);
+  promote(doc.catalog, 0);
+}
+
 /** Enregistre le document, protégé comme à l'ouverture le cas échéant. Chiffrement AES-256. */
 export async function saveDoc(doc: PDFDocument): Promise<Uint8Array> {
   const p = registry.get(doc);
   if (p) {
+    promoteDirectDictionaries(doc);
     doc.encrypt({
       userPassword: p.password,
       // Propriétaire inconnu. Sans restriction, le mot de passe d'ouverture sert aussi de propriétaire (rien à protéger de plus) ;

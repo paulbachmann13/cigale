@@ -315,3 +315,21 @@ test('retirer la protection : le fichier enregistré s’ouvre librement', async
   const bytes = readFileSync((await (await download).path())!);
   expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1); // aucun mot de passe nécessaire
 });
+
+test('caviardage : la page ne bouge pas quand on trace la première zone (rien ne décale la sélection)', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await tool(page, 'tool-redact');
+  const top = async () => (await page.locator('.doc-view:not([hidden]) .page[data-page-number="1"]').boundingBox())!.y;
+  await expect(page.locator('#annot-toolbar')).toBeVisible();
+  await page.waitForTimeout(300);
+  const before = await top();
+  const barBefore = (await page.locator('#annot-toolbar').boundingBox())!.height;
+  await page.mouse.move(300, before + 120);
+  await page.mouse.down();
+  await page.mouse.move(450, before + 170, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('#redact-apply')).toBeVisible(); // le bouton « Appliquer » est apparu
+  await page.waitForTimeout(300);
+  expect(Math.abs((await top()) - before)).toBeLessThan(0.5);
+  expect(Math.abs((await page.locator('#annot-toolbar').boundingBox())!.height - barBefore)).toBeLessThan(0.5);
+});

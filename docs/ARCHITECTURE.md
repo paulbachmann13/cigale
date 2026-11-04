@@ -109,6 +109,13 @@ tests/unit, e2e, fixtures/out (générées)
 - Extraire une zone : outil `clip` de l'`Annotator` (rectangle en repère PDF natif, donc rotation et CropBox gérées par pdf.js). `src/pdf/region-ops.ts` (pur, testé) : copie de la page par `extractPages`, puis MediaBox/CropBox/BleedBox/TrimBox/ArtBox = rectangle. Option image : rendu pdf.js à 300 dpi (plafonné à 2^24 pixels) dans `src/app/region.ts`, assemblé en PDF par le worker. Le résultat s'ouvre en onglet non enregistré ; le document d'origine n'est jamais modifié.
 - Mode vectoriel = comme « Recadrer » : le contenu hors zone reste dans le fichier (avertissement dans la boîte) ; le mode image est le choix sûr pour un document confidentiel.
 
+## Enregistrement : règles apprises (1.3.1)
+
+- `History.markSaved(bytes)` : on marque comme enregistré l'état qui a été ÉCRIT, pas l'état courant au moment où l'écriture se termine (l'utilisateur a pu modifier ou annuler entre-temps).
+- pdf-lib perd la référence `/Info` du trailer d'un document déchiffré à l'ouverture : `restoreInfoReference` (page-ops.ts) la retrouve, sinon titre et auteur disparaissent à l'enregistrement suivant d'un PDF protégé.
+- pdf-lib ne chiffre que les chaînes des objets indirects : `saveDoc` rend d'abord indirects les dictionnaires directs du catalogue (arbre des noms des pièces jointes), sinon leurs noms deviennent illisibles. Les fichiers déjà enregistrés par une version antérieure gardent un nom de clé illisible dans l'arbre des pièces jointes (le nom réel, dans la description du fichier joint, est intact).
+- Test de référence : `tests/unit/enregistrement.test.ts` (chaîne d'opérations, qpdf après chaque étape, protégé/non protégé) et `tests/e2e/aller-retour.spec.ts` (enregistrer, fermer, rouvrir). Les tests e2e doivent attendre `isDirty` plutôt que le message « enregistré » (celui du précédent enregistrement reste affiché).
+
 ## Licences
 
 Voir `NOTICE`. Contrôlé en CI (aucune licence GPL/AGPL dans les dépendances de production).

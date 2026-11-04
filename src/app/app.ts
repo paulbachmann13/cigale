@@ -312,7 +312,11 @@ export class App {
 
   /** Depuis l'accueil : on choisit d'abord le PDF, puis l'outil s'ouvre dessus (comme « Tous les outils » d'Acrobat). */
   async runTool(id: DocToolId): Promise<void> {
-    if (this.active && !this.workspace.hidden) return void (await this.runToolOnActive(id));
+    // Un document est déjà ouvert (même si l'on regarde l'accueil) : on l'utilise, sans redemander de fichier.
+    if (this.active && this.sessions.includes(this.active)) {
+      if (this.workspace.hidden) this.activate(this.active.id);
+      return void (await this.runToolOnActive(id));
+    }
     delete this.fileInput.dataset.fallback;
     const files = await pickPdfs(this.fileInput);
     if (files.length === 0) {

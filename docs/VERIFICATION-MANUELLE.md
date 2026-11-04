@@ -74,6 +74,14 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 - [ ] Extraire une zone : tracer un rectangle sur une page d'un vrai document ; vectoriel (texte sélectionnable, bonne taille) et image (netteté) ; ouvrir le résultat dans Aperçu et Acrobat.
 - [ ] Page tournée (90°) et page avec CropBox : la zone extraite est bien celle qu'on a tracée.
 
+## Version 1.3.1 — Enregistrement (à vérifier avec de vrais fichiers)
+
+- [ ] Un PDF avec formulaire : remplir, ⌘S, fermer, rouvrir dans Cigale PUIS dans Aperçu et Acrobat : les valeurs sont là.
+- [ ] Un PDF protégé par mot de passe : modifier, enregistrer, rouvrir (mot de passe demandé) : titre et auteur conservés (Propriétés du document dans Acrobat).
+- [ ] Un PDF avec pièce jointe et signets : modifier plusieurs choses, enregistrer, rouvrir : tout est là.
+- [ ] Enregistrer pendant qu'on continue à travailler (annuler, repivoter) : l'indicateur « modifié » reste juste.
+- [ ] Application Mac : fichier sur le Bureau et sur iCloud Drive / clé USB ; ⌘S ; le .bak apparaît ; rouvrir.
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

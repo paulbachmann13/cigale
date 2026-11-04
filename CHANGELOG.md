@@ -2,6 +2,15 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.3.1] — 2026-11-05
+
+### Corrigé
+- **Caviardage** : la page ne « saute » plus d'un cran sous la souris quand on trace la première zone (la barre d'outils changeait de hauteur à ce moment-là).
+- **Outils de l'accueil** : si un document est déjà ouvert, la tuile d'un outil l'utilise vraiment, même quand on regarde l'accueil, au lieu de redemander un fichier.
+- **Enregistrement** : si vous continuez à travailler pendant qu'un enregistrement est en cours (ou annulez une étape), le document reste correctement marqué « modifié » : avant, il pouvait paraître enregistré alors que la dernière modification ne l'était pas.
+- **PDF protégés par mot de passe** : le titre, l'auteur et les noms des pièces jointes ne se perdent plus quand on modifie puis enregistre un document protégé.
+- Vérifications renforcées autour de l'enregistrement : une longue série de modifications (formulaire, commentaires, filigrane, recadrage, OCR…) est enregistrée puis relue pour s'assurer que rien n'est oublié ni abîmé.
+
 ## [1.3.0] — 2026-11-04
 
 ### Ajouté

@@ -383,8 +383,9 @@ export class Editing {
     if (handle === null) return false; // annulé
     if (handle === undefined) {
       // Navigateur sans « Enregistrer sous » (Safari, Firefox) : on télécharge une copie.
-      downloadBytes(suggested, s.history.current);
-      s.history.markSaved();
+      const bytes = s.history.current;
+      downloadBytes(suggested, bytes);
+      s.history.markSaved(bytes);
       this.host.refresh(s);
       toast(fmt(t.save.downloaded, { name: suggested }));
       return true;
@@ -420,7 +421,7 @@ export class Editing {
       s.handle = handle;
       s.name = handle.name;
       s.diskBytes = bytes;
-      s.history.markSaved();
+      s.history.markSaved(bytes); // l'état écrit, pas celui d'après si l'utilisateur a continué pendant l'écriture
       this.host.refresh(s);
       this.host.rememberOpened(s);
       toast(fmt(t.save.done, { name: s.name }) + (bak ? ` ${fmt(t.save.bakNote, { bak })}` : bakFailed ? ` ${t.save.bakFailed}` : backedUp ? ` ${t.save.backupNote}` : ''));

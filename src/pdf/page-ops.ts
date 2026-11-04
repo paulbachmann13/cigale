@@ -58,6 +58,24 @@ export interface Inspection {
 // preserveXFA : sinon pdf-lib supprime les formulaires XFA (ils deviendraient vides dans Acrobat)
 const loadOpts = (password?: string) => ({ updateMetadata: false, password, throwOnInvalidObject: false, preserveXFA: true });
 
+/**
+ * Document déchiffré par pdf-lib : la référence « /Info » (titre, auteur, dates…) est perdue du trailer, donc absente à
+ * l'écriture suivante : un PDF protégé perdait son titre et son auteur à chaque modification. On la retrouve : c'est le
+ * dictionnaire sans /Type dont toutes les clés sont des clés d'information de document.
+ */
+export function restoreInfoReference(doc: PDFDocument): void {
+  if (doc.context.trailerInfo.Info) return;
+  const INFO_KEYS = new Set(['Title', 'Author', 'Subject', 'Keywords', 'Creator', 'Producer', 'CreationDate', 'ModDate', 'Trapped']);
+  for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict) || obj.has(PDFName.of('Type'))) continue;
+    const keys = obj.keys().map((k) => k.asString().slice(1));
+    if (keys.length > 0 && keys.every((k) => INFO_KEYS.has(k)) && keys.some((k) => k !== 'Producer' && k !== 'Creator')) {
+      doc.context.trailerInfo.Info = ref;
+      return;
+    }
+  }
+}
+
 export async function loadForEdit(bytes: Uint8Array, password?: string): Promise<PDFDocument> {
   let pw = password;
   let doc: PDFDocument;
@@ -71,6 +89,7 @@ export async function loadForEdit(bytes: Uint8Array, password?: string): Promise
   }
   // pdf-lib déchiffre à l'ouverture : on retient comment le protéger de nouveau à l'enregistrement.
   if (doc.context.isDecrypted && pw !== undefined) {
+    restoreInfoReference(doc);
     let permissions: Permissions = RESTRICTIVE;
     try {
       const raw = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });

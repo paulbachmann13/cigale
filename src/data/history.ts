@@ -56,8 +56,17 @@ export class History {
     return this.current;
   }
 
-  markSaved(): void {
-    this.saved = this.cursor;
+  /**
+   * Le fichier enregistré correspond à l'état `bytes` (celui qui a été écrit), pas forcément à l'état courant : pendant
+   * l'écriture, l'utilisateur a pu continuer à modifier ou annuler. Sans argument : l'état courant.
+   */
+  markSaved(bytes?: Uint8Array): void {
+    if (!bytes) {
+      this.saved = this.cursor;
+      return;
+    }
+    const at = this.stack.findIndex((s) => s.bytes === bytes);
+    this.saved = at >= 0 ? at : null; // état oublié ou inconnu : le document reste « modifié »
   }
 
   /** Oublie les plus anciennes étapes quand la mémoire dépasse la limite (au moins 2 étapes restent). */

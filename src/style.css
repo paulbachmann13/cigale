@@ -208,7 +208,7 @@ button.mini:disabled { opacity: 0.35; }
 #page-count { white-space: nowrap; }
 
 /* Commentaires */
-.annot-toolbar { border-top: 0; flex-wrap: nowrap; }
+.annot-toolbar { border-top: 0; flex-wrap: nowrap; box-sizing: border-box; height: 41px; } /* hauteur fixe : le bouton « Appliquer le caviardage » ne doit pas faire sauter la page sous la souris */
 .annot-toolbar select { min-width: 70px; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; flex: none; }
 .swatch.on { box-shadow: 0 0 0 2px var(--accent); }

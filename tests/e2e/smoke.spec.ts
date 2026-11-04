@@ -50,3 +50,18 @@ test('accueil : « Tous les outils » — on choisit un PDF, puis l’outil s’
   await waitFirstPage(page);
   await expect(page.locator('#dialog-crop')).toBeVisible();
 });
+
+test('accueil : avec un document déjà ouvert, la tuile d’un outil l’utilise sans redemander de fichier', async ({ page }) => {
+  await withoutFilePickers(page);
+  await gotoHome(page);
+  await openPdf(page, 'simple-3p.pdf');
+  await waitFirstPage(page);
+  await page.click('#tab-home'); // retour à l'accueil, le document reste ouvert
+  await expect(page.locator('#home-tool-crop')).toBeVisible();
+  let chooser = false;
+  page.on('filechooser', () => (chooser = true));
+  await page.click('#home-tool-crop');
+  await expect(page.locator('#dialog-crop')).toBeVisible();
+  expect(chooser).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as { cigale: { app: { sessions: unknown[] } } }).cigale.app.sessions.length)).toBe(1);
+});
