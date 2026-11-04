@@ -232,3 +232,17 @@ describe('enregistrer puis rouvrir', () => {
     expect(makePng(10, 10).length).toBeGreaterThan(10);
   });
 });
+
+describe('métadonnées d’un PDF protégé sans référence /Info', () => {
+  it('un signet n’est jamais pris pour le dictionnaire d’informations', async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage();
+    doc.addPage();
+    addFlatOutline(doc, [{ title: 'Chapitre', page: 1 }]);
+    const p = (await protectDocument(await doc.save(), { userPassword: 'secret', ownerPassword: 'chef', permissions: {} } as never)).bytes;
+    const out = await normalizeDocument(p, 'secret');
+    const lib = await loadForEdit(out, 'secret');
+    expect(lib.getTitle()).toBeUndefined(); // le titre du signet n'est pas devenu le titre du document
+    expect((await seen(out, 'secret')).outline).toEqual(['Chapitre']);
+  });
+});

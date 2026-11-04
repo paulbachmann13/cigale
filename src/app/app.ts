@@ -975,6 +975,7 @@ export class App {
     if (i < 0) return;
     const s = this.sessions[i];
     await this.editing.whenIdle(); // une modification demandée à l'instant n'est peut-être pas encore comptée
+    if (!this.sessions.includes(s)) return; // déjà fermé entre-temps
     if (isDirty(s)) {
       this.activate(s.id);
       const answer = await askUnsaved(s.name);

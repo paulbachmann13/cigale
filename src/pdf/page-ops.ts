@@ -69,6 +69,8 @@ export function restoreInfoReference(doc: PDFDocument): void {
   let best: { ref: PDFRef; score: number } | undefined;
   for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
     if (!(obj instanceof PDFDict) || obj.has(PDFName.of('Type')) || obj.has(PDFName.of('Subtype'))) continue;
+    // un signet (entrée d'outline) a aussi un /Title : on écarte tout dictionnaire qui a l'allure d'un nœud d'arbre
+    if (['Parent', 'Prev', 'Next', 'First', 'Last', 'Kids', 'Count', 'Dest', 'A', 'S'].some((k) => obj.has(PDFName.of(k)))) continue;
     const score = STANDARD.filter((k) => obj.has(PDFName.of(k))).length;
     // Il faut au moins un titre, un auteur, un sujet, des mots-clés ou une date : « Producer » seul est trop courant ailleurs.
     const meaningful = ['Title', 'Author', 'Subject', 'Keywords', 'CreationDate', 'ModDate'].some((k) => obj.has(PDFName.of(k)));
