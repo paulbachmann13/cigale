@@ -66,9 +66,9 @@ export function buildHome(app: App): HTMLElement {
     h('button', { class: 'home-nav-item', id: 'home-nav-open', type: 'button', onclick: () => void app.openDialog() }, t.file.open),
     h('button', { class: 'home-nav-item', id: 'home-versions', type: 'button', onclick: openVersions }, t.file.versions),
     h('button', { class: 'home-nav-item', id: 'home-settings', type: 'button', onclick: () => openSettings(app) }, t.home.settings),
-    h('button', { class: 'home-nav-item', id: 'home-news', type: 'button', onclick: openWhatsNew }, t.home.whatsNew),
+    h('button', { class: 'home-nav-item', id: 'home-news', type: 'button', onclick: () => openWhatsNew(app) }, t.home.whatsNew),
     h('span', { class: 'home-spacer' }),
-    h('span', { class: 'home-version', id: 'app-version' }, fmt(t.home.version, { version: __APP_VERSION__ })),
+    h('button', { class: 'home-version home-version-link', id: 'app-version', type: 'button', title: t.whatsNew.link, onclick: () => openWhatsNew(app) }, fmt(t.home.version, { version: __APP_VERSION__ })),
   );
 
   const main = h(
@@ -95,8 +95,18 @@ export function buildHome(app: App): HTMLElement {
   return h('section', { id: 'home', class: 'home' }, nav, main);
 }
 
-export function openWhatsNew() {
+export function openWhatsNew(app?: App) {
   const body = h('div', { class: 'news' });
+  // Application Mac : chercher une mise à jour tout de suite (même bouton que Fichier → Rechercher les mises à jour)
+  if (app && isTauri()) {
+    body.append(
+      h(
+        'p',
+        { class: 'news-update' },
+        h('button', { type: 'button', id: 'news-check-update', onclick: () => void app.checkForUpdates(false) }, t.update.check),
+      ),
+    );
+  }
   for (const entry of parseChangelog(changelogMd).slice(0, 8)) {
     body.append(h('h3', {}, `${entry.version} — ${entry.date}`));
     for (const sec of entry.sections) {

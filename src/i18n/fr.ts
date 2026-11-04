@@ -104,7 +104,7 @@ export const fr = {
     keepVersionsHint: 'La version précédente reste sur cet ordinateur, dans Cigale (Accueil → Versions précédentes), jamais envoyée ailleurs. Décochez pour ne rien conserver.',
     close: 'Fermer',
   },
-  whatsNew: { title: 'Nouveautés', close: 'Fermer', added: 'Ajouté', fixed: 'Corrigé', changed: 'Modifié' },
+  whatsNew: { link: 'Nouveautés et mises à jour', title: 'Nouveautés', close: 'Fermer', added: 'Ajouté', fixed: 'Corrigé', changed: 'Modifié' },
   file: {
     menu: 'Fichier',
     open: 'Ouvrir…',

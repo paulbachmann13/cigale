@@ -30,3 +30,11 @@ test('ouverture et affichage d’un PDF simple', async ({ page }) => {
   await expect(page.locator('.thumb')).toHaveCount(3);
   await expect.poll(async () => page.locator('.thumb canvas').first().evaluate((c: HTMLCanvasElement) => c.width)).toBeGreaterThan(50);
 });
+
+test('accueil : un clic sur « Version » ouvre les Nouveautés', async ({ page }) => {
+  await gotoHome(page);
+  await page.click('#app-version');
+  await expect(page.locator('#dialog-news')).toBeVisible();
+  await expect(page.locator('#dialog-news')).toContainText(version);
+  await expect(page.locator('#news-check-update')).toHaveCount(0); // seulement dans l'application Mac
+});

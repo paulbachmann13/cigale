@@ -276,7 +276,7 @@ export class App {
       ...(isTauri() ? [{ id: 'update', label: t.update.check, run: () => void this.checkForUpdates(false), separatorBefore: true }] : []),
       { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
       { id: 'settings', label: t.home.settings, run: () => openSettings(this) },
-      { id: 'whats-new', label: t.home.whatsNew, run: () => openWhatsNew() },
+      { id: 'whats-new', label: t.home.whatsNew, run: () => openWhatsNew(this) },
     ];
     this.fileButton.setAttribute('aria-expanded', 'true');
     const menu = showMenu(items, this.fileButton, () => this.fileButton.setAttribute('aria-expanded', 'false'));
@@ -566,7 +566,7 @@ export class App {
     try {
       const last = localStorage.getItem('cigale-last-version');
       localStorage.setItem('cigale-last-version', __APP_VERSION__);
-      if (last && last !== __APP_VERSION__) toast(fmt(t.update.updatedTo, { version: __APP_VERSION__ }), { label: t.update.seeNews, run: () => openWhatsNew() });
+      if (last && last !== __APP_VERSION__) toast(fmt(t.update.updatedTo, { version: __APP_VERSION__ }), { label: t.update.seeNews, run: () => openWhatsNew(this) });
     } catch {
       /* stockage indisponible : pas d'annonce */
     }

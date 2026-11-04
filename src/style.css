@@ -118,6 +118,8 @@ button.tool.text { border-color: var(--border); }
 .home-nav-item.active { background: rgba(255, 255, 255, 0.26); font-weight: 600; }
 .home-spacer { flex: 1; }
 .home-version { padding: 10px 12px 0; font-size: 12px; opacity: 0.9; }
+.home-version-link { background: none; border: 0; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; text-decoration: underline; }
+.news-update { margin: 0 0 12px; }
 .home-main { flex: 1; min-width: 0; overflow: auto; padding: 28px clamp(20px, 5vw, 64px); }
 .home-main h1 { margin: 0 0 4px; font-size: 28px; font-weight: 600; }
 .home-main h2 { margin: 28px 0 8px; font-size: 16px; font-weight: 600; }

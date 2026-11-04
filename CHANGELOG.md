@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.2.1] — 2026-11-04
+
+### Ajouté
+- **Mises à jour en un clic** : dans l'application Mac, un clic sur « Version … » (en bas à gauche de l'accueil) ouvre les Nouveautés, avec un bouton « Rechercher les mises à jour… » pour installer tout de suite la dernière version.
+
 ## [1.2.0] — 2026-11-04
 
 ### Ajouté
