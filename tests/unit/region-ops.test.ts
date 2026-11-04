@@ -18,6 +18,15 @@ describe('region-ops', () => {
     expect([media.width, media.height]).toEqual([200, 300]);
   });
 
+  it('page tournée à 90° : la zone garde la bonne taille et la rotation', async () => {
+    const pdf = await makePdf(1, { rotations: [90] });
+    const out = await extractRegion(pdf, 0, [50, 60, 250, 360]);
+    const page = (await PDFDocument.load(out)).getPage(0);
+    expect(page.getRotation().angle).toBe(90);
+    const box = page.getCropBox();
+    expect([box.x, box.y, box.width, box.height]).toEqual([50, 60, 200, 300]);
+  });
+
   it('le rectangle est remis dans le bon ordre et dans la page', () => {
     expect(clampRect([300, 500, 100, 200], { x: 0, y: 0, width: 595, height: 842 })).toEqual([100, 200, 300, 500]);
     expect(clampRect([-50, -50, 100, 100], { x: 0, y: 0, width: 595, height: 842 })).toEqual([0, 0, 100, 100]);

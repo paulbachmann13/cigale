@@ -54,6 +54,7 @@ test('scan en image seule : affichage net', async ({ page }) => {
   await expect
     .poll(() =>
       page.locator('.page canvas').first().evaluate((c: HTMLCanvasElement) => {
+        if (!c.width || !c.height) return 0; // canevas pas encore dimensionné (WebKit) : on réessaie
         const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
         let dark = 0;
         for (let i = 0; i < d.length; i += 4) if (d[i] < 100) dark++;

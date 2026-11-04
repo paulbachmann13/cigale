@@ -288,7 +288,8 @@ export class Annotator {
     } else if (tool === 'clip' && dragged) {
       const [p, q] = [pdf(a), pdf(b)];
       const r = normalizeRect([p[0], p[1], q[0], q[1]]);
-      this.host.region(n - 1, [r[0], r[1], r[2], r[3]]);
+      if (r[2] - r[0] < 10 || r[3] - r[1] < 10) this.host.notify(t.docTools.regionTooSmall); // l'outil reste actif : on retrace
+      else this.host.region(n - 1, [r[0], r[1], r[2], r[3]]);
     } else if (tool === 'redact' && dragged) {
       const [p, q] = [pdf(a), pdf(b)];
       const rect = normalizeRect([p[0], p[1], q[0], q[1]]);

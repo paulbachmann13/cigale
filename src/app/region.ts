@@ -51,7 +51,11 @@ async function renderRegion(s: Session, pageIndex: number, rect: Rect): Promise<
   const base = page.getViewport({ scale: 1 });
   const [ax, ay] = base.convertToViewportPoint(rect[0], rect[1]);
   const [bx, by] = base.convertToViewportPoint(rect[2], rect[3]);
-  const [x, y, widthPt, heightPt] = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
+  // bornée à la page, comme en mode vectoriel
+  const [x0, x1] = [Math.max(0, Math.min(ax, bx)), Math.min(base.width, Math.max(ax, bx))];
+  const [y0, y1] = [Math.max(0, Math.min(ay, by)), Math.min(base.height, Math.max(ay, by))];
+  const [x, y, widthPt, heightPt] = [x0, y0, x1 - x0, y1 - y0];
+  if (!(widthPt >= 10 && heightPt >= 10)) throw new PageOpError('structure');
   const scale = Math.min(DPI / 72, Math.sqrt(MAX_PIXELS / (widthPt * heightPt)));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.ceil(widthPt * scale));

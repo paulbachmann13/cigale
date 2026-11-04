@@ -25,6 +25,7 @@ export async function pickPdfs(input: HTMLInputElement): Promise<PickedFile[]> {
   }
   // Repli : le champ de fichier ouvre le sélecteur ; l'application écoute son événement « change ».
   input.value = '';
+  input.dataset.fallback = '1'; // le choix arrivera plus tard, par l'événement « change »
   input.click();
   return [];
 }
