@@ -87,3 +87,15 @@ test('OCR : rien à faire si toutes les pages ont déjà du texte', async ({ pag
   await expect(page.locator('#toast')).toContainText('contiennent déjà du texte');
   expect(await isDirty(page)).toBe(false);
 });
+
+test('OCR : Annuler rend la main tout de suite et ne modifie pas le document', async ({ page }) => {
+  await page.locator('#file-input').setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: await makeScan(page) });
+  await waitFirstPage(page);
+  await tool(page, 'tool-ocr');
+  await page.click('#tool-apply');
+  await page.click('#loading-cancel');
+  await expect(page.locator('#loading-cancel')).toBeHidden();
+  await page.waitForTimeout(4000); // le traitement abandonné ne doit rien appliquer ensuite
+  expect(await textItems(page, 1)).toHaveLength(0);
+  expect(await isDirty(page)).toBe(false);
+});

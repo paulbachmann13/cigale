@@ -53,7 +53,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 
 ## Feuille de route
 
-1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement ✔ (v1.0.0) · 6 Formulaires, signature, caviardage réel, OCR, compression, protection, filigrane, comparaison, conversions, app Mac Tauri ✔ (0.5.0). Détail dans `docs/PLAN.md`.
+1 Socle ✔ · 2 Organiser les pages + enregistrer ✔ · 3 Fusionner et découper ✔ · 4 Annotations + panneau Commentaires ✔ · 5 Durcissement ✔ (v1.0.0) · 6 Formulaires, signature, caviardage réel, OCR (1.2 ✔), compression, protection, filigrane, comparaison, conversions, app Mac Tauri ✔ (0.5.0). Détail dans `docs/PLAN.md`.
 
 - **Modifier un PDF** : toute opération passe par `Editing.run` (worker, file d'attente, adoption seulement si le résultat s'ouvre avec le bon nombre de pages). Ne jamais appeler `removePage`/`insertPage` pour réordonner (arbre cassé) : voir `reorderPages`. Toujours `updateMetadata: false`. Après suppression, `pruneUnreachable` (sinon le contenu reste dans le fichier). Pas de `.bak` voisin dans un navigateur : `storage/backups.ts`.
 - **Interface = famille Grillon** (barre à 36 px, bouton « Fichier » plein couleur, accueil à colonne colorée) ; couleur propre : terracotta.
@@ -72,6 +72,7 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 - **Mises à jour de l'app Mac** : `src/app/updater.ts` (logique testée), vérification discrète 5 s après le démarrage + Fichier → Rechercher les mises à jour. Publier = pousser l'étiquette `vX.Y.Z` (égale à `package.json`) : le workflow « Application Mac » publie le .dmg, `Cigale_X.Y.Z_universal.app.tar.gz` et `latest.json`. **Clé de signature** : privée dans `~/.tauri/cigale-updater.key` (À SAUVEGARDER) et secret GitHub `TAURI_SIGNING_PRIVATE_KEY` ; publique dans `tauri.conf.json` — ne JAMAIS la changer. Test sans publier : construire deux copies avec `--config` (clé jetable, `endpoints` locaux, `dangerousInsecureTransportProtocol`) et servir `latest.json` avec `python3 -m http.server` (fait le 03/11 : 1.0.0 → 1.0.1 OK).
 
 - **Caviardage / formulaires / signature (1.1)** : voir docs/ARCHITECTURE.md (« version 1.1 »). Tests de fuite : toujours `everything(bytes)` (tests/unit/helpers.ts), jamais une recherche dans les octets bruts. Après un caviardage : `Session.noBackup`, historique remplacé. `isDirty(s)` au lieu de `s.history.dirty`. `flushForm` avant toute opération qui lit `history.current`.
+- **OCR (1.2)** : `src/app/ocr.ts` (tesseract.js, import dynamique, ressources locales dans `public/ocr/` copiées par `scripts/copy-pdfjs-assets.mjs`, un seul cœur SIMD-LSTM) + `src/pdf/ocr-ops.ts` (couche invisible `3 Tr`, pur, testé) via `Editing.ocrLayer`. Jamais de CDN : tous les chemins tesseract (`workerPath`, `corePath`, `langPath`) sont fixés.
 - Gemini en mode `task --write-in` échoue (permission `read_file` refusée en non interactif) : utiliser `task` en lecture seule avec `--file` et demander les blocs de code dans la réponse ; relire et tester soi-même.
 
 ## Pas encore vérifié (à faire à la main, voir docs/VERIFICATION-MANUELLE.md)

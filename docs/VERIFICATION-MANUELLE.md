@@ -61,6 +61,13 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 4. **Filigrane, en-têtes, numérotation, recadrage** sur un PDF mélangeant portrait, paysage et page tournée : position et sens corrects dans Aperçu et Acrobat.
 5. **Export en images** : le .zip s'ouvre ; images nettes à 150 dpi.
 
+## Version 1.2 — OCR
+
+- [ ] Un vrai scan (photocopieur, téléphone) : Outils → Reconnaître le texte ; ⌘F trouve un mot ; sélectionner et copier un paragraphe donne un texte lisible.
+- [ ] Le PDF obtenu dans Aperçu ET Acrobat : aspect identique, recherche et copie fonctionnent, sélection au bon endroit.
+- [ ] Dans l'application Mac (pas seulement le site) : l'OCR marche, y compris sans réseau (Wi-Fi coupé).
+- [ ] Un document de 20 pages : durée acceptable, « Annuler » rend la main tout de suite.
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

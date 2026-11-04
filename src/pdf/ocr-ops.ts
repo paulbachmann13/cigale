@@ -187,7 +187,8 @@ export async function addTextLayer(
         const boxHeight = Math.abs(word.y1 - word.y0) * scaleY;
         const fontSize = Math.max(1, boxHeight);
 
-        const naturalWidth = font.widthOfTextAtSize(textToDraw, fontSize);
+        // Le MOT seul occupe sa boîte ; l'espace qui suit (même échelle) déborde vers le mot suivant.
+        const naturalWidth = font.widthOfTextAtSize(cleanText, fontSize);
         const hScaling =
           naturalWidth > 0 && boxWidth > 0 ? (boxWidth / naturalWidth) * 100 : 100;
 

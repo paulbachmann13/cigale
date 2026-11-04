@@ -103,56 +103,46 @@ describe('ocr-ops', () => {
     }
   });
 
-  it('positionne la ligne de base correctement avec une CropBox décalée', async () => {
-    const doc = await PDFDocument.create();
-    const p = doc.addPage([600, 800]);
-    p.setCropBox(50, 100, 400, 500);
-    const baseBytes = await doc.save();
+  it('CropBox décalée ET page tournée (0, 90, 180, 270) : position, sens et largeur du mot', async () => {
+    for (const rot of [0, 90, 180, 270]) {
+      const doc = await PDFDocument.create();
+      const p = doc.addPage([600, 800]);
+      p.setCropBox(50, 100, 400, 500);
+      p.setRotation(degrees(rot));
+      const baseBytes = await doc.save();
 
-    const viewWidth = 400;
-    const viewHeight = 500;
-    const imageWidth = 800;
-    const imageHeight = 1000;
+      const sideways = rot === 90 || rot === 270;
+      const viewWidth = sideways ? 500 : 400;
+      const viewHeight = sideways ? 400 : 500;
+      const imageWidth = viewWidth * 2;
+      const imageHeight = viewHeight * 2;
+      const word: OcrWord = { text: 'CROPPED', x0: 100, y0: 150, x1: 250, y1: 200 };
+      const h = word.y1 - word.y0;
+      const expectedScreenX = (word.x0 / imageWidth) * viewWidth;
+      const expectedScreenY = ((word.y1 - 0.2 * h) / imageHeight) * viewHeight;
+      const expectedWidth = ((word.x1 - word.x0) / imageWidth) * viewWidth;
 
-    const word: OcrWord = {
-      text: 'CROPPED',
-      x0: 100,
-      y0: 150,
-      x1: 250,
-      y1: 200,
-    };
-    const h = word.y1 - word.y0;
-    const expectedScreenX = (word.x0 / imageWidth) * viewWidth;
-    const expectedScreenY = ((word.y1 - 0.2 * h) / imageHeight) * viewHeight;
-
-    const out = await addTextLayer(baseBytes, [
-      {
-        index: 0,
-        imageWidth,
-        imageHeight,
-        lines: [{ words: [word] }],
-      },
-    ]);
-
-    const task = getDocument({ data: out.slice() } as never);
-    const pdfJsDoc = await task.promise;
-    const page = await pdfJsDoc.getPage(1);
-    const vp = page.getViewport({ scale: 1 });
-    const tc = await page.getTextContent();
-    const item = tc.items.find(
-      (it) => 'str' in it && it.str.includes('CROPPED')
-    );
-
-    expect(item).toBeDefined();
-    if (item && 'transform' in item) {
-      const [vx, vy] = vp.convertToViewportPoint(
-        item.transform[4],
-        item.transform[5]
-      );
-      expect(Math.abs(vx - expectedScreenX)).toBeLessThan(3);
-      expect(Math.abs(vy - expectedScreenY)).toBeLessThan(3);
+      const out = await addTextLayer(baseBytes, [{ index: 0, imageWidth, imageHeight, lines: [{ words: [word] }] }]);
+      const task = getDocument({ data: out.slice() } as never);
+      const page = await (await task.promise).getPage(1);
+      const vp = page.getViewport({ scale: 1 });
+      const tc = await page.getTextContent();
+      const item = tc.items.find((it) => 'str' in it && it.str.includes('CROPPED'));
+      expect(item, `rotation ${rot}`).toBeDefined();
+      if (item && 'transform' in item) {
+        const t = item.transform;
+        const [vx, vy] = vp.convertToViewportPoint(t[4], t[5]);
+        expect(Math.abs(vx - expectedScreenX), `x, rotation ${rot}`).toBeLessThan(3);
+        expect(Math.abs(vy - expectedScreenY), `y, rotation ${rot}`).toBeLessThan(3);
+        // sens de lecture : de gauche à droite à l'écran
+        const [ax, ay] = vp.convertToViewportPoint(t[4] + t[0], t[5] + t[1]);
+        expect(ax - vx, `sens, rotation ${rot}`).toBeGreaterThan(0);
+        expect(Math.abs(ay - vy), `sens, rotation ${rot}`).toBeLessThan(0.01);
+        // le mot occupe la largeur de sa boîte (échelle horizontale)
+        expect(Math.abs(item.width - expectedWidth), `largeur, rotation ${rot}`).toBeLessThan(2);
+      }
+      await task.destroy();
     }
-    await task.destroy();
   });
 
   it('déclenche PageOpError("structure") si expectedPages est faux', async () => {

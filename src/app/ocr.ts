@@ -88,42 +88,49 @@ async function hasText(s: Session, index: number): Promise<boolean> {
 async function runOcr(s: Session, editing: Editing, pages: number[], lang: OcrLang, skipText: boolean, overlay: (text: string, onCancel: () => void) => (f: number) => void, idle: () => void) {
   let cancelled = false;
   let worker: TesseractWorker | undefined;
+  const stop = () => {
+    const w = worker;
+    worker = undefined;
+    void w?.terminate().catch(() => undefined);
+  };
+  // Annuler rend la main tout de suite ; la suite du traitement est abandonnée (et ne touche plus l'interface).
   const progress = overlay(t.docTools.ocrLoading, () => {
     cancelled = true;
-    void worker?.terminate();
+    idle();
+    stop();
   });
+  const done = () => !cancelled && (idle(), true);
   const setText = (text: string) => {
     const el = document.querySelector('.loading-box p');
-    if (el) el.textContent = text;
+    if (el && !cancelled) el.textContent = text;
   };
   try {
     const todo: number[] = [];
-    for (const i of [...new Set(pages)].sort((a, b) => a - b)) if (!skipText || !(await hasText(s, i))) todo.push(i);
-    if (todo.length === 0) {
-      idle();
-      return void toast(t.docTools.ocrNothing);
+    for (const i of [...new Set(pages)].sort((a, b) => a - b)) {
+      if (cancelled) return;
+      if (!skipText || !(await hasText(s, i))) todo.push(i);
     }
+    if (todo.length === 0) return void (done() && toast(t.docTools.ocrNothing));
     let k = 0;
-    worker = await createOcrWorker(lang, (p) => progress((k + p) / todo.length));
+    worker = await createOcrWorker(lang, (p) => !cancelled && progress((k + p) / todo.length));
     const results: OcrPage[] = [];
     for (const index of todo) {
-      if (cancelled) return void idle();
+      if (cancelled) return;
       setText(fmt(t.docTools.ocrProgress, { k: k + 1, n: todo.length }));
-      results.push(await recognizePage(s, worker, index));
+      results.push(await recognizePage(s, worker!, index));
       k++;
       progress(k / todo.length);
     }
-    await worker.terminate();
-    worker = undefined;
-    idle();
-    if (cancelled) return;
+    stop();
+    if (!done()) return;
     const found = results.filter((p) => p.lines.length > 0);
     if (found.length === 0) return void toast(t.docTools.ocrNoText);
     if (await editing.ocrLayer(s, found)) toast(fmt(t.docTools.ocrDone, { n: found.length }));
   } catch (err) {
-    void worker?.terminate();
-    idle();
-    if (!cancelled) toast(fmt(t.docTools.failed, { detail: String((err as Error)?.message ?? err) }));
+    if (done()) toast(fmt(t.docTools.failed, { detail: String((err as Error)?.message ?? err) }));
+  } finally {
+    // dans tous les cas (fin, erreur, annulation pendant le chargement) : plus aucun worker OCR
+    stop();
   }
 }
 
