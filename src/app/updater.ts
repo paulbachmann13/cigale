@@ -150,9 +150,8 @@ function progressPanel(): { show(message: string, percent?: number): void; hide(
 export async function tauriDeps(beforeRestart: Deps['beforeRestart']): Promise<Deps> {
   const { check } = await import('@tauri-apps/plugin-updater');
   const { getVersion } = await import('@tauri-apps/api/app');
-  const { message } = await import('@tauri-apps/plugin-dialog');
   const { invoke } = await import('@tauri-apps/api/core');
-  const { confirmDialog } = await import('./dialogs');
+  const { confirmDialog, showMessage } = await import('./dialogs');
   const panel = progressPanel();
   return {
     async check() {
@@ -176,11 +175,12 @@ export async function tauriDeps(beforeRestart: Deps['beforeRestart']): Promise<D
       const body = notes?.trim() ? `${text}\n\n${notesLines(notes).map((l) => (l.heading ? `\n${l.text}` : `• ${l.text}`)).join('\n')}` : text;
       return confirmDialog(t.app.name, body, t.update.install, t.update.later);
     },
-    tell: async (text) => void (await message(text, { title: t.app.name })),
+    // Messages dans l'application (pas de fenêtre système : elle pouvait rester bloquée derrière les Nouveautés)
+    tell: (text) => showMessage(t.app.name, text, 'dialog-update-message'),
     status(text, kind, percent) {
       if (kind === 'error') {
         panel.hide();
-        void message(text, { title: t.app.name, kind: 'error' });
+        void showMessage(t.app.name, text, 'dialog-update-error');
       } else panel.show(text, percent);
     },
     // Redémarrage maison (Rust) : celui du plugin crée une 2e instance, donc une 2e icône dans le Dock.

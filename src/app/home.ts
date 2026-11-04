@@ -103,7 +103,19 @@ export function openWhatsNew(app?: App) {
       h(
         'p',
         { class: 'news-update' },
-        h('button', { type: 'button', id: 'news-check-update', onclick: () => void app.checkForUpdates(false) }, t.update.check),
+        h(
+          'button',
+          {
+            type: 'button',
+            id: 'news-check-update',
+            onclick: (e: Event) => {
+              const b = e.currentTarget as HTMLButtonElement;
+              b.disabled = true; // un seul clic à la fois : pas de messages qui s'empilent
+              void app.checkForUpdates(false).finally(() => (b.disabled = false));
+            },
+          },
+          t.update.check,
+        ),
       ),
     );
   }

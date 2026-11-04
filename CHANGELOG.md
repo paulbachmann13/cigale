@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.2.2] — 2026-11-04
+
+### Corrigé
+- **Rechercher les mises à jour** : les messages (« Vous avez la dernière version », erreurs) s'affichent maintenant dans Cigale et se ferment normalement. Avant, une fenêtre du système pouvait rester bloquée devant les Nouveautés. Le bouton est aussi grisé pendant la recherche.
+
 ## [1.2.1] — 2026-11-04
 
 ### Ajouté
