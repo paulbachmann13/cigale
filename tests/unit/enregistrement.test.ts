@@ -4,11 +4,11 @@
  * avoir gardé ce qu'il avait (signets, pièce jointe, champs de formulaire, commentaires, titre, texte).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
+import { afterAll, describe, expect, it } from 'vitest';
+import { PDFDocument, PDFName, PDFString, StandardFonts } from '@cantoo/pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { AnnotDraft } from '../../src/data/annotations';
 import { addAnnotations, listAnnotations } from '../../src/pdf/annot-ops';
@@ -32,6 +32,7 @@ async function readPagesWithPassword(bytes: Uint8Array, password: string): Promi
 const hasQpdf = spawnSync('qpdf', ['--version']).status === 0;
 const dir = mkdtempSync(join(tmpdir(), 'cigale-enreg-'));
 let n = 0;
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 function qpdfCheck(bytes: Uint8Array, label: string, password?: string) {
   if (!hasQpdf) return;
@@ -176,12 +177,44 @@ describe('enregistrer puis rouvrir', () => {
       const plain = new Uint8Array(readFileSync(dec));
       const s = await seen(plain);
       expect(s).toMatchObject({ pages: 6, title: 'Dossier de test', annots: 1 });
-      expect(s.attachments).toHaveLength(1);
+      expect(s.attachments).toEqual(['note.txt']);
     }
     expect((await readPagesWithPassword(bytes, 'secret')).length).toBe(6);
     const open = (await unprotectDocument(bytes, 'secret')).bytes;
     qpdfCheck(open, 'protection retirée');
     expect((await seen(open)).pages).toBe(6);
+  });
+
+  it('PDF protégé : les chaînes imbriquées (liens, pièces jointes) sont chiffrées et se relisent, les métadonnées personnalisées aussi', async () => {
+    const doc = await PDFDocument.create();
+    doc.setTitle('Titre protégé');
+    (doc as unknown as { getInfoDict(): { set(k: unknown, v: unknown): void } }).getInfoDict().set(PDFName.of('Company'), PDFString.of('Société é'));
+    doc.addPage();
+    const ctx = doc.context;
+    doc.getPage(0).node.set(PDFName.of('TestB'), ctx.obj({ Inner: ctx.obj({ S2: PDFString.of('chaine-imbriquee-secrete'), Arr: [PDFString.of('dans-un-tableau-secret')] }) }));
+    await doc.attach(new TextEncoder().encode('x'), 'note.txt', { mimeType: 'text/plain' });
+    const p = (await protectDocument(await doc.save(), { userPassword: 'secret', ownerPassword: 'chef', permissions: {} } as never)).bytes;
+    // jamais en clair dans le fichier protégé
+    const raw = Buffer.from(p).toString('latin1');
+    expect(raw).not.toContain('chaine-imbriquee-secrete');
+    expect(raw).not.toContain('dans-un-tableau-secret');
+    // modifier + enregistrer deux fois : toujours lisible, toujours protégé
+    let bytes = (await applyOp(p, { op: 'rotate', pages: [0], delta: 90 }, 'secret')).bytes;
+    bytes = await normalizeDocument(bytes, 'secret');
+    expect(Buffer.from(bytes).toString('latin1')).not.toContain('chaine-imbriquee-secrete');
+    if (hasQpdf) {
+      const f = join(dir, 'imbrique.pdf');
+      writeFileSync(f, bytes);
+      const dec = join(dir, 'imbrique-dec.pdf');
+      spawnSync('qpdf', ['--password=secret', '--decrypt', '--qdf', '--object-streams=disable', f, dec]);
+      const text = readFileSync(dec).toString('latin1');
+      expect(text).toContain('chaine-imbriquee-secrete');
+      expect(text).toContain('dans-un-tableau-secret');
+      expect(text).toContain('note.txt');
+      expect(text).toContain('/Company');
+      expect(text).toContain('<feff0054');
+    }
+    await expect(getDocument({ data: bytes.slice() } as never).promise).rejects.toMatchObject({ name: 'PasswordException' });
   });
 
   it('zone extraite, pages extraites : fichiers valides qui se rouvrent', async () => {

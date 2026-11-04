@@ -51,6 +51,11 @@ export class Editing {
 
   constructor(private host: EditHost) {}
 
+  /** Se résout quand toutes les opérations déjà demandées sont terminées (avant de décider si un document est « modifié »). */
+  whenIdle(): Promise<void> {
+    return this.serial(async () => undefined);
+  }
+
   private serial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.queue.then(fn, fn);
     this.queue = next.catch(() => undefined);

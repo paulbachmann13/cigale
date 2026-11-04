@@ -4,7 +4,7 @@
  * avec mot de passe, ce qu'il faut pour le protéger de nouveau (même mot de passe d'ouverture, mêmes restrictions) :
  * `saveDoc` remplace `doc.save()` partout.
  */
-import { PDFDict, type PDFDocument, PDFName, PDFStream } from '@cantoo/pdf-lib';
+import { PDFArray, PDFDict, type PDFDocument, PDFHexString, type PDFRef, PDFString } from '@cantoo/pdf-lib';
 
 export interface Permissions {
   printing?: boolean | 'lowResolution' | 'highResolution';
@@ -88,29 +88,48 @@ function randomOwnerPassword(): string {
 }
 
 /**
- * pdf-lib ne chiffre que les chaînes des objets INDIRECTS : celles d'un dictionnaire direct du catalogue (arbre des noms des
- * pièces jointes, par exemple) restent en clair et deviennent illisibles à la relecture. On rend donc indirects les
- * dictionnaires directs du catalogue et de son arbre des noms avant de chiffrer.
+ * pdf-lib ne chiffre que les chaînes situées directement dans un objet INDIRECT. Celles qui sont dans un dictionnaire ou un
+ * tableau DIRECT imbriqué (action d'un lien « /A << /URI (…) >> », arbre des noms des pièces jointes…) restent en clair dans
+ * le fichier protégé et deviennent illisibles pour les autres lecteurs. Avant de chiffrer, on rend donc indirects tous les
+ * dictionnaires et tableaux imbriqués qui contiennent une chaîne (la relecture, elle, déchiffre correctement les imbriqués).
  */
-function promoteDirectDictionaries(doc: PDFDocument): void {
-  const promote = (parent: PDFDict, depth: number) => {
-    for (const key of parent.keys()) {
-      const value = parent.get(key);
-      if (!(value instanceof PDFDict) || value instanceof PDFStream) continue;
-      if (depth > 0) promote(value, depth - 1);
-      parent.set(key, doc.context.register(value));
-    }
+const hasString = (v: unknown): boolean => {
+  if (v instanceof PDFString || v instanceof PDFHexString) return true;
+  if (v instanceof PDFDict) return v.entries().some(([, x]) => hasString(x));
+  if (v instanceof PDFArray) return v.asArray().some(hasString);
+  return false; // les flux sont chiffrés tels quels, les références n'ont pas de chaîne
+};
+
+function hoistStrings(doc: PDFDocument, parent: PDFDict | PDFArray): void {
+  const lift = (child: unknown): PDFRef | undefined => {
+    if (!(child instanceof PDFDict || child instanceof PDFArray) || !hasString(child)) return undefined;
+    hoistStrings(doc, child); // d'abord ses propres enfants
+    return doc.context.register(child);
   };
-  const names = doc.catalog.get(PDFName.of('Names'));
-  if (names instanceof PDFDict) promote(names, 1);
-  promote(doc.catalog, 0);
+  if (parent instanceof PDFArray) {
+    for (let i = 0; i < parent.size(); i++) {
+      const ref = lift(parent.get(i));
+      if (ref) parent.set(i, ref);
+    }
+    return;
+  }
+  for (const [key, value] of parent.entries()) {
+    const ref = lift(value);
+    if (ref) parent.set(key, ref);
+  }
+}
+
+function hoistNestedStrings(doc: PDFDocument): void {
+  for (const [, obj] of [...doc.context.enumerateIndirectObjects()]) {
+    if (obj instanceof PDFDict || obj instanceof PDFArray) hoistStrings(doc, obj);
+  }
 }
 
 /** Enregistre le document, protégé comme à l'ouverture le cas échéant. Chiffrement AES-256. */
 export async function saveDoc(doc: PDFDocument): Promise<Uint8Array> {
   const p = registry.get(doc);
   if (p) {
-    promoteDirectDictionaries(doc);
+    hoistNestedStrings(doc);
     doc.encrypt({
       userPassword: p.password,
       // Propriétaire inconnu. Sans restriction, le mot de passe d'ouverture sert aussi de propriétaire (rien à protéger de plus) ;

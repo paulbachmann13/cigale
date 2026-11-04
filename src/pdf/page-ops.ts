@@ -65,15 +65,16 @@ const loadOpts = (password?: string) => ({ updateMetadata: false, password, thro
  */
 export function restoreInfoReference(doc: PDFDocument): void {
   if (doc.context.trailerInfo.Info) return;
-  const INFO_KEYS = new Set(['Title', 'Author', 'Subject', 'Keywords', 'Creator', 'Producer', 'CreationDate', 'ModDate', 'Trapped']);
+  const STANDARD = ['Title', 'Author', 'Subject', 'Keywords', 'Creator', 'Producer', 'CreationDate', 'ModDate'];
+  let best: { ref: PDFRef; score: number } | undefined;
   for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
-    if (!(obj instanceof PDFDict) || obj.has(PDFName.of('Type'))) continue;
-    const keys = obj.keys().map((k) => k.asString().slice(1));
-    if (keys.length > 0 && keys.every((k) => INFO_KEYS.has(k)) && keys.some((k) => k !== 'Producer' && k !== 'Creator')) {
-      doc.context.trailerInfo.Info = ref;
-      return;
-    }
+    if (!(obj instanceof PDFDict) || obj.has(PDFName.of('Type')) || obj.has(PDFName.of('Subtype'))) continue;
+    const score = STANDARD.filter((k) => obj.has(PDFName.of(k))).length;
+    // Il faut au moins un titre, un auteur, un sujet, des mots-clés ou une date : « Producer » seul est trop courant ailleurs.
+    const meaningful = ['Title', 'Author', 'Subject', 'Keywords', 'CreationDate', 'ModDate'].some((k) => obj.has(PDFName.of(k)));
+    if (meaningful && (!best || score > best.score)) best = { ref, score };
   }
+  if (best) doc.context.trailerInfo.Info = best.ref;
 }
 
 export async function loadForEdit(bytes: Uint8Array, password?: string): Promise<PDFDocument> {

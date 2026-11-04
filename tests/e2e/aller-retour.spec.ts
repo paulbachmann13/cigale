@@ -24,11 +24,19 @@ async function putAndOpen(page: Page, name: string, bytes?: number[]) {
 }
 const readOpfs = (page: Page, name: string) =>
   page.evaluate(async (name) => Array.from(new Uint8Array(await (await (await (await navigator.storage.getDirectory()).getFileHandle(name)).getFile()).arrayBuffer())), name);
-const closeActive = (page: Page) =>
-  page.evaluate(async () => {
+const state = (page: Page) =>
+  page.evaluate(() => {
+    const s = (window as unknown as { cigale: { app: { sessions: { history: { dirty: boolean }; formModified: boolean }[] } } }).cigale.app.sessions.at(-1)!;
+    return { dirty: s.history.dirty, formModified: s.formModified };
+  });
+const closeActive = async (page: Page) => {
+  // un message « Enregistrer ? » ici voudrait dire que Cigale croit à tort que le document est modifié
+  expect(await state(page), 'avant de fermer : rien à enregistrer').toEqual({ dirty: false, formModified: false });
+  await page.evaluate(async () => {
     const app = (window as unknown as { cigale: { app: { sessions: { id: number }[]; close(id: number): Promise<void> } } }).cigale.app;
     await app.close(app.sessions.at(-1)!.id);
   });
+};
 const sessionCount = (page: Page) => page.evaluate(() => (window as unknown as { cigale: { app: { sessions: unknown[] } } }).cigale.app.sessions.length);
 const field = (page: Page, name: string) => page.locator(`.doc-view:not([hidden]) .annotationLayer [name="${name}"]`).first();
 
@@ -61,6 +69,7 @@ test('formulaire : saisie → ⌘S (sans valider) → fermer → rouvrir : les v
   await page.locator('.left-panel .thumb[data-page="1"]').click();
   await page.click('#btn-rot-right');
   await expect.poll(() => docRotations(page)).toEqual([90]);
+  await expect.poll(() => isDirty(page)).toBe(true); // la rotation est comptée
   await page.keyboard.press('Meta+s');
   await expect.poll(() => isDirty(page)).toBe(false);
   await closeActive(page);

@@ -633,6 +633,7 @@ export class App {
 
   /** Pour chaque document modifié : « Enregistrer / Ne pas enregistrer / Annuler ». Faux si l'utilisateur annule. */
   async confirmCloseAll(): Promise<boolean> {
+    await this.editing.whenIdle(); // une modification demandée à l'instant n'est peut-être pas encore comptée
     for (const s of this.sessions.filter((x) => isDirty(x))) {
       this.activate(s.id);
       const answer = await askUnsaved(s.name);
@@ -973,6 +974,7 @@ export class App {
     const i = this.sessions.findIndex((x) => x.id === id);
     if (i < 0) return;
     const s = this.sessions[i];
+    await this.editing.whenIdle(); // une modification demandée à l'instant n'est peut-être pas encore comptée
     if (isDirty(s)) {
       this.activate(s.id);
       const answer = await askUnsaved(s.name);
