@@ -7,7 +7,7 @@ import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
 import { h } from './dom';
 
-export type Tool = 'select' | 'redact' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
@@ -22,6 +22,8 @@ export interface AnnotHost {
   remove(ids: string[]): Promise<void>;
   selected(id: string | null): void;
   notify(message: string): void;
+  /** Outil « Extraire une zone » : une zone (repère PDF de la page, x0 y0 x1 y1) a été tracée. */
+  region(page: number, rect: [number, number, number, number]): void;
 }
 
 /** Même partie de l'API de PageViewport que pdf.js expose : on n'en utilise que ces deux conversions. */
@@ -35,7 +37,7 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
 const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature']);
 
@@ -241,6 +243,7 @@ export class Annotator {
         const common = { stroke: color, 'stroke-width': sw, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
         if (tool === 'ink') el('polyline', { ...common, points: points.map((p) => p.join(',')).join(' ') });
         else if (tool === 'redact') el('rect', { stroke: '#d9231a', 'stroke-width': 2, fill: 'rgba(217,35,26,0.18)', 'stroke-dasharray': '5 3', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
+        else if (tool === 'clip') el('rect', { stroke: '#1a6fd9', 'stroke-width': 2, fill: 'rgba(26,111,217,0.14)', 'stroke-dasharray': '6 4', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'rect') el('rect', { ...common, x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'ellipse') el('ellipse', { ...common, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, rx: Math.abs(x2 - x1) / 2, ry: Math.abs(y2 - y1) / 2 });
         else if (tool === 'line' || tool === 'arrow') el('line', { ...common, x1, y1, x2, y2 });
@@ -282,6 +285,10 @@ export class Annotator {
       const w = 150;
       const hgt = (w * this.signature.height) / this.signature.width;
       void this.host.add([{ ...base, kind: 'signature', color: [0, 0, 0], width: 0, rect: [x - w / 2, y - hgt / 2, x + w / 2, y + hgt / 2], image: this.signature.png }]);
+    } else if (tool === 'clip' && dragged) {
+      const [p, q] = [pdf(a), pdf(b)];
+      const r = normalizeRect([p[0], p[1], q[0], q[1]]);
+      this.host.region(n - 1, [r[0], r[1], r[2], r[3]]);
     } else if (tool === 'redact' && dragged) {
       const [p, q] = [pdf(a), pdf(b)];
       const rect = normalizeRect([p[0], p[1], q[0], q[1]]);

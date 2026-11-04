@@ -92,6 +92,7 @@ Aucune requête réseau avec des données ; CSP stricte ; aucune télémétrie ;
 | Signature | Image seulement, pas de certificat ; les polices cursives dépendent de l'ordinateur | 1.x |
 | Filigrane / en-têtes | Police Helvetica, caractères hors Latin-1 remplacés par « ? » ; texte posé par-dessus le contenu (pas en dessous) | 1.x |
 | Recadrer | Réduit la zone visible sans supprimer le contenu (utiliser le caviardage pour supprimer) | — |
+| Extraire une zone | Une zone tracée sur UNE page devient un PDF d'une page. Mode vectoriel : le texte reste sélectionnable mais le reste de la page reste caché dans le fichier (comme « Recadrer ») ; mode image : seule l'image de la zone est gardée. Pas de zone sur plusieurs pages | — |
 | Formulaires | Pas de création de champs, pas de calculs JavaScript ni de validation de formats ; signature numérique des champs de signature non prise en charge | 1.x |
 | Fusion : formulaires | Les champs de formulaire des fichiers combinés ne sont pas repris (le contenu affiché l'est) | Étape 5 |
 | Découpe : signets | Les parties ne reprennent pas les signets | Étape 5 |

@@ -44,6 +44,8 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 |---|---|---|
 | Réordonner (glisser-déposer, grille), pivoter, supprimer, dupliquer, insérer (vierge ou autre PDF), extraire | Oui | Étape 2 |
 | Recadrer | Oui | Marges en mm |
+| Extraire une zone en nouveau PDF (rogner une partie de page) | Oui (1.3) | Vectoriel (texte gardé) ou image ; équivalent de « Capture » + « Créer un PDF » |
+| Écran d'accueil « Tous les outils » | Oui (1.3) | Tuiles : diviser, recadrer, filigrane, en-têtes, protéger, caviarder, OCR, images, zone |
 | Remplacer des pages | Non | 1.x |
 | Diviser un document | Oui | Plages, tous les N pages, signets ; .zip ou onglets |
 | Numéros de page, en-têtes, pieds, filigrane | Oui | Texte par-dessus ; Helvetica |

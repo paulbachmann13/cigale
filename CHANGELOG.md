@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.3.0] — 2026-11-04
+
+### Ajouté
+- **Tous les outils sur l'accueil** : des tuiles pour Diviser, Recadrer, Filigrane, En-têtes et pieds de page, Protéger, Retirer la protection, Caviarder, Reconnaître le texte, Exporter en images et Extraire une zone. Cliquez sur une tuile : Cigale vous demande le PDF, puis ouvre l'outil dessus (si un document est déjà ouvert, elle l'utilise).
+- **Extraire une zone en nouveau PDF** (Outils → Extraire une zone, ou la tuile de l'accueil) : tracez un rectangle sur une page, comme on rogne une image, et la zone devient un nouveau PDF d'une page. Au choix : en gardant le texte et les dessins (texte sélectionnable), ou en simple image (rien d'autre de la page n'est conservé, plus sûr si le reste est confidentiel). Votre document n'est pas modifié.
+
 ## [1.2.2] — 2026-11-04
 
 ### Corrigé

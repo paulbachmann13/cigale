@@ -31,6 +31,15 @@ const PATHS = {
   sign: ['M3 17c3-6 5-9 6-9s-2 8 0 8 3-4 5-4 1 3 3 3', 'M3 21h18'],
   tools: ['M15 4a4 4 0 0 0-4 5L4 16l4 4 7-7a4 4 0 0 0 5-4l-3 2-2-2 2-3z'],
   redact: ['M4 6h16v12H4z', 'M7 10h10', 'M7 14h6'],
+  split: ['M5 4h14v6H5z', 'M5 14h14v6H5z', 'M3 12h4', 'M10 12h4', 'M17 12h4'],
+  crop: ['M7 3v14h14', 'M3 7h14v14'],
+  watermark: ['M5 4h14v16H5z', 'M8 15l8-6', 'M8 11l8 6'],
+  headerfooter: ['M5 4h14v16H5z', 'M5 8h14', 'M5 16h14'],
+  lock: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
+  unlock: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 6.5-1.8'],
+  ocr: ['M4 8V4h4', 'M16 4h4v4', 'M20 16v4h-4', 'M8 20H4v-4', 'M8 12h8', 'M8 9h8', 'M8 15h5'],
+  region: ['M4 9V4h5', 'M15 4h5v5', 'M20 15v5h-5', 'M9 20H4v-5', 'M9 9h6v6H9z'],
+  image: ['M4 5h16v14H4z', 'M4 16l5-5 4 4 3-3 4 4', 'M15.5 9.5a1 1 0 1 0 0-.01'],
 } as const;
 
 export type IconName = keyof typeof PATHS;

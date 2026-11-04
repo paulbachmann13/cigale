@@ -68,6 +68,12 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 - [ ] Dans l'application Mac (pas seulement le site) : l'OCR marche, y compris sans réseau (Wi-Fi coupé).
 - [ ] Un document de 20 pages : durée acceptable, « Annuler » rend la main tout de suite.
 
+## Version 1.3 — Accueil « Tous les outils » et extraction de zone
+
+- [ ] Accueil : les tuiles (Diviser, Recadrer, Filigrane, En-têtes, Protéger, Retirer la protection, Caviarder, OCR, Exporter en images, Extraire une zone) demandent un PDF puis ouvrent l'outil ; avec un document déjà ouvert, l'outil s'ouvre directement.
+- [ ] Extraire une zone : tracer un rectangle sur une page d'un vrai document ; vectoriel (texte sélectionnable, bonne taille) et image (netteté) ; ouvrir le résultat dans Aperçu et Acrobat.
+- [ ] Page tournée (90°) et page avec CropBox : la zone extraite est bien celle qu'on a tracée.
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

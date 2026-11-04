@@ -11,6 +11,7 @@ import type { ProtectOptions, ProtectResult } from './protect-ops';
 import type { RedactOptions, RedactResult, RedactedPage } from './redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from './stamp-ops';
 import type { OcrPage } from './ocr-ops';
+import type { RegionRect } from './region-ops';
 import type { MergeOptions, MergeSource, Part } from './doc-ops';
 import type { MergeResult, WorkerRequest, WorkerResponse } from './ops.worker';
 import type { Inspection, OpResult, PageOp } from './page-ops';
@@ -78,6 +79,8 @@ export const fillFormOp = (bytes: Uint8Array, values: FormValue[], password: str
 export const ocrLayerOp = (bytes: Uint8Array, pages: OcrPage[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'ocrLayer', bytes, pages, password, expectedPages });
 export const watermarkOp = (bytes: Uint8Array, options: WatermarkOptions, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'watermark', bytes, options, password, expectedPages });
 export const headerFooterOp = (bytes: Uint8Array, options: HeaderFooterOptions, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'headerFooter', bytes, options, password, expectedPages });
+export const regionOp = (bytes: Uint8Array, page: number, rect: RegionRect, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'region', bytes, page, rect, password, expectedPages });
+export const regionImageOp = (png: Uint8Array, widthPt: number, heightPt: number) => run<Uint8Array>({ kind: 'regionImage', png, widthPt, heightPt });
 export const cropOp = (bytes: Uint8Array, margins: CropMargins, pages: number[] | undefined, password: string | undefined, expectedPages: number) => run<CropResult>({ kind: 'crop', bytes, margins, pages, password, expectedPages });
 export const redactOp = (bytes: Uint8Array, pages: RedactedPage[], options: RedactOptions, password: string | undefined, expectedPages: number) => run<RedactResult>({ kind: 'redact', bytes, pages, options, password, expectedPages });
 export const protectOp = (bytes: Uint8Array, options: ProtectOptions, password: string | undefined, expectedPages: number) => run<ProtectResult>({ kind: 'protect', bytes, options, password, expectedPages });

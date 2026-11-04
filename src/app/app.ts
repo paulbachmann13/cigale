@@ -16,7 +16,7 @@ import { askPassword, askUnsaved, confirmDialog, showMessage } from './dialogs';
 import { clear, h, toast } from './dom';
 import { Editing } from './editing';
 import { type PickedFile, filesFromDrop, pickPdfs, readFromHandle } from './files';
-import { buildHome, openSettings, openVersions, openWhatsNew } from './home';
+import { buildHome, type DocToolId, openSettings, openVersions, openWhatsNew } from './home';
 import { type IconName, icon } from './icons';
 import { type MenuItem, showMenu } from './menu';
 import { buildOutline } from './outline';
@@ -27,6 +27,7 @@ import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
 import { openOcrDialog } from './ocr';
 import { applyRedaction } from './redact';
+import { openRegionDialog } from './region';
 import { askSignature } from './signature';
 import { openCropDialog, openProtectDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
 import { type Session, isDirty } from './session';
@@ -110,8 +111,10 @@ export class App {
     this.fileInput.addEventListener('change', () => {
       const files = Array.from(this.fileInput.files ?? []).map((file) => ({ file }));
       this.fileInput.value = '';
-      this.openPicked(files);
+      void this.openPicked(files).then(() => this.runPendingTool());
     });
+    // Sélecteur de repli fermé sans choix : l'outil demandé depuis l'accueil est abandonné.
+    this.fileInput.addEventListener('cancel', () => (this.pendingTool = null));
     this.buildShell();
     this.bindGlobalEvents();
     this.showHome();
@@ -283,20 +286,67 @@ export class App {
     menu.id = 'file-menu-list';
   }
 
+  /** Les outils qui agissent sur un document, une seule définition pour le menu « Outils » et pour l'accueil. */
+  private toolRunners(s: Session): Record<DocToolId, () => void> {
+    const busy = (text: string, onCancel: () => void) => this.showOverlay(text, onCancel);
+    const idle = () => this.hideLoading();
+    return {
+      split: () => void this.openSplit(),
+      crop: () => openCropDialog(s, this.editing),
+      watermark: () => openWatermarkDialog(s, this.editing),
+      headerfooter: () => openHeaderFooterDialog(s, this.editing),
+      protect: () => openProtectDialog(s, this.editing),
+      unprotect: () => void this.confirmUnprotect(s),
+      redact: () => this.startRedaction(),
+      ocr: () => openOcrDialog(s, this.editing, busy, idle),
+      exportimages: () => openExportImagesDialog(s, this.editing, busy, idle),
+      region: () => {
+        this.setAnnotTool('clip');
+        toast(t.docTools.regionStart);
+      },
+    };
+  }
+
+  /** Outil demandé depuis l'accueil, en attente du PDF choisi (sélecteur de repli : le choix arrive plus tard, par « change »). */
+  private pendingTool: { id: DocToolId; at: number } | null = null;
+
+  /** Depuis l'accueil : on choisit d'abord le PDF, puis l'outil s'ouvre dessus (comme « Tous les outils » d'Acrobat). */
+  async runTool(id: DocToolId): Promise<void> {
+    if (this.active && !this.workspace.hidden) return void (await this.runToolOnActive(id));
+    this.pendingTool = { id, at: Date.now() };
+    await this.openDialog();
+    if (this.active && !this.workspace.hidden) await this.runPendingTool();
+  }
+
+  private async runPendingTool(): Promise<void> {
+    const p = this.pendingTool;
+    this.pendingTool = null;
+    if (p && Date.now() - p.at < 120_000 && this.active && !this.workspace.hidden) await this.runToolOnActive(p.id);
+  }
+
+  private async runToolOnActive(id: DocToolId): Promise<void> {
+    const s = this.active;
+    if (!s) return;
+    if (isDirtyForm(s)) await this.editing.flushForm(s);
+    this.toolRunners(s)[id]();
+  }
+
   private openToolsMenu() {
     const s = this.active;
     if (!s) return;
     const anchor = this.workspace.querySelector<HTMLElement>('#btn-tools')!;
+    const run = this.toolRunners(s);
     showMenu(
       [
-        { id: 'tool-watermark', label: t.docTools.watermark, run: () => openWatermarkDialog(s, this.editing) },
-        { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: () => openHeaderFooterDialog(s, this.editing) },
-        { id: 'tool-crop', label: t.docTools.crop, run: () => openCropDialog(s, this.editing) },
-        { id: 'tool-protect', label: t.docTools.protect, run: () => openProtectDialog(s, this.editing), separatorBefore: true },
-        { id: 'tool-unprotect', label: t.docTools.unprotect, run: () => void this.confirmUnprotect(s) },
-        { id: 'tool-redact', label: t.docTools.redact, run: () => this.startRedaction(), separatorBefore: true },
-        { id: 'tool-ocr', label: t.docTools.ocr, run: () => openOcrDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()), separatorBefore: true },
-        { id: 'tool-export-images', label: t.docTools.exportImages, run: () => openExportImagesDialog(s, this.editing, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading()) },
+        { id: 'tool-watermark', label: t.docTools.watermark, run: run.watermark },
+        { id: 'tool-headerfooter', label: t.docTools.headerFooter, run: run.headerfooter },
+        { id: 'tool-crop', label: t.docTools.crop, run: run.crop },
+        { id: 'tool-protect', label: t.docTools.protect, run: run.protect, separatorBefore: true },
+        { id: 'tool-unprotect', label: t.docTools.unprotect, run: run.unprotect },
+        { id: 'tool-redact', label: t.docTools.redact, run: run.redact, separatorBefore: true },
+        { id: 'tool-ocr', label: t.docTools.ocr, run: run.ocr, separatorBefore: true },
+        { id: 'tool-export-images', label: t.docTools.exportImages, run: run.exportimages },
+        { id: 'tool-region', label: t.docTools.region, run: run.region },
       ],
       anchor,
     );
@@ -478,13 +528,11 @@ export class App {
   // ───────────────────────── ouverture des fichiers ─────────────────────────
 
   async openDialog(): Promise<void> {
-    this.openPicked(await pickPdfs(this.fileInput));
+    await this.openPicked(await pickPdfs(this.fileInput));
   }
 
-  openPicked(files: PickedFile[]): void {
-    void (async () => {
-      for (const f of files) await this.openFile(f.file, f.handle, files.length > 1);
-    })();
+  async openPicked(files: PickedFile[]): Promise<void> {
+    for (const f of files) await this.openFile(f.file, f.handle, files.length > 1);
   }
 
   /** Application Mac : ouvre des chemins (double-clic dans le Finder, « Ouvrir avec »). */
@@ -498,7 +546,7 @@ export class App {
         await showMessage(t.errors.title, fmt(t.errors.unknown, { name: path.split('/').pop() ?? path, detail: String((err as Error).message ?? err) }));
       }
     }
-    this.openPicked(files);
+    void this.openPicked(files);
   }
 
   /** Branche ce qui n'existe que dans l'application Mac : fichiers du Finder et fermeture de la fenêtre. */
@@ -981,6 +1029,7 @@ export class App {
     this.annotBar.append(
       mk('select', 'pointer'),
       mk('redact', 'redact'),
+      mk('clip', 'region'),
       mk('sign', 'sign'),
       h('span', { class: 'sep' }),
       mk('highlight', 'highlight'),
@@ -1099,6 +1148,10 @@ export class App {
         this.syncStyleUi();
       },
       notify: (m) => toast(m),
+      region: (page, rect) => {
+        this.setAnnotTool('select');
+        openRegionDialog(this.toolsHost(), s, page, rect);
+      },
     };
   }
 

@@ -13,6 +13,21 @@ import { isTauri } from './tauri-files';
 import { type IconName, icon } from './icons';
 import { type DefaultZoom, type ThemeChoice, loadSettings, saveSettings } from './settings';
 
+export type DocToolId = 'split' | 'crop' | 'watermark' | 'headerfooter' | 'protect' | 'unprotect' | 'redact' | 'ocr' | 'exportimages' | 'region';
+
+const TOOL_TILES: Record<DocToolId, IconName> = {
+  split: 'split',
+  crop: 'crop',
+  watermark: 'watermark',
+  headerfooter: 'headerfooter',
+  protect: 'lock',
+  unprotect: 'unlock',
+  redact: 'redact',
+  ocr: 'ocr',
+  exportimages: 'image',
+  region: 'region',
+};
+
 /** Écran d'accueil (même disposition que Grillon) : colonne colorée à gauche, tuiles d'actions et récents à droite. */
 export function buildHome(app: App): HTMLElement {
   const recents = loadRecents();
@@ -81,6 +96,16 @@ export function buildHome(app: App): HTMLElement {
       { class: 'tiles' },
       tile('home-open', 'open', t.home.open, t.home.openHint, () => void app.openDialog()),
       tile('home-combine', 'duplicate', t.home.combine, t.home.combineHint, () => app.openCombine()),
+    ),
+    h('h2', {}, t.home.allTools),
+    h('p', { class: 'hint' }, t.home.allToolsHint),
+    h(
+      'div',
+      { class: 'tiles', id: 'home-tools' },
+      ...(Object.keys(TOOL_TILES) as DocToolId[]).map((id) => {
+        const [iconName, text] = [TOOL_TILES[id], t.home.tools[id]] as const;
+        return tile(`home-tool-${id}`, iconName, text.title, text.hint, () => void app.runTool(id));
+      }),
     ),
     h('h2', {}, t.home.recents),
     recents.length ? list : h('p', { class: 'empty', id: 'no-recents' }, t.home.noRecents),

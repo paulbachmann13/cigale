@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
 const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string };
-import { gotoHome, openPdf, waitFirstPage } from './helpers';
+import { fixture, gotoHome, openPdf, waitFirstPage, withoutFilePickers } from './helpers';
 
 test('accueil : version, boutons et aucune requête externe', async ({ page }) => {
   const external: string[] = [];
@@ -37,4 +37,16 @@ test('accueil : un clic sur « Version » ouvre les Nouveautés', async ({ page 
   await expect(page.locator('#dialog-news')).toBeVisible();
   await expect(page.locator('#dialog-news')).toContainText(version);
   await expect(page.locator('#news-check-update')).toHaveCount(0); // seulement dans l'application Mac
+});
+
+test('accueil : « Tous les outils » — on choisit un PDF, puis l’outil s’ouvre dessus', async ({ page }) => {
+  await withoutFilePickers(page);
+  await gotoHome(page);
+  const ids = ['split', 'crop', 'watermark', 'headerfooter', 'protect', 'unprotect', 'redact', 'ocr', 'exportimages'];
+  for (const id of ids) await expect(page.locator(`#home-tool-${id}`)).toBeVisible();
+  const chooser = page.waitForEvent('filechooser');
+  await page.click('#home-tool-crop');
+  await (await chooser).setFiles(fixture('simple-3p.pdf'));
+  await waitFirstPage(page);
+  await expect(page.locator('#dialog-crop')).toBeVisible();
 });
