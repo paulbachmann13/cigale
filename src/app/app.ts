@@ -28,7 +28,7 @@ import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
 import { pickImageFile, prepareImage } from './image-import';
-import { askInsertPaper, openNotebookDialog } from './notebook';
+import { askInsertPages, openNotebookDialog } from './notebook';
 import { openOcrDialog } from './ocr';
 import { applyRedaction } from './redact';
 import { openRegionDialog } from './region';
@@ -412,9 +412,20 @@ export class App {
     });
   }
 
-  private async insertPaper(s: Session): Promise<void> {
-    const r = await askInsertPaper();
-    if (r) await this.editing.insertPaper(s, r.side, r.template, r.count);
+  /** « Insérer des pages… » : papier, copie d'une page ou pages d'un autre PDF, avant ou après une page. */
+  private async insertPages(s: Session): Promise<void> {
+    if (isDirtyForm(s)) await this.editing.flushForm(s);
+    const pages = this.editing.targetPages(s);
+    const target = pages[pages.length - 1];
+    let pageSize: [number, number] = [595.28, 841.89];
+    try {
+      const v = (await s.view.pdf.getPage(target + 1)).view;
+      pageSize = [Math.abs(v[2] - v[0]), Math.abs(v[3] - v[1])];
+    } catch {
+      /* A4 par défaut */
+    }
+    const choice = await askInsertPages({ pageCount: s.view.pageCount, target, pageSize });
+    if (choice) await this.editing.insertPages(s, choice);
   }
 
   async openCombine(): Promise<void> {
@@ -428,13 +439,13 @@ export class App {
   }
 
   private openInsertMenu(anchor: HTMLElement) {
-    const none = (this.active?.selection.length ?? 0) === 0;
     showMenu(
       [
-        { id: 'insert-blank-before', label: t.pages.insertBlankBefore, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'before')) },
-        { id: 'insert-blank-after', label: t.pages.insertBlankAfter, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'after')) },
-        { id: 'insert-paper', label: t.notebook.menu, disabled: none, run: () => void this.withActive((s) => this.insertPaper(s)), separatorBefore: true },
-        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, 'after')) },
+        { id: 'insert-pages', label: t.notebook.menu, run: () => void this.withActive((s) => this.insertPages(s)) },
+        { id: 'insert-blank-before', label: t.pages.insertBlankBefore, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'before')), separatorBefore: true },
+        { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'after')) },
+        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, Math.max(...this.editing.targetPages(s)) + 1)), separatorBefore: true },
+        { id: 'paste-image', label: t.annot.pasteImage, run: () => void this.pasteImageFromClipboard() },
       ],
       anchor,
     );
@@ -452,8 +463,8 @@ export class App {
         { id: 'extract', label: t.pages.extract, run: () => void this.editing.extract(s) },
         { id: 'insert-blank-before', label: t.pages.insertBlankBefore, run: () => void this.editing.insertBlank(s, 'before'), separatorBefore: true },
         { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.editing.insertBlank(s, 'after') },
-        { id: 'insert-paper', label: t.notebook.menu, run: () => void this.insertPaper(s) },
-        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.editing.insertFromFile(s, 'after') },
+        { id: 'insert-pages', label: t.notebook.menu, run: () => void this.insertPages(s) },
+        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.editing.insertFromFile(s, Math.max(...this.editing.targetPages(s)) + 1) },
         { id: 'move-start', label: t.pages.moveStart, run: () => void this.editing.moveToStart(s), separatorBefore: true },
         { id: 'move-end', label: t.pages.moveEnd, run: () => void this.editing.moveToEnd(s) },
         { id: 'move-to', label: t.pages.moveTo, run: () => void this.editing.moveTo(s) },
@@ -475,6 +486,16 @@ export class App {
         e.preventDefault();
         e.returnValue = t.confirm.leavePage;
       }
+    });
+    // Coller une image (capture d'écran, photo copiée…) : elle est posée au milieu de la page affichée
+    document.addEventListener('paste', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!this.active || this.workspace.hidden || document.querySelector('dialog[open]')) return;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return; // du texte qu'on tape : le collage normal
+      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      if (!file) return;
+      e.preventDefault();
+      void this.pasteImage(file);
     });
     window.addEventListener('dragover', (e) => {
       if (e.dataTransfer?.types.includes('Files')) {
@@ -1122,6 +1143,43 @@ export class App {
     this.toolButtons.image.onclick = () => void this.chooseImage();
   }
 
+  /** Pose une image (collée) au milieu de la page affichée, sélectionnée pour qu'on puisse la déplacer ou la redimensionner. */
+  async pasteImage(file: File): Promise<boolean> {
+    const s = this.active;
+    if (!s) return false;
+    try {
+      const img = await prepareImage(file);
+      const page = Math.min(Math.max(s.view.page - 1, 0), s.view.pageCount - 1);
+      const [x0, y0, x1, y1] = (await s.view.pdf.getPage(page + 1)).view;
+      const pw = Math.abs(x1 - x0);
+      const w = Math.min(img.width * 0.75, pw * 0.6);
+      const hgt = (w * img.height) / img.width;
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      this.setAnnotTool('select'); // l'image collée sera sélectionnée après l'ajout
+      return await this.editing.addAnnots(s, [{ kind: 'image', page, color: [0, 0, 0], fill: null, opacity: 1, width: 0, contents: '', rect: [cx - w / 2, cy - hgt / 2, cx + w / 2, cy + hgt / 2], image: img.bytes }]);
+    } catch {
+      toast(t.annot.imageFailed);
+      return false;
+    }
+  }
+
+  /** Bouton « Coller une image » (là où Ctrl+V n'existe pas, comme l'iPad) : lit l'image du presse-papiers. */
+  private async pasteImageFromClipboard() {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((x) => x.startsWith('image/'));
+        if (type) {
+          await this.pasteImage(new File([await item.getType(type)], 'image', { type }));
+          return;
+        }
+      }
+    } catch {
+      /* refusé ou indisponible */
+    }
+    toast(t.annot.pasteNone);
+  }
+
   /** Outil « Image » : choisir une image, puis cliquer sur la page pour la poser. */
   private async chooseImage() {
     const file = await pickImageFile();
@@ -1474,8 +1532,9 @@ export class App {
 
   private updateEditUi(s: Session | null) {
     const n = s?.selection.length ?? 0;
-    const need = ['btn-rot-left', 'btn-rot-right', 'btn-duplicate', 'btn-delete', 'btn-extract'];
-    for (const id of need) this.editButtons[id].disabled = n === 0;
+    // pivoter, dupliquer, extraire : s'appliquent à la sélection, sinon à la page affichée ; supprimer exige une sélection
+    for (const id of ['btn-rot-left', 'btn-rot-right', 'btn-duplicate', 'btn-extract']) this.editButtons[id].disabled = !s;
+    this.editButtons['btn-delete'].disabled = n === 0;
     const undo = this.workspace.querySelector<HTMLButtonElement>('#btn-undo')!;
     const redo = this.workspace.querySelector<HTMLButtonElement>('#btn-redo')!;
     undo.disabled = !s?.history.canUndo;

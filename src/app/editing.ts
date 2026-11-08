@@ -8,7 +8,7 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
-import type { PaperTemplate } from '../pdf/notebook-ops';
+import type { InsertChoice } from './notebook';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
@@ -115,7 +115,7 @@ export class Editing {
   }
 
   rotate(s: Session, delta: 90 | -90 | 180): Promise<boolean> {
-    return this.withSelection(s, (pages) => this.run(s, { op: 'rotate', pages, delta }, 'rotate'));
+    return this.withTarget(s, (pages) => this.run(s, { op: 'rotate', pages, delta }, 'rotate'));
   }
 
   async remove(s: Session): Promise<boolean> {
@@ -131,7 +131,7 @@ export class Editing {
   }
 
   duplicate(s: Session): Promise<boolean> {
-    return this.withSelection(s, (pages) => this.run(s, { op: 'duplicate', pages }, 'duplicate'));
+    return this.withTarget(s, (pages) => this.run(s, { op: 'duplicate', pages }, 'duplicate'));
   }
 
   move(s: Session, pages: number[], to: number): Promise<boolean> {
@@ -156,16 +156,18 @@ export class Editing {
   }
 
   insertBlank(s: Session, side: 'before' | 'after'): Promise<boolean> {
-    return this.withSelection(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1 }, 'insertBlank'));
+    return this.withTarget(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1 }, 'insertBlank'));
   }
 
-  /** Insère des pages avec un papier (ligné, quadrillé, Seyès…) avant ou après la sélection. */
-  insertPaper(s: Session, side: 'before' | 'after', template: PaperTemplate, count: number): Promise<boolean> {
-    return this.withSelection(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1, template, count }, 'insertBlank'));
+  /** Insère ce que l'utilisateur a choisi dans « Insérer des pages » (papier, copie d'une page, pages d'un autre PDF). */
+  insertPages(s: Session, choice: InsertChoice): Promise<boolean> {
+    if (choice.kind === 'paper') return this.run(s, { op: 'insertBlank', at: choice.at, template: choice.template, color: choice.color, count: choice.count }, 'insertBlank');
+    if (choice.kind === 'copy') return this.run(s, { op: 'insertCopy', at: choice.at, from: choice.from, count: choice.count }, 'insertBlank');
+    return this.insertFromFile(s, choice.at);
   }
 
   /** Insère les pages d'un autre PDF (choisi par l'utilisateur) avant ou après la sélection (ou à la fin). */
-  async insertFromFile(s: Session, side: 'before' | 'after'): Promise<boolean> {
+  async insertFromFile(s: Session, at: number): Promise<boolean> {
     const file = await pickOnePdf();
     if (!file) return false;
     const other = new Uint8Array(await file.arrayBuffer());
@@ -173,8 +175,6 @@ export class Editing {
     for (let attempt = 0; ; attempt++) {
       try {
         const info = await inspectDocument(other, password).promise;
-        const sel = s.selection;
-        const at = sel.length === 0 ? s.view.pageCount : side === 'before' ? sel[0] : sel[sel.length - 1] + 1;
         const ok = await this.run(s, { op: 'insertFrom', at, other, otherPassword: password }, 'insertFile');
         if (ok) toast(plural(info.pageCount, t.pages.insertedFile));
         return ok;
@@ -194,7 +194,7 @@ export class Editing {
 
   /** Extrait la sélection dans un nouveau document (nouvel onglet, pas encore enregistré). */
   extract(s: Session): Promise<boolean> {
-    return this.withSelection(s, async (pages) => {
+    return this.withTarget(s, async (pages) => {
       if (!(await this.flushForm(s))) return false;
       const handle = extractOperation(s.history.current, pages, s.password, s.view.pageCount);
       this.host.busy(t.busy.working, () => handle.cancel());
@@ -213,6 +213,15 @@ export class Editing {
         return false;
       }
     });
+  }
+
+  /** Pages visées : la sélection, sinon la page affichée (on peut insérer, copier, tourner « ici » sans avoir rien sélectionné). */
+  targetPages(s: Session): number[] {
+    return s.selection.length ? s.selection : [Math.min(Math.max(s.view.page - 1, 0), s.view.pageCount - 1)];
+  }
+
+  private withTarget(s: Session, fn: (pages: number[]) => Promise<boolean>): Promise<boolean> {
+    return fn(this.targetPages(s));
   }
 
   private async withSelection(s: Session, fn: (pages: number[]) => Promise<boolean>): Promise<boolean> {

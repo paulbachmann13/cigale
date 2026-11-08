@@ -20,7 +20,7 @@ import {
   degrees,
 } from '@cantoo/pdf-lib';
 import { moveOrder, normalizeSelection } from '../data/page-order';
-import { type PaperTemplate, drawPaper, sharePaper } from './notebook-ops';
+import { type PaperColor, type PaperTemplate, drawPaper, sharePaper } from './notebook-ops';
 import { type Permissions, RESTRICTIVE, getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
 
 export type PageOp =
@@ -28,7 +28,9 @@ export type PageOp =
   | { op: 'delete'; pages: number[] }
   | { op: 'duplicate'; pages: number[] }
   | { op: 'move'; pages: number[]; to: number }
-  | { op: 'insertBlank'; at: number; /** Papier des nouvelles pages (vierge si absent) et leur nombre (1 si absent). */ template?: PaperTemplate; count?: number }
+  | { op: 'insertBlank'; at: number; /** Papier des nouvelles pages (vierge si absent), sa couleur et leur nombre (1 si absent). */ template?: PaperTemplate; color?: PaperColor; count?: number }
+  /** Insère `count` copies de la page `from` (du même document) à la position `at`. */
+  | { op: 'insertCopy'; at: number; from: number; count?: number }
   | { op: 'insertFrom'; at: number; other: Uint8Array; otherPassword?: string; otherPages?: number[] };
 
 export interface OpResult {
@@ -207,18 +209,31 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, 
       const rot = ref.getRotation().angle;
       // Avec un papier, la page est droite : pour une voisine tournée de 90° ou 270°, on échange largeur et hauteur au lieu de la tourner
       // (sinon les lignes du papier apparaîtraient à la verticale).
-      const upright = !!op.template && rot % 180 !== 0;
+      const upright = !!(op.template || op.color) && rot % 180 !== 0;
       selection = [];
       let firstNew: PDFPage | undefined;
       for (let k = 0; k < many; k++) {
         const page = doc.insertPage(at + k, upright ? [height, width] : [width, height]);
         if (rot && !upright) page.setRotation(degrees(rot));
-        if (op.template) {
+        if (op.template || op.color) {
           if (!firstNew) {
-            drawPaper(page, op.template);
+            drawPaper(page, op.template ?? 'blank', op.color);
             firstNew = page;
           } else sharePaper(firstNew, page);
         }
+        selection.push(at + k);
+      }
+      break;
+    }
+    case 'insertCopy': {
+      if (!(op.from >= 0 && op.from < count)) throw new PageOpError('structure');
+      const many = Number.isFinite(op.count) ? Math.min(Math.max(Math.floor(op.count!), 1), 200) : 1;
+      const at = Math.min(Math.max(op.at, 0), count);
+      // un appel par copie : copier la même page plusieurs fois en un seul appel pourrait renvoyer deux fois le même objet de page
+      selection = [];
+      for (let k = 0; k < many; k++) {
+        const [copy] = await doc.copyPages(doc, [op.from]);
+        doc.insertPage(at + k, copy);
         selection.push(at + k);
       }
       break;

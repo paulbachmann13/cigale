@@ -91,3 +91,69 @@ describe('papier partagé et cas limites', () => {
     expect(doc.getPage(1).getSize().height).toBeCloseTo(width, 1);
   });
 });
+
+import { PAPER_COLORS, PAPER_COLOR_NAMES, paperPrims } from '../../src/data/paper';
+
+describe('tous les papiers et couleurs', () => {
+  it('chaque papier (sauf l’uni) a des formes, dans les limites de la page', () => {
+    for (const template of PAPER_TEMPLATES) {
+      const prims = paperPrims(template, 595.28, 841.89);
+      if (template === 'blank') {
+        expect(prims).toHaveLength(0);
+        continue;
+      }
+      expect(prims.length, template).toBeGreaterThan(5);
+      for (const p of prims) {
+        const xs = p.k === 'line' ? [p.x1, p.x2] : [p.x];
+        const ys = p.k === 'line' ? [p.y1, p.y2] : [p.y];
+        for (const x of xs) expect(x).toBeGreaterThanOrEqual(-0.01), expect(x).toBeLessThanOrEqual(595.3);
+        for (const y of ys) expect(y).toBeGreaterThanOrEqual(-0.01), expect(y).toBeLessThanOrEqual(841.9);
+      }
+    }
+  });
+  it('musique : des portées de 5 lignes ; Cornell : le cadre est dessiné ; millimétré : trois épaisseurs', () => {
+    expect(paperPrims('music', 595.28, 841.89).length % 5).toBe(0);
+    const cornell = paperPrims('cornell', 595.28, 841.89).filter((p) => p.k === 'line' && p.w >= 0.9);
+    expect(cornell).toHaveLength(3); // titre, résumé, colonne de mots-clés
+    expect(new Set(paperPrims('mm', 595.28, 841.89).map((p) => (p.k === 'line' ? p.w : 0))).size).toBe(3);
+  });
+  it('papier de couleur : le fond est dans le PDF, pour chaque couleur ; le blanc n’ajoute rien', async () => {
+    for (const color of PAPER_COLOR_NAMES.filter((c) => c !== 'white')) {
+      const bytes = await createNotebook({ template: 'blank', color, size: 'a5', landscape: false, pages: 2 });
+      const doc = await PDFDocument.load(bytes);
+      const ref = doc.getPage(0).node.Contents();
+      expect(ref).toBeTruthy();
+      expect((await readPages(bytes)).length).toBe(2);
+      void PAPER_COLORS[color];
+    }
+    const white = await createNotebook({ template: 'blank', size: 'a5', landscape: false, pages: 1 });
+    const cream = await createNotebook({ template: 'blank', color: 'cream', size: 'a5', landscape: false, pages: 1 });
+    expect(cream.length).toBeGreaterThan(white.length);
+  });
+});
+
+describe('insérer une copie d’une page', () => {
+  it('2 copies de la page 2, après la page 1 : 4 pages, copies distinctes et sélectionnées', async () => {
+    const src = await makePdf(3);
+    const r = await applyOp(src, { op: 'insertCopy', at: 1, from: 1, count: 2 }, undefined, 3);
+    expect(r.pageCount).toBe(5);
+    expect(r.selection).toEqual([1, 2]);
+    const pages = await readPages(r.bytes);
+    expect(pages[1].text).toBe(pages[3].text); // la copie a le même texte que la page 2 d'origine (maintenant en 4)
+    expect(pages[2].text).toBe(pages[3].text);
+    expect(pages[0].text).not.toBe(pages[1].text);
+    const doc = await PDFDocument.load(r.bytes);
+    const refs = new Set(doc.getPages().map((p) => p.ref.toString()));
+    expect(refs.size).toBe(5); // aucune page n'apparaît deux fois dans l'arbre
+  });
+  it('page source inexistante : refusé', async () => {
+    await expect(applyOp(await makePdf(2), { op: 'insertCopy', at: 0, from: 5 }, undefined, 2)).rejects.toMatchObject({ name: 'structure' });
+  });
+  it('insérer au tout début et à la toute fin', async () => {
+    const start = await applyOp(await makePdf(2), { op: 'insertCopy', at: 0, from: 1 }, undefined, 2);
+    expect(start.selection).toEqual([0]);
+    const end = await applyOp(await makePdf(2), { op: 'insertBlank', at: 2, template: 'dots', color: 'cream' }, undefined, 2);
+    expect(end.pageCount).toBe(3);
+    expect(end.selection).toEqual([2]);
+  });
+});

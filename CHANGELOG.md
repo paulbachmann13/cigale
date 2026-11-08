@@ -2,6 +2,16 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.6.0] — 2026-11-08
+
+### Ajouté
+- **Nouveau carnet avec aperçus** : on voit chaque papier (vignettes dessinées comme les vraies pages) et on clique pour choisir. Neuf papiers : uni, ligné, quadrillé 5 mm, pointillé, Seyès, **Cornell** (pour les cours), **portées de musique**, **millimétré** et **liste à cocher**. Cinq couleurs de papier : blanc, crème, jaune pâle, vert pâle, bleu pâle. Les aperçus suivent le format et l'orientation choisis.
+- **Insérer des pages, enfin partout** : « Insérer des pages… » propose une page avec un papier (avec aperçus), **la copie d'une page du document** (une ou plusieurs), ou les pages d'un autre PDF, **avant ou après une page précise**, au tout début ou à la fin.
+- **Coller une image** : Ctrl+V (⌘V) avec une capture d'écran ou une image copiée la pose au milieu de la page affichée, prête à être déplacée ou redimensionnée. Le menu « Insérer » a aussi « Coller une image du presse-papiers » (utile sur iPad).
+
+### Modifié
+- Pivoter, dupliquer, extraire, insérer : sans page sélectionnée, ces boutons agissent sur la **page affichée** au lieu d'être grisés.
+
 ## [1.5.0] — 2026-11-08
 
 ### Ajouté
