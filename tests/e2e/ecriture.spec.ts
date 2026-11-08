@@ -110,6 +110,51 @@ test('chaque stylo retrouve sa couleur et son épaisseur', async ({ page }) => {
   expect((await color()).color[2]).toBeGreaterThan(0.9); // le bleu choisi est retenu pour le surligneur
 });
 
+test('un trait lent (plus de 1,5 s) n’est pas coupé par l’envoi du précédent au document', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await wave(page, pb.x + 100, pb.y + 300);
+  await page.mouse.move(pb.x + 100, pb.y + 400);
+  await page.mouse.down();
+  await page.mouse.move(pb.x + 140, pb.y + 410, { steps: 5 });
+  await page.waitForTimeout(2200); // le délai d'envoi du 1er trait est passé : il doit attendre la fin de celui-ci
+  await page.mouse.move(pb.x + 260, pb.y + 420, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(2);
+  const last = (await annots(page)).map((a) => a.strokes![0].length);
+  expect(Math.max(...last)).toBeGreaterThan(10); // le trait lent est entier
+});
+
+test('Rétablir reste possible même si l’envoi différé passe entre-temps', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await wave(page, pb.x + 100, pb.y + 300);
+  await wave(page, pb.x + 100, pb.y + 340);
+  await page.keyboard.press('Meta+z');
+  await expect.poll(() => pending(page)).toBe(1);
+  await page.waitForTimeout(2200); // envoi du trait restant
+  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+});
+
+test('la gomme ne supprime rien si le geste est annulé par le système', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await wave(page, pb.x + 100, pb.y + 300);
+  await page.click('#tool-eraser');
+  await page.evaluate(
+    ({ x, y }) => {
+      const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
+      const mk = (type: string, dy: number) => new PointerEvent(type, { pointerId: 5, pointerType: 'pen', isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y + dy, pressure: 0.5, button: 0, buttons: 1 });
+      layer.dispatchEvent(mk('pointerdown', -20));
+      layer.dispatchEvent(mk('pointermove', 0));
+      layer.dispatchEvent(mk('pointercancel', 0));
+    },
+    { x: pb.x + 160, y: pb.y + 300 },
+  );
+  expect(await pending(page)).toBe(1); // le trait est toujours là
+  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+});
+
 test('stylet : la pression est gardée dans le fichier ; la plume s’épaissit avec la pression', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');

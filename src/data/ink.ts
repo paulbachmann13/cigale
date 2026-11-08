@@ -70,10 +70,15 @@ export function inkOutline(points: Pt[], pressures: number[] | undefined, width:
 
 /** Rectangle qui contient tout le trait, épaisseur comprise. */
 export function strokeBounds(points: Pt[], width: number): Rect {
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity; // boucle : un très long trait ferait dépasser la pile avec Math.min(...)
+  for (const [x, y] of points) {
+    if (x < x1) x1 = x;
+    if (x > x2) x2 = x;
+    if (y < y1) y1 = y;
+    if (y > y2) y2 = y;
+  }
   const m = width * 0.9 + 0.5; // la pression peut élargir le trait au-delà de l'épaisseur de base
-  return [Math.min(...xs) - m, Math.min(...ys) - m, Math.max(...xs) + m, Math.max(...ys) + m];
+  return [x1 - m, y1 - m, x2 + m, y2 + m];
 }
 
 /** Distance d'un point à un segment. */

@@ -46,7 +46,7 @@ export class InkStore {
   take(): InkStroke[] {
     const all = this.list;
     this.list = [];
-    this.undone = [];
+    if (all.length) this.undone = []; // sans trait à envoyer, ce qu'on avait annulé reste rétablissable
     return all;
   }
   /** L'écriture a échoué : on les remet, pour ne rien perdre. */

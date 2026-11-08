@@ -72,6 +72,9 @@ export class Annotator {
   private erasing = new Map<string, Annot>();
   private inkTimer: number | undefined;
   private paintQueued = false;
+  private paintFrame = 0;
+  /** Traits en attente que la gomme vient de toucher (supprimés au relâchement seulement : un geste annulé ne supprime rien). */
+  private erasingPending = new Set<InkStroke>();
   private annots: Annot[] = [];
   private selectedId: string | null = null;
   private layers = new Map<number, HTMLElement>();
@@ -88,6 +91,7 @@ export class Annotator {
 
   destroy() {
     window.clearTimeout(this.inkTimer);
+    cancelAnimationFrame(this.paintFrame);
     this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove()));
     this.inkCanvases.clear();
     this.closeEditor();
@@ -344,7 +348,11 @@ export class Annotator {
   private scheduleInkFlush(ms: number) {
     window.clearTimeout(this.inkTimer);
     if (!this.ink.hasPending) return;
-    this.inkTimer = window.setTimeout(() => void this.host.flushInk(), ms);
+    this.inkTimer = window.setTimeout(() => {
+      // jamais en plein tracé : le rechargement du document ferait perdre le trait en cours
+      if (this.live || this.erasing.size || this.erasingPending.size) this.scheduleInkFlush(500);
+      else void this.host.flushInk();
+    }, ms);
   }
 
   refreshInk() {
@@ -373,6 +381,7 @@ export class Annotator {
     const liveHere = this.live && this.live.page === n - 1 ? this.live : null;
     const erasedHere = [...this.erasing.values()].filter((a) => a.page === n - 1);
     if (strokes.length === 0 && !liveHere && erasedHere.length === 0 && !this.inkCanvases.has(n)) return;
+    // (un trait que la gomme a touché reste affiché, en rouge, jusqu'au relâchement)
     const c = this.inkCanvasesFor(n);
     if (!c) return;
     const w = layer.clientWidth;
@@ -392,6 +401,7 @@ export class Annotator {
       if (liveHere) all.push({ s: { points: liveHere.points, pressures: liveHere.usesPressure ? liveHere.pressures : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
       for (const { s } of all) {
         if ((PENS[s.pen].blend === 'Multiply') !== multiply) continue;
+        if (this.erasingPending.has(s as InkStroke)) continue; // dessiné en rouge plus bas
         const poly = toScreen(inkOutline(s.points, s.pressures, s.width, s.pen));
         g.globalAlpha = PENS[s.pen].opacity;
         g.fillStyle = rgbToCss(s.color);
@@ -401,6 +411,15 @@ export class Annotator {
         g.fill();
       }
       if (!multiply) {
+        g.globalAlpha = 0.55;
+        g.fillStyle = '#d9231a';
+        for (const s of strokes) {
+          if (!this.erasingPending.has(s)) continue;
+          g.beginPath();
+          toScreen(inkOutline(s.points, s.pressures, s.width, s.pen)).forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+          g.closePath();
+          g.fill();
+        }
         // gomme : les traits déjà enregistrés qu'elle va supprimer apparaissent barrés en rouge
         g.globalAlpha = 0.55;
         g.strokeStyle = '#d9231a';
@@ -423,13 +442,15 @@ export class Annotator {
   private queuePaint(n: number) {
     if (this.paintQueued) return;
     this.paintQueued = true;
-    requestAnimationFrame(() => {
+    this.paintFrame = requestAnimationFrame(() => {
       this.paintQueued = false;
       this.paintInk(n);
     });
   }
 
   private beginInk(e: PointerEvent, layer: HTMLElement, n: number) {
+    if (!e.isPrimary) return; // un 2ᵉ doigt pendant un tracé ne doit rien casser
+    window.clearTimeout(this.inkTimer); // pas d'envoi au document pendant qu'on écrit
     if (e.pointerType === 'pen') this.penSeen = true;
     if (e.pointerType === 'touch' && this.penSeen) return this.panWithFinger(e, layer); // doigt = défiler, stylet = écrire
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -503,7 +524,13 @@ export class Annotator {
     const radius = 9 / scale; // 9 pixels d'écran
     const hit = (ev: PointerEvent) => {
       const at = toPdf(ev);
-      let changed = this.ink.removeWhere((s) => s.page === n - 1 && strokeTouched(s.points, s.width, at, radius));
+      let changed = false;
+      for (const s of this.ink.forPage(n - 1)) {
+        if (!this.erasingPending.has(s) && strokeTouched(s.points, s.width, at, radius)) {
+          this.erasingPending.add(s);
+          changed = true;
+        }
+      }
       for (const a of this.annots) {
         if (a.kind !== 'ink' || a.page !== n - 1 || a.replyTo || this.erasing.has(a.id)) continue;
         if ((a.strokes ?? []).some((st) => strokeTouched(st, a.width, at, radius))) {
@@ -517,19 +544,24 @@ export class Annotator {
     const move = (ev: PointerEvent) => {
       for (const c of ev.getCoalescedEvents?.() ?? [ev]) hit(c);
     };
-    const end = () => {
+    const finish = (cancelled: boolean) => {
       layer.removeEventListener('pointermove', move);
-      layer.removeEventListener('pointerup', end);
-      layer.removeEventListener('pointercancel', end);
-      const ids = [...this.erasing.keys()];
+      layer.removeEventListener('pointerup', up);
+      layer.removeEventListener('pointercancel', cancel);
+      const ids = cancelled ? [] : [...this.erasing.keys()];
+      if (!cancelled) this.ink.removeWhere((s) => this.erasingPending.has(s));
       this.erasing.clear();
+      this.erasingPending.clear();
       this.paintInk(n);
       this.host.inkChanged();
       if (ids.length) void this.host.remove(ids);
+      else this.scheduleInkFlush(1500);
     };
+    const up = () => finish(false);
+    const cancel = () => finish(true);
     layer.addEventListener('pointermove', move);
-    layer.addEventListener('pointerup', end);
-    layer.addEventListener('pointercancel', end);
+    layer.addEventListener('pointerup', up);
+    layer.addEventListener('pointercancel', cancel);
   }
 
   // ───────────── surlignage, soulignement, barré : d'après le texte sélectionné ─────────────
