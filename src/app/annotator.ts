@@ -273,7 +273,11 @@ export class Annotator {
 
   private bindLayer(layer: HTMLElement, n: number) {
     // Les doigts posés (même le 2ᵉ, qui n'est pas « principal ») : deux doigts = pincement, pas de défilement ni d'écriture
-    layer.addEventListener('pointerdown', (e) => void (e.pointerType === 'touch' && this.fingers.add(e.pointerId)));
+    layer.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (e.isPrimary) this.fingers.clear(); // un 1er doigt = on repart de zéro (un doigt relâché hors du calque n'a pas pu se retirer)
+      this.fingers.add(e.pointerId);
+    });
     const lift = (e: PointerEvent) => this.fingers.delete(e.pointerId);
     layer.addEventListener('pointerup', lift);
     layer.addEventListener('pointercancel', lift);
@@ -653,7 +657,7 @@ export class Annotator {
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, w, hgt);
       const all: { s: Pick<InkStroke, 'points' | 'pressures' | 'width' | 'pen' | 'color'> }[] = strokes.map((s) => ({ s }));
-      if (liveHere) all.push({ s: { points: [...liveHere.points, ...liveHere.predicted], pressures: liveHere.usesPressure ? liveHere.pressures : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
+      if (liveHere) all.push({ s: { points: [...liveHere.points, ...liveHere.predicted], pressures: liveHere.usesPressure ? [...liveHere.pressures, ...liveHere.predicted.map(() => liveHere.pressures[liveHere.pressures.length - 1] ?? 0.5)] : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
       for (const { s } of all) {
         if ((PENS[s.pen].blend === 'Multiply') !== multiply) continue;
         if (this.erasingPending.has(s as InkStroke)) continue; // dessiné en rouge plus bas

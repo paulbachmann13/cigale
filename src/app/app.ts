@@ -1229,7 +1229,7 @@ export class App {
   private applyFavorite(f: PenFavorite) {
     this.rememberPen();
     this.annotStyle.pen = f.pen;
-    this.annotStyle.color = f.color;
+    this.annotStyle.color = [...f.color] as Rgb;
     this.annotStyle.width = f.width;
     this.rememberPen();
     this.pushStyle();
