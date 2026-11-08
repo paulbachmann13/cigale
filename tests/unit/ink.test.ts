@@ -102,3 +102,28 @@ describe('écriture manuscrite : dans le PDF', () => {
     expect((await everything(bytes)).length).toBeGreaterThan(0);
   });
 });
+
+describe('images ajoutées sur une page', () => {
+  const PNG = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  const JPEG = Uint8Array.from(Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64'));
+  const img = (image: Uint8Array): AnnotDraft => ({ kind: 'image', page: 0, color: [0, 0, 0], fill: null, opacity: 1, width: 0, contents: '', rect: [100, 500, 220, 560], image });
+
+  it('PNG et JPEG : écrits comme annotation « image », relus comme telle, sans passer pour une signature', async () => {
+    for (const image of [PNG, JPEG]) {
+      const { bytes } = await addAnnotations(await makePdf(1), [img(image)], undefined, 1);
+      const [a] = await listAnnotations(bytes);
+      expect(a.kind).toBe('image');
+      expect(a.rect).toEqual([100, 500, 220, 560]);
+      expect((await readPages(bytes)).length).toBe(1);
+    }
+  });
+  it('déplacée, l’image garde son contenu ; image illisible : refusée proprement', async () => {
+    const { bytes, ids } = await addAnnotations(await makePdf(1), [img(PNG)], undefined, 1);
+    const [a] = await listAnnotations(bytes);
+    const moved = await updateAnnotation(bytes, ids[0], translate(a, 40, 40), undefined, 1);
+    const [b] = await listAnnotations(moved);
+    expect(b.kind).toBe('image');
+    expect(b.rect[0]).toBeCloseTo(140, 1);
+    await expect(addAnnotations(await makePdf(1), [img(Uint8Array.from([1, 2, 3]))], undefined, 1)).rejects.toMatchObject({ name: 'badImage' });
+  });
+});

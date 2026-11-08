@@ -19,6 +19,7 @@ import {
   degrees,
 } from '@cantoo/pdf-lib';
 import { moveOrder, normalizeSelection } from '../data/page-order';
+import { type PaperTemplate, drawPaper } from './notebook-ops';
 import { type Permissions, RESTRICTIVE, getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
 
 export type PageOp =
@@ -26,7 +27,7 @@ export type PageOp =
   | { op: 'delete'; pages: number[] }
   | { op: 'duplicate'; pages: number[] }
   | { op: 'move'; pages: number[]; to: number }
-  | { op: 'insertBlank'; at: number }
+  | { op: 'insertBlank'; at: number; /** Papier des nouvelles pages (vierge si absent) et leur nombre (1 si absent). */ template?: PaperTemplate; count?: number }
   | { op: 'insertFrom'; at: number; other: Uint8Array; otherPassword?: string; otherPages?: number[] };
 
 export interface OpResult {
@@ -201,10 +202,15 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, 
       const at = Math.min(Math.max(op.at, 0), count);
       const ref = doc.getPage(Math.min(Math.max(at - 1, 0), count - 1));
       const { width, height } = ref.getSize();
-      const page = doc.insertPage(at, [width, height]);
-      const rot = ref.getRotation().angle;
-      if (rot) page.setRotation(degrees(rot));
-      selection = [at];
+      const many = Math.min(Math.max(Math.floor(op.count ?? 1), 1), 200);
+      selection = [];
+      for (let k = 0; k < many; k++) {
+        const page = doc.insertPage(at + k, [width, height]);
+        const rot = ref.getRotation().angle;
+        if (rot) page.setRotation(degrees(rot));
+        if (op.template) drawPaper(page, op.template);
+        selection.push(at + k);
+      }
       break;
     }
     case 'insertFrom': {

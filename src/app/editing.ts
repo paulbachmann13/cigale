@@ -8,6 +8,7 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
+import type { PaperTemplate } from '../pdf/notebook-ops';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
@@ -156,6 +157,11 @@ export class Editing {
 
   insertBlank(s: Session, side: 'before' | 'after'): Promise<boolean> {
     return this.withSelection(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1 }, 'insertBlank'));
+  }
+
+  /** Insère des pages avec un papier (ligné, quadrillé, Seyès…) avant ou après la sélection. */
+  insertPaper(s: Session, side: 'before' | 'after', template: PaperTemplate, count: number): Promise<boolean> {
+    return this.withSelection(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1, template, count }, 'insertBlank'));
   }
 
   /** Insère les pages d'un autre PDF (choisi par l'utilisateur) avant ou après la sélection (ou à la fin). */

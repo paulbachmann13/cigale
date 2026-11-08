@@ -1,6 +1,6 @@
 /** Modèle des annotations et géométrie associée : logique pure (aucun accès au PDF ni au DOM). Coordonnées en espace utilisateur PDF. */
 
-export type AnnotKind = 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp' | 'redact' | 'signature' | 'other';
+export type AnnotKind = 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp' | 'redact' | 'signature' | 'image' | 'other';
 
 export type Rgb = [number, number, number];
 export type Rect = [number, number, number, number];

@@ -10,6 +10,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Formes parfaites** : tracez une ligne, un cercle, une ellipse, un rectangle, un triangle ou un angle à main levée, puis **maintenez le stylet immobile une demi-seconde** : le trait devient parfait. Une ligne redressée suit encore le stylet pour régler sa longueur et son angle. L'écriture n'est jamais transformée.
 - **Règle** (bouton à côté du stylo) : une règle apparaît ; déplacez-la par sa poignée centrale, tournez-la par la poignée ronde (elle s'aimante à 0°, 15°, 45°, 90°…). Un trait qui commence près de son bord devient une droite parfaite le long de ce bord.
 - **Lasso** : entourez des traits pour les sélectionner, puis déplacez-les, dupliquez-les ou supprimez-les (touche Suppr). Un déplacement est une seule étape pour Annuler.
+- **Nouveau carnet** (accueil, ou Fichier → Nouveau carnet) : un document neuf sur le papier de votre choix — uni, ligné, quadrillé 5 mm, pointillé ou **Seyès** — en A4, A5 ou Lettre, portrait ou paysage, de 1 à 500 pages. Il s'ouvre directement avec le stylo, et s'enregistre en PDF comme les autres.
+- **Insérer des pages avec un papier** (menu Insérer des pages, ou clic droit sur une page) : une ou plusieurs pages lignées, quadrillées, Seyès… avant ou après la sélection, dans n'importe quel document.
+- **Ajouter une image** (Commenter → Image) : une photo, une capture ou un schéma, posée d'un clic puis déplaçable et redimensionnable. L'orientation de la photo est respectée et les très grandes images sont réduites.
 - **Annuler trait par trait** tant qu'on écrit ; Rétablir les rend.
 - **Stylet et doigt** : une fois qu'un stylet a servi, le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits).
 - Les traits sont de vrais commentaires du PDF : on les retrouve dans Aperçu et Acrobat, avec la même forme. Un trait déplacé garde sa forme.

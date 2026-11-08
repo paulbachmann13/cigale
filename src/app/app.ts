@@ -27,6 +27,8 @@ import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, 
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
+import { pickImageFile, prepareImage } from './image-import';
+import { askInsertPaper, openNotebookDialog } from './notebook';
 import { openOcrDialog } from './ocr';
 import { applyRedaction } from './redact';
 import { openRegionDialog } from './region';
@@ -100,6 +102,7 @@ export class App {
   private findTimer: number | undefined;
   private closing = false;
   private signature: { png: Uint8Array; width: number; height: number } | null = null;
+  private image: { bytes: Uint8Array; width: number; height: number } | null = null;
   private formDismissed = new Set<number>();
   private redactApplyBtn = h('button', { class: 'primary', id: 'redact-apply', type: 'button', hidden: true, onclick: () => void this.applyRedactionNow() }, t.docTools.redactApply);
 
@@ -283,7 +286,8 @@ export class App {
     const items: MenuItem[] = [
       { id: 'home', label: t.file.home, run: () => this.showHome() },
       { id: 'open', label: t.file.open, shortcut: `${mod}O`, run: () => void this.openDialog(), separatorBefore: true },
-      { id: 'combine', label: t.file.combine, run: () => this.openCombine(), separatorBefore: true },
+      { id: 'new-notebook', label: `${t.home.notebook}…`, run: () => this.openNewNotebook(), separatorBefore: true },
+      { id: 'combine', label: t.file.combine, run: () => this.openCombine() },
       { id: 'split', label: t.file.split, disabled: !has, run: () => this.openSplit() },
       { id: 'save', label: t.file.save, shortcut: `${mod}S`, disabled: !has, run: () => void this.save(), separatorBefore: true },
       { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
@@ -399,6 +403,18 @@ export class App {
   }
 
   /** « Combiner des fichiers » : part du document affiché, s'il y en a un. */
+  /** « Nouveau carnet » : un document neuf sur le papier choisi, ouvert directement avec le stylo. */
+  openNewNotebook(): void {
+    openNotebookDialog(async (name, bytes) => {
+      if (await this.openBytes(name, bytes, { unsaved: true })) this.setAnnotTool('ink');
+    });
+  }
+
+  private async insertPaper(s: Session): Promise<void> {
+    const r = await askInsertPaper();
+    if (r) await this.editing.insertPaper(s, r.side, r.template, r.count);
+  }
+
   async openCombine(): Promise<void> {
     if (this.active && isDirtyForm(this.active)) await this.editing.flushForm(this.active);
     openCombineDialog(this.toolsHost(), !this.workspace.hidden ? (this.active ?? undefined) : undefined);
@@ -415,7 +431,8 @@ export class App {
       [
         { id: 'insert-blank-before', label: t.pages.insertBlankBefore, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'before')) },
         { id: 'insert-blank-after', label: t.pages.insertBlankAfter, disabled: none, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'after')) },
-        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, 'after')), separatorBefore: true },
+        { id: 'insert-paper', label: t.notebook.menu, disabled: none, run: () => void this.withActive((s) => this.insertPaper(s)), separatorBefore: true },
+        { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, 'after')) },
       ],
       anchor,
     );
@@ -433,6 +450,7 @@ export class App {
         { id: 'extract', label: t.pages.extract, run: () => void this.editing.extract(s) },
         { id: 'insert-blank-before', label: t.pages.insertBlankBefore, run: () => void this.editing.insertBlank(s, 'before'), separatorBefore: true },
         { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.editing.insertBlank(s, 'after') },
+        { id: 'insert-paper', label: t.notebook.menu, run: () => void this.insertPaper(s) },
         { id: 'insert-file', label: t.pages.insertFile, run: () => void this.editing.insertFromFile(s, 'after') },
         { id: 'move-start', label: t.pages.moveStart, run: () => void this.editing.moveToStart(s), separatorBefore: true },
         { id: 'move-end', label: t.pages.moveEnd, run: () => void this.editing.moveToEnd(s) },
@@ -1071,6 +1089,7 @@ export class App {
       mk('redact', 'redact'),
       mk('clip', 'region'),
       mk('sign', 'sign'),
+      mk('image', 'image'),
       h('span', { class: 'sep' }),
       mk('highlight', 'highlight'),
       mk('underline', 'underline'),
@@ -1096,6 +1115,22 @@ export class App {
       this.redactApplyBtn,
     );
     this.toolButtons.sign.onclick = () => void this.chooseSignature();
+    this.toolButtons.image.onclick = () => void this.chooseImage();
+  }
+
+  /** Outil « Image » : choisir une image, puis cliquer sur la page pour la poser. */
+  private async chooseImage() {
+    const file = await pickImageFile();
+    if (!file) return;
+    try {
+      const img = await prepareImage(file);
+      this.sessions.forEach((x) => (x.annotator.image = img));
+      this.image = img;
+      this.setAnnotTool('image');
+      toast(t.annot.imageHint);
+    } catch {
+      toast(t.annot.imageFailed);
+    }
   }
 
   /** Outil « Signer » : choisir (dessiner, taper, importer) une signature, puis cliquer sur la page pour la poser. */
@@ -1218,6 +1253,7 @@ export class App {
       add: (drafts) => this.editing.addAnnots(s, drafts).then(() => undefined),
       update: (id, patch, label) => this.editing.updateAnnot(s, id, patch, label).then(() => undefined),
       remove: (ids) => this.editing.removeAnnots(s, ids).then(() => undefined),
+      switchTool: (tool) => this.setAnnotTool(tool),
       updateMany: (items) => this.editing.updateAnnots(s, items).then(() => undefined),
       selected: (id) => {
         s.comments.update(s.annots, id);
@@ -1258,6 +1294,7 @@ export class App {
     const annotator = new Annotator(s.view, this.annotHost(s), s.ink);
     annotator.style = this.annotStyle;
     annotator.signature = this.signature;
+    annotator.image = this.image;
     annotator.setTool(this.annotTool);
     s.annotator = annotator;
     const view = s.view;

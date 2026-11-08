@@ -10,7 +10,7 @@ import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '.
 import { h } from './dom';
 import type { InkStore } from './ink-store';
 
-export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'lasso' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'lasso' | 'image' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
@@ -34,6 +34,8 @@ export interface AnnotHost {
   /** Des traits viennent d'apparaître ou de disparaître (état « modifié »). */
   inkChanged(): void;
   /** Modifie plusieurs annotations en une seule étape (déplacement d'une sélection au lasso). */
+  /** Change d'outil (après avoir posé une image, on repasse à « Sélectionner »). */
+  switchTool(tool: Tool): void;
   updateMany(items: { id: string; patch: AnnotPatch }[]): Promise<void>;
 }
 
@@ -48,9 +50,9 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'eraser', 'lasso', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['sign', 'image', 'redact', 'clip', 'ink', 'eraser', 'lasso', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
-const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature']);
+const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature', 'image']);
 
 /** Le calque garde le stylet même s'il sort de la page (sans erreur si le système a déjà lâché ce pointeur). */
 function capture(el: HTMLElement, id: number) {
@@ -65,6 +67,8 @@ export class Annotator {
   private tool: Tool | null = null;
   /** Signature choisie, posée par un clic avec l'outil « Signer ». */
   signature: { png: Uint8Array; width: number; height: number } | null = null;
+  /** Image choisie, posée par un clic avec l'outil « Image ». */
+  image: { bytes: Uint8Array; width: number; height: number } | null = null;
   style: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved', pen: 'pen' };
   /** Une écriture au stylet a eu lieu : le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits). */
   private penSeen = false;
@@ -320,7 +324,13 @@ export class Annotator {
     const pdf = (p: [number, number]): Pt => vp.convertToPdfPoint(p[0], p[1]);
     const dragged = Math.hypot(b[0] - a[0], b[1] - a[1]) > 4;
     const base = this.base(n);
-    if (tool === 'sign' && this.signature) {
+    if (tool === 'image' && this.image) {
+      const [x, y] = pdf(a);
+      const w = Math.min(260, this.image.width * 0.75); // 96 dpi → points, plafonné
+      const hgt = (w * this.image.height) / this.image.width;
+      void this.host.add([{ ...base, kind: 'image', color: [0, 0, 0], width: 0, rect: [x - w / 2, y - hgt / 2, x + w / 2, y + hgt / 2], image: this.image.bytes }]);
+      this.host.switchTool('select'); // l'image posée est sélectionnée : on peut la déplacer ou la redimensionner
+    } else if (tool === 'sign' && this.signature) {
       const [x, y] = pdf(a);
       const w = 150;
       const hgt = (w * this.signature.height) / this.signature.width;

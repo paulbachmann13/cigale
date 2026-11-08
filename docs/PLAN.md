@@ -49,6 +49,6 @@ Première page d'un PDF de 500 pages < 2 s ; défilement fluide ; fusion de 10 �
 Décidé avec Paul le 08/11/2026 : un univers d'écriture dans Cigale (importer un PDF, écrire dessus, annoter, signer, prendre des cours).
 - **A. Moteur** ✔ (1.5.0) : stylo, plume à pression, surligneur, gomme, couleurs/épaisseurs par stylo, annuler trait par trait, enregistrement en annotations PDF standard.
 - **B. Précision** ✔ (1.5.0) : règle, trait redressé en maintenant la fin du trait, reconnaissance de formes (cercle, rectangle, angle, flèche), sélection au lasso (déplacer, copier, supprimer).
-- **C. Carnet** : pages vierges (lignées, quadrillées, points), ajout de pages, zones de texte, images, signature intégrée.
+- **C. Carnet** ✔ (1.5.0) : pages vierges (lignées, quadrillées, points), ajout de pages, zones de texte, images, signature intégrée.
 - **D. Finition** : stylos favoris, interface tablette, réglages fins, latence.
 Puis : améliorations à partir des retours du père de Paul (version Windows 1.4).

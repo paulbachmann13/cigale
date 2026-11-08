@@ -2,6 +2,7 @@
  * Côté interface : lance une opération dans un Web Worker (l'écran ne se fige pas) et permet de l'annuler
  * (le worker est simplement arrêté : le document n'est jamais modifié tant que le résultat n'est pas adopté).
  */
+import type { NotebookOptions } from './notebook-ops';
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { Range } from '../data/page-ranges';
 import type { AddResult } from './annot-ops';
@@ -65,6 +66,7 @@ export const applyOperation = (bytes: Uint8Array, op: PageOp, password?: string,
 export const extractOperation = (bytes: Uint8Array, pages: number[], password?: string, expectedPages?: number) => run<Uint8Array>({ kind: 'extract', bytes, pages, password, expectedPages });
 export const inspectDocument = (bytes: Uint8Array, password?: string) => run<Inspection>({ kind: 'inspect', bytes, password });
 export const normalizeOperation = (bytes: Uint8Array, password?: string) => run<Uint8Array>({ kind: 'normalize', bytes, password });
+export const notebookOp = (options: NotebookOptions) => run<Uint8Array>({ kind: 'notebook', options });
 export const mergeOperation = (sources: MergeSource[], options: MergeOptions, onProgress?: (f: number) => void) => run<MergeResult>({ kind: 'merge', sources, options }, onProgress);
 export const splitOperation = (bytes: Uint8Array, ranges: Range[], names: string[], password?: string, expectedPages?: number, onProgress?: (f: number) => void) =>
   run<Part[]>({ kind: 'split', bytes, ranges, names, password, expectedPages }, onProgress);

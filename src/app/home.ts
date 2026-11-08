@@ -95,6 +95,7 @@ export function buildHome(app: App): HTMLElement {
       'div',
       { class: 'tiles' },
       tile('home-open', 'open', t.home.open, t.home.openHint, () => void app.openDialog()),
+      tile('home-notebook', 'pen', t.home.notebook, t.home.notebookHint, () => app.openNewNotebook()),
       tile('home-combine', 'duplicate', t.home.combine, t.home.combineHint, () => app.openCombine()),
     ),
     h('h2', {}, t.home.allTools),

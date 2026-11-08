@@ -91,7 +91,9 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 5. Tracer un cercle, un rectangle, une ligne puis maintenir le Pencil : forme parfaite ? Ça ne transforme pas l'écriture ?
 6. Règle : bouton à côté du stylo ; la déplacer, la tourner (aimant), tracer le long du bord au Pencil.
 7. Lasso : entourer des traits au Pencil ; les déplacer avec le doigt/Pencil ; Dupliquer ; Supprimer.
-8. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
+8. Nouveau carnet (accueil) : Seyès, quadrillé, ligné, pointillé ; imprimer une page Seyès et vérifier les carreaux (2 mm / 8 mm) ; ouvrir le carnet enregistré dans Aperçu / Acrobat.
+9. Ajouter une image (photo prise à l'iPad) : l'orientation est-elle bonne ? la déplacer, la redimensionner.
+10. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
 
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 

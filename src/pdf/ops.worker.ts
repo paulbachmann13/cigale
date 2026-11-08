@@ -9,6 +9,7 @@ import { type HeaderFooterOptions, type WatermarkOptions, addHeaderFooter, addWa
 import { type OcrPage, addTextLayer } from './ocr-ops';
 import { type RegionRect, extractRegion, regionImagePdf } from './region-ops';
 import { type FillResult, type FormValue, fillForm } from './form-ops';
+import { type NotebookOptions, createNotebook } from './notebook-ops';
 import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation, updateAnnotations } from './annot-ops';
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
 
@@ -18,6 +19,7 @@ export type WorkerRequest =
   | { kind: 'inspect'; bytes: Uint8Array; password?: string }
   | { kind: 'normalize'; bytes: Uint8Array; password?: string }
   | { kind: 'merge'; sources: MergeSource[]; options: MergeOptions }
+  | { kind: 'notebook'; options: NotebookOptions }
   | { kind: 'split'; bytes: Uint8Array; ranges: Range[]; names: string[]; password?: string; expectedPages?: number }
   | { kind: 'zip'; parts: Part[] }
   | { kind: 'bookmarks'; bytes: Uint8Array; password?: string }
@@ -62,6 +64,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'normalize': {
         const bytes = await normalizeDocument(req.bytes, req.password);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'notebook': {
+        const bytes = await createNotebook(req.options);
         return post({ ok: true, result: bytes }, buffers(bytes));
       }
       case 'merge': {
