@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.6.1] — 2026-11-08
+
+### Corrigé
+- **Gomme** : elle efface maintenant aussi les rectangles, ellipses, lignes et flèches (par leur bord, ou par l'intérieur s'ils sont remplis), pas seulement les traits à main levée. Première modification proposée par Jérôme.
+
 ## [1.6.0] — 2026-11-08
 
 ### Ajouté
