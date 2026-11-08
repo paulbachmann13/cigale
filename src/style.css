@@ -217,7 +217,14 @@ button.mini:disabled { opacity: 0.35; }
 .annot-layer.eraser { cursor: cell; }
 /* écriture à la main : deux calques par page (le surligneur se multiplie avec le texte, comme dans le PDF) */
 .ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.lasso-box { position: absolute; border: 1.5px dashed #1a6fd9; background: rgb(26 111 217 / .06); cursor: move; touch-action: none; border-radius: 3px; }
+.lasso-actions { position: absolute; top: -34px; left: 0; display: flex; gap: 4px; cursor: default; }
+.lasso-actions button { font-size: 12px; padding: 3px 8px; }
 .ink-canvas.multiply { mix-blend-mode: multiply; }
+/* règle virtuelle : le corps laisse passer le stylet (on écrit le long du bord) ; seules la poignée centrale et la poignée de rotation captent */
+.ink-ruler { position: absolute; z-index: 9; pointer-events: none; border: 1px solid rgb(0 0 0 / .4); border-radius: 6px; background: repeating-linear-gradient(90deg, rgb(0 0 0 / .45) 0 1px, transparent 1px 10px) bottom / 100% 9px no-repeat, rgb(255 255 255 / .55); box-shadow: 0 2px 8px rgb(0 0 0 / .2); transform-origin: center; }
+.ink-ruler .ruler-grip { position: absolute; left: 50%; top: 50%; width: 64px; height: 26px; transform: translate(-50%, -50%); border-radius: 13px; background: rgb(0 0 0 / .12); pointer-events: auto; cursor: grab; touch-action: none; }
+.ink-ruler .ruler-rot { position: absolute; right: 6px; top: 50%; width: 26px; height: 26px; margin-top: -13px; border-radius: 50%; background: rgb(0 0 0 / .18); pointer-events: auto; cursor: alias; touch-action: none; }
 .annot-hit { position: absolute; border: 1px dashed transparent; pointer-events: auto; cursor: move; touch-action: none; box-sizing: border-box; }
 .annot-hit:hover { border-color: var(--accent); }
 .annot-hit.selected { border: 2px solid var(--accent); background: rgba(180, 83, 42, 0.08); }

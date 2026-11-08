@@ -73,6 +73,7 @@ export const bookmarksOperation = (bytes: Uint8Array, password?: string) => run<
 
 export const listAnnotationsOp = (bytes: Uint8Array, password?: string, expectedPages?: number) => run<Annot[]>({ kind: 'annotList', bytes, password, expectedPages });
 export const addAnnotationsOp = (bytes: Uint8Array, drafts: AnnotDraft[], password: string | undefined, expectedPages: number, author: string) => run<AddResult>({ kind: 'annotAdd', bytes, drafts, password, expectedPages, author });
+export const updateAnnotationsOp = (bytes: Uint8Array, items: { id: string; patch: AnnotPatch }[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdateMany', bytes, items, password, expectedPages });
 export const updateAnnotationOp = (bytes: Uint8Array, id: string, patch: AnnotPatch, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdate', bytes, id, patch, password, expectedPages });
 export const deleteAnnotationsOp = (bytes: Uint8Array, ids: string[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotDelete', bytes, ids, password, expectedPages });
 export const fillFormOp = (bytes: Uint8Array, values: FormValue[], password: string | undefined, expectedPages: number) => run<FillResult>({ kind: 'formFill', bytes, values, password, expectedPages });

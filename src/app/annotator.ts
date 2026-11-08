@@ -2,14 +2,15 @@
  * Calque de commentaires posé sur les pages de pdf.js : outils de dessin, sélection, déplacement, redimensionnement.
  * Rien n'est écrit ici : chaque geste aboutit à un appel de l'hôte (App/Editing) qui modifie le PDF réel.
  */
-import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate } from '../data/annotations';
+import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate, unionRect } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
+import { type Shape, magnetAngle, pointInPolygon, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
 import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
 import { h } from './dom';
 import type { InkStore } from './ink-store';
 
-export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'lasso' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
@@ -32,6 +33,8 @@ export interface AnnotHost {
   flushInk(): Promise<void>;
   /** Des traits viennent d'apparaître ou de disparaître (état « modifié »). */
   inkChanged(): void;
+  /** Modifie plusieurs annotations en une seule étape (déplacement d'une sélection au lasso). */
+  updateMany(items: { id: string; patch: AnnotPatch }[]): Promise<void>;
 }
 
 /** Même partie de l'API de PageViewport que pdf.js expose : on n'en utilise que ces deux conversions. */
@@ -45,7 +48,7 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'eraser', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'eraser', 'lasso', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
 const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature']);
 
@@ -76,6 +79,8 @@ export class Annotator {
   /** Traits en attente que la gomme vient de toucher (supprimés au relâchement seulement : un geste annulé ne supprime rien). */
   private erasingPending = new Set<InkStroke>();
   private annots: Annot[] = [];
+  /** La liste des commentaires est relue après chaque rechargement : tant qu'elle n'est pas là, la sélection au lasso est gardée telle quelle. */
+  private annotsLoaded = false;
   private selectedId: string | null = null;
   private layers = new Map<number, HTMLElement>();
   private editor: HTMLElement | null = null;
@@ -92,6 +97,7 @@ export class Annotator {
   destroy() {
     window.clearTimeout(this.inkTimer);
     cancelAnimationFrame(this.paintFrame);
+    this.rulerEl?.remove();
     this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove()));
     this.inkCanvases.clear();
     this.closeEditor();
@@ -113,8 +119,10 @@ export class Annotator {
   /** `null` : mode commentaire désactivé (aucun calque). */
   setTool(tool: Tool | null) {
     this.tool = tool;
+    if (tool !== 'lasso') this.ink.lasso = null;
     if (tool !== 'ink' && tool !== 'eraser') this.scheduleInkFlush(0); // on quitte l'écriture : tout part dans le document
     if (tool !== 'select') this.select(null);
+    this.syncRuler();
     this.view.container.classList.toggle('annotating', tool !== null);
     this.view.container.classList.toggle('annot-markup', tool !== null && MARKUP_TOOLS.has(tool));
     this.renderAll();
@@ -122,6 +130,7 @@ export class Annotator {
 
   setAnnots(list: Annot[]) {
     this.annots = list;
+    this.annotsLoaded = true;
     if (this.selectedId && !list.some((a) => a.id === this.selectedId)) this.selectedId = null;
     this.renderAll();
   }
@@ -157,6 +166,7 @@ export class Annotator {
     layer.classList.toggle('capture', this.tool !== null && SHAPE_TOOLS.has(this.tool));
     layer.classList.toggle('eraser', this.tool === 'eraser');
     this.paintInk(n);
+    if (this.tool === 'lasso') return this.layoutLasso(layer, pv, n);
     if (this.tool !== 'select') return; // les zones cliquables n'existent qu'avec l'outil Sélectionner (sinon elles gêneraient la sélection de texte)
     const vp = pv.viewport;
     for (const a of this.annots) {
@@ -258,6 +268,7 @@ export class Annotator {
     layer.addEventListener('pointerdown', (e) => {
       if (e.target !== layer || this.tool === null || !SHAPE_TOOLS.has(this.tool)) return;
       if (this.tool === 'ink' || this.tool === 'eraser') return this.beginInk(e, layer, n);
+      if (this.tool === 'lasso') return this.beginLasso(e, layer, n);
       e.preventDefault();
       const tool = this.tool;
       const vp = this.pageView(n)!.viewport;
@@ -353,6 +364,223 @@ export class Annotator {
       if (this.live || this.erasing.size || this.erasingPending.size) this.scheduleInkFlush(500);
       else void this.host.flushInk();
     }, ms);
+  }
+
+  // ───────────── lasso : choisir des traits, les déplacer, les dupliquer, les supprimer ─────────────
+
+  get hasLasso(): boolean {
+    return !!this.ink.lasso && this.ink.lasso.ids.length > 0;
+  }
+
+  private lassoItems(): Annot[] {
+    const sel = this.ink.lasso;
+    return sel ? this.annots.filter((a) => sel.ids.includes(a.id)) : [];
+  }
+
+  deleteLasso() {
+    const ids = this.lassoItems().map((a) => a.id);
+    this.ink.lasso = null;
+    if (ids.length) void this.host.remove(ids);
+  }
+
+  duplicateLasso() {
+    const items = this.lassoItems();
+    this.ink.lasso = null;
+    if (!items.length) return;
+    // la copie est décalée pour qu'on la voie, et devient un nouveau trait indépendant
+    const drafts: AnnotDraft[] = items.map((a) => {
+      const m = translate(a, 14, -14);
+      return { kind: 'ink', page: a.page, color: a.color, fill: null, opacity: a.opacity, width: a.width, contents: '', rect: m.rect, strokes: m.strokes, pen: a.pen, pressures: a.pressures };
+    });
+    void this.host.add(drafts);
+  }
+
+  private beginLasso(e: PointerEvent, layer: HTMLElement, n: number) {
+    if (!e.isPrimary) return;
+    if (e.pointerType === 'touch' && this.penSeen) return this.panWithFinger(e, layer);
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    capture(layer, e.pointerId);
+    const vp = this.pageView(n)!.viewport;
+    const pts: [number, number][] = [this.local(layer, e)];
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'annot-preview');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    for (const [k, v] of Object.entries({ fill: 'rgba(26,111,217,0.08)', stroke: '#1a6fd9', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' })) line.setAttribute(k, String(v));
+    svg.append(line);
+    layer.append(svg);
+    const move = (ev: PointerEvent) => {
+      for (const c of ev.getCoalescedEvents?.() ?? [ev]) pts.push(this.local(layer, c));
+      line.setAttribute('points', pts.map((p) => p.join(',')).join(' '));
+    };
+    const finish = (cancelled: boolean) => {
+      layer.removeEventListener('pointermove', move);
+      layer.removeEventListener('pointerup', up);
+      layer.removeEventListener('pointercancel', cancel);
+      svg.remove();
+      if (cancelled) return;
+      const poly = pts.map((p) => vp.convertToPdfPoint(p[0], p[1]) as Pt);
+      let ids: string[] = [];
+      if (pts.length >= 6) {
+        ids = this.annots
+          .filter((a) => a.kind === 'ink' && a.page === n - 1 && !a.replyTo && a.strokes?.length)
+          .filter((a) => {
+            const all = a.strokes!.flat();
+            return all.filter((p) => pointInPolygon(p, poly)).length >= all.length / 2; // au moins la moitié du trait est dans la boucle
+          })
+          .map((a) => a.id);
+      }
+      this.ink.lasso = ids.length ? { page: n - 1, ids } : null;
+      this.renderAll();
+    };
+    const up = () => finish(false);
+    const cancel = () => finish(true);
+    layer.addEventListener('pointermove', move);
+    layer.addEventListener('pointerup', up);
+    layer.addEventListener('pointercancel', cancel);
+  }
+
+  private layoutLasso(layer: HTMLElement, pv: PageViewLike, n: number) {
+    const sel = this.ink.lasso;
+    if (!sel || sel.page !== n - 1 || !this.annotsLoaded) return;
+    const items = this.lassoItems();
+    if (items.length === 0) {
+      this.ink.lasso = null;
+      return;
+    }
+    const vp = pv.viewport;
+    const r = unionRect(items.map((a) => a.rect));
+    const [x1, y1] = vp.convertToViewportPoint(r[0], r[1]);
+    const [x2, y2] = vp.convertToViewportPoint(r[2], r[3]);
+    const box = h('div', { class: 'lasso-box', 'data-count': String(items.length) });
+    Object.assign(box.style, { left: `${Math.min(x1, x2) - 4}px`, top: `${Math.min(y1, y2) - 4}px`, width: `${Math.abs(x2 - x1) + 8}px`, height: `${Math.abs(y2 - y1) + 8}px` });
+    const actions = h(
+      'div',
+      { class: 'lasso-actions' },
+      h('button', { type: 'button', class: 'lasso-dup', onclick: () => this.duplicateLasso() }, t.annot.lasso.duplicate),
+      h('button', { type: 'button', class: 'lasso-del', onclick: () => this.deleteLasso() }, t.annot.lasso.delete),
+    );
+    for (const b of actions.querySelectorAll('button')) b.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    box.append(actions);
+    layer.append(box);
+    box.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement).closest('.lasso-actions')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      capture(box, e.pointerId);
+      const start = this.local(layer, e);
+      let moved = false;
+      const move = (ev: PointerEvent) => {
+        const p = this.local(layer, ev);
+        if (Math.hypot(p[0] - start[0], p[1] - start[1]) > 3) moved = true;
+        if (moved) box.style.transform = `translate(${p[0] - start[0]}px, ${p[1] - start[1]}px)`;
+      };
+      const end = (ev: PointerEvent) => {
+        box.removeEventListener('pointermove', move);
+        box.removeEventListener('pointerup', end);
+        if (!moved) return;
+        const p = this.local(layer, ev);
+        const [ax, ay] = vp.convertToPdfPoint(start[0], start[1]);
+        const [bx, by] = vp.convertToPdfPoint(p[0], p[1]);
+        void this.host.updateMany(items.map((a) => ({ id: a.id, patch: translate(a, bx - ax, by - ay) })));
+      };
+      box.addEventListener('pointermove', move);
+      box.addEventListener('pointerup', end);
+    });
+  }
+
+  // ───────────── règle ─────────────
+
+  private rulerEl: HTMLElement | null = null;
+  static readonly RULER_THICKNESS = 44;
+
+  /** La règle est visible quand elle est allumée ET qu'on écrit au stylo. */
+  syncRuler() {
+    const show = this.ink.ruler.visible && this.tool === 'ink';
+    if (!show) {
+      this.rulerEl?.remove();
+      this.rulerEl = null;
+      return;
+    }
+    const root = this.view.container.parentElement;
+    if (!root) return;
+    const r = this.ink.ruler;
+    const box = root.getBoundingClientRect();
+    if (!r.length) {
+      r.length = Math.max(240, Math.min(640, box.width - 60));
+      r.cx = box.width / 2;
+      r.cy = box.height / 2;
+    }
+    if (!this.rulerEl || !root.contains(this.rulerEl)) {
+      const el = h('div', { class: 'ink-ruler', 'aria-label': t.annot.ruler });
+      const grip = h('div', { class: 'ruler-grip', title: t.annot.rulerMove });
+      const rot = h('div', { class: 'ruler-rot', title: t.annot.rulerRotate });
+      el.append(grip, rot);
+      root.append(el);
+      this.rulerEl = el;
+      grip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        capture(grip, e.pointerId);
+        let x = e.clientX;
+        let y = e.clientY;
+        const move = (ev: PointerEvent) => {
+          r.cx += ev.clientX - x;
+          r.cy += ev.clientY - y;
+          x = ev.clientX;
+          y = ev.clientY;
+          this.placeRuler();
+        };
+        const end = () => {
+          grip.removeEventListener('pointermove', move);
+          grip.removeEventListener('pointerup', end);
+          grip.removeEventListener('pointercancel', end);
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+      });
+      rot.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        capture(rot, e.pointerId);
+        const move = (ev: PointerEvent) => {
+          const b = root.getBoundingClientRect();
+          r.angle = magnetAngle(Math.atan2(ev.clientY - (b.top + r.cy), ev.clientX - (b.left + r.cx)));
+          this.placeRuler();
+        };
+        const end = () => {
+          rot.removeEventListener('pointermove', move);
+          rot.removeEventListener('pointerup', end);
+          rot.removeEventListener('pointercancel', end);
+        };
+        rot.addEventListener('pointermove', move);
+        rot.addEventListener('pointerup', end);
+        rot.addEventListener('pointercancel', end);
+      });
+    }
+    this.placeRuler();
+  }
+
+  private placeRuler() {
+    const el = this.rulerEl;
+    if (!el) return;
+    const r = this.ink.ruler;
+    Object.assign(el.style, {
+      width: `${r.length}px`,
+      height: `${Annotator.RULER_THICKNESS}px`,
+      left: `${r.cx - r.length / 2}px`,
+      top: `${r.cy - Annotator.RULER_THICKNESS / 2}px`,
+      transform: `rotate(${r.angle}rad)`,
+    });
+  }
+
+  /** Bord de la règle (en coordonnées de l'écran) le plus proche du stylet, s'il en est à moins de 22 px. */
+  private rulerEdgeAt(clientX: number, clientY: number): [Pt, Pt] | null {
+    const root = this.view.container.parentElement;
+    if (!this.rulerEl || !root) return null;
+    const b = root.getBoundingClientRect();
+    const r = this.ink.ruler;
+    const edges = rulerEdges([b.left + r.cx, b.top + r.cy], r.angle, r.length, Annotator.RULER_THICKNESS);
+    return nearestRulerEdge([clientX, clientY], edges, 22);
   }
 
   refreshInk() {
@@ -457,10 +685,11 @@ export class Annotator {
     e.preventDefault();
     capture(layer, e.pointerId);
     const vp = this.pageView(n)!.viewport;
-    const toPdf = (ev: PointerEvent): Pt => {
-      const [x, y] = this.local(layer, ev);
-      return vp.convertToPdfPoint(x, y);
+    const toPdfXY = (clientX: number, clientY: number): Pt => {
+      const b = layer.getBoundingClientRect();
+      return vp.convertToPdfPoint(clientX - b.left, clientY - b.top);
     };
+    const toPdf = (ev: PointerEvent): Pt => toPdfXY(ev.clientX, ev.clientY);
     if (this.tool === 'eraser') return this.beginErase(e, layer, n, toPdf, vp.scale);
     const usesPressure = e.pointerType === 'pen';
     const live = { page: n - 1, points: [] as Pt[], pressures: [] as number[], usesPressure };
@@ -473,17 +702,67 @@ export class Annotator {
       live.points.push(p);
       live.pressures.push(ev.pressure > 0 ? ev.pressure : 0.5);
     };
-    add(e, true);
+    // Règle : un trait qui commence près de son bord devient une droite le long de ce bord.
+    const edge = this.tool === 'ink' ? this.rulerEdgeAt(e.clientX, e.clientY) : null;
+    const ruled = (ev: PointerEvent): Pt => {
+      const q = projectOnSegment([ev.clientX, ev.clientY], edge![0], edge![1]);
+      return toPdfXY(q[0], q[1]);
+    };
+    if (edge) {
+      const p0 = ruled(e);
+      live.points = [p0, p0];
+      live.pressures = [e.pressure > 0 ? e.pressure : 0.5, e.pressure > 0 ? e.pressure : 0.5];
+    } else add(e, true);
     this.paintInk(n);
+    // Maintenir le stylet immobile en fin de trait : le trait devient parfait (ligne droite, cercle, rectangle, angle…).
+    let snapped: Shape | null = null;
+    let holdTimer = 0;
+    let anchor: [number, number] = [e.clientX, e.clientY];
+    const snap = () => {
+      if (snapped || live.points.length < 5) return;
+      const shape = recognizeShape(live.points);
+      if (!shape) return;
+      snapped = shape;
+      const avg = live.pressures.reduce((a, v) => a + v, 0) / live.pressures.length;
+      live.points = shape.points.slice();
+      live.pressures = live.points.map(() => avg);
+      this.paintInk(n);
+    };
+    const arm = () => {
+      window.clearTimeout(holdTimer);
+      if (!snapped) holdTimer = window.setTimeout(snap, 550);
+    };
+    if (!edge) arm();
     const move = (ev: PointerEvent) => {
+      if (edge) {
+        live.points = [live.points[0], ruled(ev)];
+        this.queuePaint(n);
+        return;
+      }
+      if (snapped) {
+        // une ligne redressée suit encore le stylet (on règle sa longueur et son angle) ; les autres formes restent telles quelles
+        if (snapped.kind === 'line') {
+          live.points = [live.points[0], toPdf(ev)];
+          live.pressures = [live.pressures[0], live.pressures[0]];
+          this.queuePaint(n);
+        }
+        return;
+      }
       for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
+      if (Math.hypot(ev.clientX - anchor[0], ev.clientY - anchor[1]) > 2.5) {
+        anchor = [ev.clientX, ev.clientY];
+        arm();
+      }
       this.queuePaint(n);
     };
     const finish = (ev: PointerEvent, cancelled: boolean) => {
       layer.removeEventListener('pointermove', move);
       layer.removeEventListener('pointerup', up);
       layer.removeEventListener('pointercancel', cancel);
-      if (!cancelled) add(ev);
+      window.clearTimeout(holdTimer);
+      if (!cancelled && edge) live.points = [live.points[0], ruled(ev)];
+      else if (!cancelled && !snapped) add(ev);
+      else if (!cancelled && snapped && (snapped as Shape).kind === 'line') live.points = [live.points[0], toPdf(ev)];
       this.live = null;
       if (!cancelled && live.points.length > 0) {
         this.ink.add({ page: n - 1, points: live.points, pressures: usesPressure ? live.pressures : undefined, color: this.style.color, width: this.style.width, pen: this.style.pen });

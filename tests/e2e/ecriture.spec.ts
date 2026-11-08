@@ -234,3 +234,200 @@ test('un doigt fait défiler au lieu d’écrire dès qu’un stylet a servi', a
   );
   expect(await pending(page)).toBe(1); // aucun trait de plus
 });
+
+test.describe('trait redressé en maintenant le stylet (formes parfaites)', () => {
+  const pdfPoints = async (page: Page) => (await annots(page))[0].strokes![0];
+
+  test('une ligne tremblée devient droite ; on règle encore sa longueur avant de relâcher', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
+    await page.waitForTimeout(900); // maintenu : redressé
+    await page.mouse.move(pb.x + 330, pb.y + 330); // on règle la fin
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    const pts = await pdfPoints(page);
+    expect(pts).toHaveLength(2);
+    expect(Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])).toBeGreaterThan(120);
+    expect(Math.abs(pts[1][1] - pts[0][1])).toBeGreaterThan(10); // la fin a bien été réglée après le redressement (30 px plus bas)
+  });
+
+  test('un cercle approximatif devient un cercle', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    const cx = pb.x + 250, cy = pb.y + 350;
+    await page.mouse.move(cx + 70, cy);
+    await page.mouse.down();
+    for (let i = 1; i <= 40; i++) {
+      const a = (i / 40) * Math.PI * 2.03;
+      const r = 70 + Math.sin(i * 1.7) * 3;
+      await page.mouse.move(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    const pts = await pdfPoints(page);
+    expect(pts).toHaveLength(73);
+    const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+    const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    const rs = pts.map((p) => Math.hypot(p[0] - mx, p[1] - my));
+    expect(Math.max(...rs) - Math.min(...rs)).toBeLessThan(2); // rond à moins de 2 points près (le tracé à main levée variait de ±3 px)
+  });
+
+  test('sans maintenir, rien n’est transformé (l’écriture reste libre)', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
+    await page.mouse.up(); // relâché tout de suite
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    expect((await pdfPoints(page)).length).toBeGreaterThan(10);
+  });
+
+  test('de l’écriture maintenue immobile n’est pas transformée', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 30; i++) await page.mouse.move(pb.x + 100 + Math.sin(i / 5) * 25, pb.y + 300 + i * 2.2);
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    expect((await pdfPoints(page)).length).toBeGreaterThan(10);
+  });
+});
+
+test.describe('règle', () => {
+  test('un trait au bord de la règle est parfaitement droit, même si la main tremble', async ({ page }) => {
+    const pb = await pageBox(page);
+    void pb;
+    await page.click('#tool-ink');
+    await page.click('#tool-ruler');
+    const ruler = page.locator('.ink-ruler');
+    await expect(ruler).toBeVisible();
+    const box = (await ruler.boundingBox())!;
+    await page.mouse.move(box.x + 100, box.y + 6);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(box.x + 100 + i * 10, box.y + 6 + Math.sin(i) * 9);
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    const pts = (await annots(page))[0].strokes![0];
+    expect(pts).toHaveLength(2);
+    expect(Math.abs(pts[1][1] - pts[0][1])).toBeLessThan(0.01); // horizontale
+    expect(Math.abs(pts[1][0] - pts[0][0])).toBeGreaterThan(80);
+  });
+
+  test('on tourne la règle à 45° : le trait suit l’inclinaison', async ({ page }) => {
+    await page.click('#tool-ink');
+    await page.click('#tool-ruler');
+    const rot = page.locator('.ink-ruler .ruler-rot');
+    const rb = (await rot.boundingBox())!;
+    const ruler = page.locator('.ink-ruler');
+    const b0 = (await ruler.boundingBox())!;
+    const cx = b0.x + b0.width / 2;
+    const cy = b0.y + b0.height / 2;
+    await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(cx + 200, cy + 200, { steps: 6 }); // 45° exactement
+    await page.mouse.up();
+    // le bord supérieur de la règle inclinée : on le retrouve par calcul à partir du centre
+    const a = Math.PI / 4;
+    const nx = -Math.sin(a), ny = Math.cos(a);
+    const edgeCenter = { x: cx + (nx * -44) / 2, y: cy + (ny * -44) / 2 };
+    await page.mouse.move(edgeCenter.x - 50 * Math.cos(a) + 3, edgeCenter.y - 50 * Math.sin(a) - 3);
+    await page.mouse.down();
+    await page.mouse.move(edgeCenter.x + 90 * Math.cos(a), edgeCenter.y + 90 * Math.sin(a), { steps: 10 });
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    const pts = (await annots(page))[0].strokes![0];
+    const dx = pts[1][0] - pts[0][0];
+    const dy = pts[1][1] - pts[0][1];
+    expect(Math.abs(Math.abs(dy / dx) - 1)).toBeLessThan(0.03); // 45° (le repère PDF a l'axe y inversé : on compare la valeur absolue)
+  });
+
+  test('loin de la règle, on écrit normalement ; la règle disparaît avec le stylo', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.click('#tool-ruler');
+    await page.mouse.move(pb.x + 80, pb.y + 100); // loin de la règle (au centre de l'écran)
+    await page.mouse.down();
+    for (let i = 1; i <= 15; i++) await page.mouse.move(pb.x + 80 + i * 8, pb.y + 100 + Math.sin(i) * 8);
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    expect((await annots(page))[0].strokes![0].length).toBeGreaterThan(5);
+    await page.click('#tool-eraser');
+    await expect(page.locator('.ink-ruler')).toHaveCount(0);
+    await page.click('#tool-ink');
+    await expect(page.locator('.ink-ruler')).toBeVisible();
+  });
+});
+
+test.describe('lasso', () => {
+  async function threeStrokes(page: Page) {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await wave(page, pb.x + 100, pb.y + 300);
+    await wave(page, pb.x + 100, pb.y + 360);
+    await wave(page, pb.x + 100, pb.y + 520);
+    await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(3);
+    return pb;
+  }
+  async function loop(page: Page, x1: number, y1: number, x2: number, y2: number) {
+    await page.mouse.move(x1, y1);
+    await page.mouse.down();
+    for (const [x, y] of [[x2, y1], [x2, y2], [x1, y2], [x1, y1 + 2]]) await page.mouse.move(x, y, { steps: 6 });
+    await page.mouse.up();
+  }
+  const firstYs = async (page: Page) => (await annots(page)).map((a) => Math.round(a.strokes![0][0][1]));
+
+  test('on entoure deux traits sur trois ; on les déplace en une seule étape ; Annuler les remet', async ({ page }) => {
+    const pb = await threeStrokes(page);
+    const before = await firstYs(page);
+    const x0 = (await annots(page))[0].strokes![0][0][0];
+    await page.click('#tool-lasso');
+    await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 410);
+    const box = page.locator('.lasso-box');
+    await expect(box).toHaveAttribute('data-count', '2');
+    const bb = (await box.boundingBox())!;
+    await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(bb.x + bb.width / 2 + 80, bb.y + bb.height / 2 + 40, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page))[0].strokes![0][0][0] > x0 + 20, { timeout: 8000 }).toBe(true);
+    const after = await firstYs(page);
+    expect(after[0]).toBeLessThan(before[0] - 10); // déplacé vers le bas de la page (y PDF plus petit)
+    expect(after[1]).toBeLessThan(before[1] - 10);
+    expect(after[2]).toBe(before[2]); // le troisième n'a pas bougé
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2'); // la sélection reste après le rechargement
+    await page.keyboard.press('Meta+z'); // une seule étape
+    await expect.poll(async () => firstYs(page)).toEqual(before);
+  });
+
+  test('supprimer et dupliquer la sélection', async ({ page }) => {
+    const pb = await threeStrokes(page);
+    await page.click('#tool-lasso');
+    await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 410);
+    await page.click('.lasso-dup');
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(5);
+    await page.click('#tool-lasso'); // (re)choisir l'outil ne change rien ; on entoure la copie et l'original du haut
+    await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 330);
+    await expect(page.locator('.lasso-box')).toBeVisible();
+    await page.click('.lasso-del');
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBeLessThan(5);
+  });
+
+  test('une boucle vide désélectionne ; Suppr efface la sélection', async ({ page }) => {
+    const pb = await threeStrokes(page);
+    await page.click('#tool-lasso');
+    await loop(page, pb.x + 70, pb.y + 480, pb.x + 300, pb.y + 560);
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '1');
+    await loop(page, pb.x + 350, pb.y + 100, pb.x + 420, pb.y + 160); // vide
+    await expect(page.locator('.lasso-box')).toHaveCount(0);
+    await loop(page, pb.x + 70, pb.y + 480, pb.x + 300, pb.y + 560);
+    await page.keyboard.press('Delete');
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(2);
+  });
+});

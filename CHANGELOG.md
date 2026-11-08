@@ -7,6 +7,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 ### Ajouté
 - **Écrire à la main sur un PDF** (Commenter → l'outil « Écrire et dessiner »). Trois stylos : **Stylo**, **Plume** (le trait s'épaissit quand on appuie, avec un Apple Pencil ou un stylet) et **Surligneur** (translucide, il ne cache pas le texte). Chaque stylo retient sa couleur et son épaisseur. Le trait apparaît instantanément, sans attendre.
 - **Gomme** : passez sur un trait pour l'effacer (il devient rouge avant de disparaître). Elle efface aussi les traits des versions précédentes.
+- **Formes parfaites** : tracez une ligne, un cercle, une ellipse, un rectangle, un triangle ou un angle à main levée, puis **maintenez le stylet immobile une demi-seconde** : le trait devient parfait. Une ligne redressée suit encore le stylet pour régler sa longueur et son angle. L'écriture n'est jamais transformée.
+- **Règle** (bouton à côté du stylo) : une règle apparaît ; déplacez-la par sa poignée centrale, tournez-la par la poignée ronde (elle s'aimante à 0°, 15°, 45°, 90°…). Un trait qui commence près de son bord devient une droite parfaite le long de ce bord.
+- **Lasso** : entourez des traits pour les sélectionner, puis déplacez-les, dupliquez-les ou supprimez-les (touche Suppr). Un déplacement est une seule étape pour Annuler.
 - **Annuler trait par trait** tant qu'on écrit ; Rétablir les rend.
 - **Stylet et doigt** : une fois qu'un stylet a servi, le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits).
 - Les traits sont de vrais commentaires du PDF : on les retrouve dans Aperçu et Acrobat, avec la même forme. Un trait déplacé garde sa forme.

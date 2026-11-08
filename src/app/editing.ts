@@ -13,7 +13,7 @@ import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
 import type { OcrPage } from '../pdf/ocr-ops';
 import type { ProtectOptions } from '../pdf/protect-ops';
-import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp } from '../pdf/ops-client';
+import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp, updateAnnotationsOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -341,6 +341,11 @@ export class Editing {
       this.host.pendingSelect(s, id);
       return updateAnnotationOp(s.history.current, id, patch, s.password, s.view.pageCount).promise;
     });
+  }
+
+  /** Plusieurs annotations d'un coup, en une seule étape annuler/rétablir (déplacer une sélection au lasso). */
+  updateAnnots(s: Session, items: { id: string; patch: AnnotPatch }[], label: keyof typeof t.annot.labels = 'move'): Promise<boolean> {
+    return this.annotOp(s, label, () => updateAnnotationsOp(s.history.current, items, s.password, s.view.pageCount).promise);
   }
 
   removeAnnots(s: Session, ids: string[]): Promise<boolean> {

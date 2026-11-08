@@ -54,6 +54,13 @@ export class App {
   /** Couleur et épaisseur retenues pour chaque stylo. */
   private penColors: Record<PenKind, Rgb> = { pen: PENS.pen.color, fountain: PENS.fountain.color, highlighter: PENS.highlighter.color };
   private penWidths: Record<PenKind, number> = { pen: PENS.pen.width, fountain: PENS.fountain.width, highlighter: PENS.highlighter.width };
+  private rulerBtn = this.iconButton('tool-ruler', t.annot.ruler, 'ruler', () => {
+    const s = this.active;
+    if (!s) return;
+    s.ink.ruler.visible = !s.ink.ruler.visible;
+    s.annotator.syncRuler();
+    this.syncStyleUi();
+  });
   private penSelect = h('select', { id: 'annot-pen', 'aria-label': t.annot.pen });
   private annotBar = h('div', { class: 'toolbar annot-toolbar', id: 'annot-toolbar', role: 'toolbar', 'aria-label': t.annot.toolbar, hidden: true });
   private toolButtons: Record<string, HTMLButtonElement> = {};
@@ -494,6 +501,9 @@ export class App {
     } else if (mod && key === 'y' && this.active && !typing && !this.workspace.hidden) {
       e.preventDefault();
       void this.redo();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active?.annotator.hasLasso && !typing && !this.workspace.hidden) {
+      e.preventDefault();
+      this.active.annotator.deleteLasso();
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.active?.annotator.selection && !this.active.organizing && !typing && !this.workspace.hidden && !target.closest('.thumbs')) {
       e.preventDefault();
       void this.editing.removeAnnots(this.active, [this.active.annotator.selection.id]);
@@ -1070,7 +1080,10 @@ export class App {
       mk('freetext', 'text'),
       mk('ink', 'pen'),
       this.penSelect,
+      this.rulerBtn,
       mk('eraser', 'eraser'),
+      mk('lasso', 'lasso'),
+      mk('lasso', 'lasso'),
       mk('rect', 'rect'),
       mk('ellipse', 'ellipse'),
       mk('line', 'line'),
@@ -1191,8 +1204,11 @@ export class App {
     }
     this.penSelect.value = this.annotStyle.pen;
     this.penSelect.hidden = tool !== 'ink';
-    this.widthSelect.hidden = tool === 'eraser';
-    this.swatches.forEach((b) => (b.hidden = tool === 'eraser'));
+    this.rulerBtn.hidden = tool !== 'ink';
+    this.rulerBtn.classList.toggle('on', !!this.active?.ink.ruler.visible);
+    this.rulerBtn.setAttribute('aria-pressed', String(!!this.active?.ink.ruler.visible));
+    this.widthSelect.hidden = tool === 'eraser' || tool === 'lasso';
+    this.swatches.forEach((b) => (b.hidden = tool === 'eraser' || tool === 'lasso'));
     this.widthSelect.value = String(sel && sel.width ? Math.round(sel.width) : this.annotStyle.width);
     this.sizeSelect.value = String(sel?.fontSize ?? this.annotStyle.fontSize);
     this.sizeSelect.hidden = !(tool === 'freetext' || sel?.kind === 'freetext');
@@ -1203,6 +1219,7 @@ export class App {
       add: (drafts) => this.editing.addAnnots(s, drafts).then(() => undefined),
       update: (id, patch, label) => this.editing.updateAnnot(s, id, patch, label).then(() => undefined),
       remove: (ids) => this.editing.removeAnnots(s, ids).then(() => undefined),
+      updateMany: (items) => this.editing.updateAnnots(s, items).then(() => undefined),
       selected: (id) => {
         s.comments.update(s.annots, id);
         this.syncStyleUi();

@@ -504,9 +504,20 @@ function find(doc: PDFDocument, id: string): { page: PDFPage; pageIndex: number;
 }
 
 /** Modifie une annotation : style, texte, position… L'apparence est reconstruite à partir des nouvelles valeurs. */
-export async function updateAnnotation(bytes: Uint8Array, id: string, patch: AnnotPatch, password?: string, expectedPages?: number, now = new Date()): Promise<Uint8Array> {
+export function updateAnnotation(bytes: Uint8Array, id: string, patch: AnnotPatch, password?: string, expectedPages?: number, now = new Date()): Promise<Uint8Array> {
+  return updateAnnotations(bytes, [{ id, patch }], password, expectedPages, now);
+}
+
+/** Modifie plusieurs annotations en une seule lecture/écriture du document (déplacer une sélection de traits). */
+export async function updateAnnotations(bytes: Uint8Array, items: { id: string; patch: AnnotPatch }[], password?: string, expectedPages?: number, now = new Date()): Promise<Uint8Array> {
   const doc = await loadForEdit(bytes, password);
   if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new AnnotError('structure');
+  for (const { id, patch } of items) await applyUpdate(doc, id, patch, now);
+  pruneUnreachable(doc); // l'ancien flux d'apparence et les polices inutilisées ne restent pas dans le fichier
+  return saveDoc(doc);
+}
+
+async function applyUpdate(doc: PDFDocument, id: string, patch: AnnotPatch, now: Date): Promise<void> {
   const hit = find(doc, id);
   if (!hit) throw new AnnotError('notFound');
   const current = readAnnot(doc, hit.pageIndex, hit.ref, hit.dict);
@@ -534,8 +545,6 @@ export async function updateAnnotation(bytes: Uint8Array, id: string, patch: Ann
   const redraw = !translateOnly && (geometryChanged || styleChanged || (patch.contents !== undefined && (next.kind === 'freetext' || next.kind === 'stamp'))) && next.kind !== 'other' && next.kind !== 'signature' && !next.replyTo; // une signature garde son image : le lecteur l'étire dans le nouveau rectangle
   if (patch.stamp !== undefined && next.kind === 'stamp') hit.dict.set(N('Name'), N(`Cigale-${STAMPS[patch.stamp] ? patch.stamp : 'custom'}`));
   if (redraw) setAppearance(doc, hit.dict, buildAppearance(next, await fontsFor(doc)));
-  pruneUnreachable(doc); // l'ancien flux d'apparence et les polices inutilisées ne restent pas dans le fichier
-  return saveDoc(doc);
 }
 
 /** Supprime des annotations, avec leurs réponses et leur bulle (Popup). */

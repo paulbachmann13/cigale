@@ -88,7 +88,10 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 2. Stylo, Plume, Surligneur : le trait suit-il le Pencil sans retard gênant ? La Plume s'épaissit-elle quand on appuie ?
 3. Poser la paume sur l'écran en écrivant : aucun trait parasite ? Un doigt fait-il défiler la page (après un premier trait au Pencil) ?
 4. Gomme ; Annuler / Rétablir (trait par trait) ; attendre 2 s puis enregistrer, rouvrir dans Aperçu / Acrobat : même forme, surligneur transparent sur le texte.
-5. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
+5. Tracer un cercle, un rectangle, une ligne puis maintenir le Pencil : forme parfaite ? Ça ne transforme pas l'écriture ?
+6. Règle : bouton à côté du stylo ; la déplacer, la tourner (aimant), tracer le long du bord au Pencil.
+7. Lasso : entourer des traits au Pencil ; les déplacer avec le doigt/Pencil ; Dupliquer ; Supprimer.
+8. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
 
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 

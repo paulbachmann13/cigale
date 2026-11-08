@@ -9,7 +9,7 @@ import { type HeaderFooterOptions, type WatermarkOptions, addHeaderFooter, addWa
 import { type OcrPage, addTextLayer } from './ocr-ops';
 import { type RegionRect, extractRegion, regionImagePdf } from './region-ops';
 import { type FillResult, type FormValue, fillForm } from './form-ops';
-import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation } from './annot-ops';
+import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation, updateAnnotations } from './annot-ops';
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
 
 export type WorkerRequest =
@@ -24,6 +24,7 @@ export type WorkerRequest =
   | { kind: 'annotList'; bytes: Uint8Array; password?: string; expectedPages?: number }
   | { kind: 'annotAdd'; bytes: Uint8Array; drafts: AnnotDraft[]; password?: string; expectedPages?: number; author: string }
   | { kind: 'annotUpdate'; bytes: Uint8Array; id: string; patch: AnnotPatch; password?: string; expectedPages?: number }
+  | { kind: 'annotUpdateMany'; bytes: Uint8Array; items: { id: string; patch: AnnotPatch }[]; password?: string; expectedPages?: number }
   | { kind: 'formFill'; bytes: Uint8Array; values: FormValue[]; password?: string; expectedPages?: number }
   | { kind: 'watermark'; bytes: Uint8Array; options: WatermarkOptions; password?: string; expectedPages?: number }
   | { kind: 'region'; bytes: Uint8Array; page: number; rect: RegionRect; password?: string; expectedPages?: number }
@@ -85,6 +86,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'annotUpdate': {
         const bytes = await updateAnnotation(req.bytes, req.id, req.patch, req.password, req.expectedPages);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'annotUpdateMany': {
+        const bytes = await updateAnnotations(req.bytes, req.items, req.password, req.expectedPages);
         return post({ ok: true, result: bytes }, buffers(bytes));
       }
       case 'formFill': {

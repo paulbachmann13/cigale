@@ -244,6 +244,7 @@ export const fr = {
       freetext: 'Ajouter une zone de texte',
       ink: 'Écrire et dessiner à la main',
       eraser: 'Gomme (efface le trait touché)',
+      lasso: 'Lasso : entourer des traits pour les déplacer, dupliquer ou supprimer',
       rect: 'Rectangle',
       ellipse: 'Ellipse',
       line: 'Ligne',
@@ -254,6 +255,10 @@ export const fr = {
       clip: 'Extraire une zone en nouveau PDF',
     },
     pen: 'Type de stylo',
+    lasso: { duplicate: 'Dupliquer', delete: 'Supprimer' },
+    ruler: 'Règle',
+    rulerMove: 'Déplacer la règle',
+    rulerRotate: 'Tourner la règle',
     pens: { pen: 'Stylo', fountain: 'Plume', highlighter: 'Surligneur' },
     kinds: {
       highlight: 'Surlignage',

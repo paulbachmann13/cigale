@@ -7,7 +7,19 @@
 import type { AnnotDraft } from '../data/annotations';
 import { type InkStroke, PENS, strokeBounds } from '../data/ink';
 
+/** Règle virtuelle : position en pixels par rapport à la zone du document ; (0, 0) = pas encore placée. */
+export interface RulerState {
+  visible: boolean;
+  cx: number;
+  cy: number;
+  angle: number;
+  length: number;
+}
+
 export class InkStore {
+  /** Traits choisis au lasso (déjà dans le document) ; garde la sélection d'un rechargement à l'autre. */
+  lasso: { page: number; ids: string[] } | null = null;
+  ruler: RulerState = { visible: false, cx: 0, cy: 0, angle: 0, length: 0 };
   private list: InkStroke[] = [];
   private undone: InkStroke[] = [];
 
