@@ -419,8 +419,10 @@ export class App {
     const target = pages[pages.length - 1];
     let pageSize: [number, number] = [595.28, 841.89];
     try {
-      const v = (await s.view.pdf.getPage(target + 1)).view;
+      const pg = await s.view.pdf.getPage(target + 1);
+      const v = pg.view;
       pageSize = [Math.abs(v[2] - v[0]), Math.abs(v[3] - v[1])];
+      if (pg.rotate % 180 !== 0) pageSize = [pageSize[1], pageSize[0]]; // le papier inséré à côté d'une page tournée est droit : même forme que l'aperçu
     } catch {
       /* A4 par défaut */
     }
@@ -1152,8 +1154,10 @@ export class App {
       const page = Math.min(Math.max(s.view.page - 1, 0), s.view.pageCount - 1);
       const [x0, y0, x1, y1] = (await s.view.pdf.getPage(page + 1)).view;
       const pw = Math.abs(x1 - x0);
-      const w = Math.min(img.width * 0.75, pw * 0.6);
-      const hgt = (w * img.height) / img.width;
+      const ph = Math.abs(y1 - y0);
+      const k = Math.min(0.75, (pw * 0.6) / img.width, (ph * 0.6) / img.height); // jamais plus grande que 60 % de la page, ni en largeur ni en hauteur
+      const w = img.width * k;
+      const hgt = img.height * k;
       const cx = (x0 + x1) / 2;
       const cy = (y0 + y1) / 2;
       this.setAnnotTool('select'); // l'image collée sera sélectionnée après l'ajout

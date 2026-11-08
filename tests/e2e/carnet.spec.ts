@@ -213,6 +213,26 @@ test.describe('sur un PDF existant, sans rien sélectionner', () => {
     await expect(page.locator('.annot-hit.selected')).toHaveCount(1);
   });
 
+  test('coller une image très haute : elle reste dans la page (60 % de la hauteur au plus)', async ({ page }) => {
+    await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 300;
+      c.height = 2400;
+      c.getContext('2d')!.fillStyle = '#0a0';
+      c.getContext('2d')!.fillRect(0, 0, 300, 2400);
+      const blob = await new Promise<Blob>((r) => c.toBlob((x) => r(x!), 'image/png'));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'haute.png', { type: 'image/png' }));
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    const rect = () => page.evaluate(() => (window as unknown as { cigale: { app: { sessions: { annots: { rect: number[] }[] }[] } } }).cigale.app.sessions[0].annots[0]?.rect);
+    await expect.poll(rect).toBeTruthy();
+    const r = (await rect())!;
+    expect(r[3] - r[1]).toBeLessThanOrEqual(842 * 0.61);
+    expect(r[1]).toBeGreaterThan(0);
+    expect(r[3]).toBeLessThan(842);
+  });
+
   test('coller du texte dans une zone de saisie : le collage normal n’est pas intercepté', async ({ page }) => {
     await page.click('#btn-comment');
     await page.click('#tool-freetext');

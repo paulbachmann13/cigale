@@ -96,6 +96,7 @@ export function askInsertPages(ctx: InsertContext): Promise<InsertChoice | null>
     const current = () => (document.querySelector<HTMLInputElement>('input[name="ip-source"]:checked')?.value ?? 'paper') as 'paper' | 'copy' | 'file';
     const showSource = () => {
       const k = current();
+      error.textContent = '';
       paperBox.hidden = k !== 'paper';
       copyBox.hidden = k !== 'copy';
       fileBox.hidden = k !== 'file';

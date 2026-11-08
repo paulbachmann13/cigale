@@ -156,7 +156,7 @@ export class Editing {
   }
 
   insertBlank(s: Session, side: 'before' | 'after'): Promise<boolean> {
-    return this.withTarget(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? pages[0] : pages[pages.length - 1] + 1 }, 'insertBlank'));
+    return this.withTarget(s, (pages) => this.run(s, { op: 'insertBlank', at: side === 'before' ? Math.min(...pages) : Math.max(...pages) + 1 }, 'insertBlank'));
   }
 
   /** Insère ce que l'utilisateur a choisi dans « Insérer des pages » (papier, copie d'une page, pages d'un autre PDF). */

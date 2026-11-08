@@ -9,6 +9,7 @@ const css = (c: readonly number[]) => `rgb(${Math.round(c[0] * 255)} ${Math.roun
 
 /** Dessine l'aperçu d'un papier dans un canevas (largeur en pixels CSS donnée, hauteur selon la page). */
 export function drawPaperPreview(canvas: HTMLCanvasElement, template: PaperTemplate, color: PaperColor, pageW: number, pageH: number, cssWidth: number): void {
+  if (!(pageW > 0 && pageH > 0)) [pageW, pageH] = [595.28, 841.89]; // taille illisible : A4
   const dpr = window.devicePixelRatio || 1;
   const cssHeight = Math.round((cssWidth * pageH) / pageW);
   canvas.style.width = `${cssWidth}px`;
