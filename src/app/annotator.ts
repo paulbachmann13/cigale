@@ -106,6 +106,7 @@ export class Annotator {
   destroy() {
     window.clearTimeout(this.inkTimer);
     cancelAnimationFrame(this.paintFrame);
+    this.gestures = 0; // un geste coupé par la destruction du calque ne doit pas laisser l'affichage « occupé »
     this.rulerEl?.remove();
     this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove()));
     this.inkCanvases.clear();
@@ -432,6 +433,7 @@ export class Annotator {
       });
     if (drafts.length < items.length) this.host.notify(t.annot.lasso.noCopy);
     if (drafts.length) void this.host.add(drafts);
+    else this.renderAll(); // rien à copier : le cadre de sélection disparaît
   }
 
   /** Choisit ce qu'entoure la boucle `poly` (repère PDF) sur la page `page`. Si des traits viennent d'être écrits, on attend qu'ils soient dans le document. */
@@ -473,7 +475,7 @@ export class Annotator {
       if (cancelled) return;
       const poly = pts.map((p) => vp.convertToPdfPoint(p[0], p[1]) as Pt);
       if (pts.length >= 6) this.lassoBy(n - 1, poly);
-      else this.ink.lasso = null;
+      else this.ink.lasso = this.ink.lassoPoly = null;
       this.renderAll();
     };
     const up = () => finish(false);

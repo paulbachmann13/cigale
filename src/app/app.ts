@@ -889,11 +889,18 @@ export class App {
     // même position de défilement qu'avant (le zoom est le même, donc la mise en page aussi) : on reste là où on travaillait
     view.container.scrollTop = state.top;
     view.container.scrollLeft = state.left;
-    if (this.active === s) {
-      await this.whenPageRendered(view, 1200);
-      await this.whenNotWriting(old.annotator, 3000); // jamais pendant qu'un trait est en cours : le changement d'affichage le couperait
-      view.root.style.visibility = '';
+    try {
+      if (this.active === s) {
+        await this.whenPageRendered(view, 1200);
+        await this.whenNotWriting(old.annotator, 3000); // jamais pendant qu'un trait est en cours : le changement d'affichage le couperait
+      }
+    } catch (err) {
+      view.destroy();
+      throw err;
     }
+    // Montré (ou caché si on a changé d'onglet entre-temps) selon l'onglet actif à l'instant de l'échange
+    view.root.style.visibility = '';
+    view.root.hidden = this.active !== s;
     s.view = view;
     s.selection = selection.filter((i) => i < view.pageCount);
     s.thumbs = this.makeList(s, 'list', pdf, PANEL_THUMB);

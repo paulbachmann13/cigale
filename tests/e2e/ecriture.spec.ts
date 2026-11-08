@@ -619,6 +619,9 @@ test.describe('mode stylet en un clic, sans clignotement, lasso fiable', () => {
     for (const [x, y] of [[300, 270], [300, 430], [70, 430], [70, 272]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
     await page.mouse.up();
     await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2');
+    await page.click('.lasso-dup'); // dupliquer une ligne et un rectangle
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(4);
+    await page.click('#tool-lasso');
     // un lasso trop petit pour entourer la moitié d'une forme : rien
     await page.mouse.move(pb.x + 400, pb.y + 600);
     await page.mouse.down();
