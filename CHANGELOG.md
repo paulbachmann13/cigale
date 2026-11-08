@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.4.1] — 2026-11-08
+
+### Corrigé
+- **Windows** : après avoir fermé Cigale, un double-clic sur un PDF (ou « Ouvrir avec ») ne l'ouvrait plus : le programme restait caché en tâche de fond. Fermer la fenêtre arrête maintenant vraiment Cigale.
+
 ## [1.4.0] — 2026-11-08
 
 ### Ajouté

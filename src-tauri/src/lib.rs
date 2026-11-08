@@ -175,6 +175,9 @@ pub fn run() {
         .expect("erreur au démarrage de Cigale")
         .run(|app, event| {
             // ⌘Q ou « Quitter Cigale » : on laisse l'interface vérifier les documents modifiés avant de quitter.
+            // Mac seulement : sous Windows, fermer la fenêtre (déjà confirmée par l'interface) DOIT arrêter le programme. Sinon
+            // il reste invisible en tâche de fond et reçoit les doubles-clics suivants sur un PDF sans pouvoir les afficher.
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
                 if code.is_none() {
                     api.prevent_exit();
