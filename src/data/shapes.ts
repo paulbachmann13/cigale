@@ -4,7 +4,7 @@
  * (aucune dépendance au DOM ni au PDF), indépendante du repère (y vers le haut ou vers le bas).
  */
 import type { Pt } from './annotations';
-import { distToSegment } from './ink';
+import { distToSegment, strokeTouched } from './ink';
 
 export type ShapeKind = 'line' | 'angle' | 'ellipse' | 'circle' | 'rect' | 'polygon';
 export interface Shape {
@@ -263,4 +263,45 @@ export function insideFraction(points: Pt[], poly: Pt[]): number {
 /** Le lasso `poly` entoure-t-il l'annotation ? Oui si au moins la moitié de ce qui la représente est dedans. */
 export function lassoSelects(a: Parameters<typeof annotSamples>[0], poly: Pt[]): boolean {
   return insideFraction(annotSamples(a), poly) >= 0.5;
+}
+
+// ───────────── gomme : contour des annotations ─────────────
+
+/** Ce dont la gomme a besoin pour une annotation. */
+type Erasable = { kind: string; rect: [number, number, number, number]; strokes?: Pt[][]; line?: [number, number, number, number]; fill?: unknown; width: number };
+
+/** Contour d'une annotation en lignes brisées : traits (ink), 4 côtés (rectangle), polygone de 48 côtés (ellipse), segment (ligne, flèche). */
+export function eraseOutline(a: Erasable): Pt[][] {
+  if (a.kind === 'ink') return a.strokes ?? [];
+  if (a.kind === 'rect') {
+    const [x1, y1, x2, y2] = a.rect;
+    return [[[x1, y1], [x2, y1], [x2, y2], [x1, y2], [x1, y1]]];
+  }
+  if (a.kind === 'ellipse') {
+    const [x1, y1, x2, y2] = a.rect;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const rx = Math.abs(x2 - x1) / 2;
+    const ry = Math.abs(y2 - y1) / 2;
+    const ring: Pt[] = Array.from({ length: 49 }, (_, i): Pt => {
+      const t = (i / 48) * Math.PI * 2;
+      return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)];
+    });
+    ring[48] = ring[0];
+    return [ring];
+  }
+  if ((a.kind === 'line' || a.kind === 'arrow') && a.line) return [[[a.line[0], a.line[1]], [a.line[2], a.line[3]]]];
+  return [];
+}
+
+/** La gomme (centre `at`, rayon `radius`) touche-t-elle l'annotation ? Par son contour ; aussi par l'intérieur d'un rectangle ou d'une ellipse remplis. */
+export function eraseTouched(a: Erasable, at: Pt, radius: number): boolean {
+  if (eraseOutline(a).some((st) => strokeTouched(st, a.width, at, radius))) return true;
+  if (!a.fill) return false;
+  if (a.kind === 'rect') {
+    const [x1, y1, x2, y2] = a.rect;
+    return at[0] >= Math.min(x1, x2) && at[0] <= Math.max(x1, x2) && at[1] >= Math.min(y1, y2) && at[1] <= Math.max(y1, y2);
+  }
+  if (a.kind === 'ellipse') return pointInPolygon(at, eraseOutline(a)[0]);
+  return false;
 }

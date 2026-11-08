@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pt } from '../../src/data/annotations';
-import { annotSamples, densify, distToLine, lassoSelects, magnetAngle, nearestRulerEdge, pointInPolygon, projectOnLine, projectOnSegment, recognizeShape, resample, rulerEdges, simplify } from '../../src/data/shapes';
+import { annotSamples, densify, distToLine, eraseOutline, eraseTouched, lassoSelects, magnetAngle, nearestRulerEdge, pointInPolygon, projectOnLine, projectOnSegment, recognizeShape, resample, rulerEdges, simplify } from '../../src/data/shapes';
 
 /** Bruit déterministe (graine fixe) : la main tremble un peu. */
 let seed = 7;
@@ -149,5 +149,32 @@ describe('lasso : qu’est-ce qui est entouré ?', () => {
   it('un lasso mal fermé (le départ n’est pas la fin) entoure quand même', () => {
     const open: Pt[] = [[0, 0], [100, 0], [100, 100], [0, 100], [5, 8]];
     expect(lassoSelects({ rect: [20, 20, 80, 80] }, open)).toBe(true);
+  });
+});
+
+describe('gomme : formes', () => {
+  const base = { page: 0, width: 2, fill: null as null | [number, number, number] };
+  const rect = { ...base, kind: 'rect', rect: [100, 100, 200, 160] as [number, number, number, number] };
+  it('rectangle vide : touché par le bord, pas par le centre', () => {
+    expect(eraseTouched(rect, [100, 130], 3)).toBe(true);
+    expect(eraseTouched(rect, [150, 100], 3)).toBe(true);
+    expect(eraseTouched(rect, [150, 130], 3)).toBe(false);
+    expect(eraseTouched(rect, [300, 300], 3)).toBe(false);
+  });
+  it('rectangle rempli : touché aussi à l’intérieur', () => {
+    expect(eraseTouched({ ...rect, fill: [1, 0, 0] }, [150, 130], 3)).toBe(true);
+    expect(eraseTouched({ ...rect, fill: [1, 0, 0] }, [300, 300], 3)).toBe(false);
+  });
+  it('ellipse, ligne et flèche', () => {
+    const ell = { ...base, kind: 'ellipse', rect: [0, 0, 100, 60] as [number, number, number, number] };
+    expect(eraseOutline(ell)[0]).toHaveLength(49);
+    expect(eraseTouched(ell, [100, 30], 3)).toBe(true);
+    expect(eraseTouched(ell, [50, 30], 3)).toBe(false);
+    expect(eraseTouched({ ...ell, fill: [0, 0, 1] }, [50, 30], 3)).toBe(true);
+    for (const kind of ['line', 'arrow']) {
+      const l = { ...base, kind, rect: [0, 0, 100, 100] as [number, number, number, number], line: [0, 0, 100, 100] as [number, number, number, number] };
+      expect(eraseTouched(l, [50, 51], 3)).toBe(true);
+      expect(eraseTouched(l, [50, 80], 3)).toBe(false);
+    }
   });
 });

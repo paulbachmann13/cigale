@@ -5,11 +5,14 @@
 import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate, unionRect } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
-import { type Shape, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
+import { type Shape, eraseOutline, eraseTouched, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
 import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
 import { h } from './dom';
 import { loadSettings } from './settings';
 import type { InkStore } from './ink-store';
+
+/** Annotations que la gomme sait effacer. */
+const ERASABLE = new Set(['ink', 'rect', 'ellipse', 'line', 'arrow']);
 
 export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'lasso' | 'image' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
@@ -710,7 +713,7 @@ export class Annotator {
         g.lineCap = 'round';
         for (const a of erasedHere) {
           g.lineWidth = Math.max(3, a.width * vp.scale) + 2;
-          for (const st of a.strokes ?? []) {
+          for (const st of eraseOutline(a)) {
             const pts = toScreen(st);
             g.beginPath();
             pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
@@ -877,8 +880,8 @@ export class Annotator {
         }
       }
       for (const a of this.annots) {
-        if (a.kind !== 'ink' || a.page !== n - 1 || a.replyTo || this.erasing.has(a.id)) continue;
-        if ((a.strokes ?? []).some((st) => strokeTouched(st, a.width, at, radius))) {
+        if (!ERASABLE.has(a.kind) || a.page !== n - 1 || a.replyTo || this.erasing.has(a.id)) continue;
+        if (eraseTouched(a, at, radius)) {
           this.erasing.set(a.id, a);
           changed = true;
         }
