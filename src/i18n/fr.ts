@@ -2,6 +2,9 @@
  * Textes de l'interface Cigale (français).
  * Pour ajouter une langue : copier ce fichier (ex. en.ts) en gardant les mêmes clés.
  */
+/** Mac / iPad : raccourcis en ⌘ ; ailleurs (Windows) : Ctrl. */
+const IS_MAC = typeof navigator !== 'undefined' && (/Mac|iPhone|iPad/.test(navigator.platform) || /Mac OS/.test(navigator.userAgent));
+
 export const fr = {
   app: { name: 'Cigale', tagline: 'Éditeur PDF local et gratuit', untitled: 'Sans titre' },
   home: {
@@ -55,12 +58,12 @@ export const fr = {
     fitWidth: 'Ajuster à la largeur',
     fitPage: 'Ajuster à la page',
     actualSize: 'Taille réelle',
-    rotate: 'Pivoter l’affichage de 90° (⌘ ⇧ R)',
+    rotate: `Pivoter l’affichage de 90° (${IS_MAC ? '⌘ ⇧ R' : 'Ctrl+Maj+R'})`,
     view: 'Mode d’affichage',
     viewContinuous: 'Défilement continu',
     viewSingle: 'Page par page',
     viewTwoPages: 'Deux pages',
-    search: 'Rechercher dans le document (⌘F)',
+    search: `Rechercher dans le document (${IS_MAC ? '⌘F' : 'Ctrl+F'})`,
     fullscreen: 'Plein écran',
     open: 'Ouvrir',
     theme: 'Thème',
@@ -504,7 +507,7 @@ export const fr = {
     delete: 'Supprimer',
     close: 'Fermer',
   },
-  shortcuts: { open: '⌘O', save: '⌘S', saveAs: '⇧⌘S' },
+  shortcuts: IS_MAC ? { open: '⌘O', save: '⌘S', saveAs: '⇧⌘S' } : { open: 'Ctrl+O', save: 'Ctrl+S', saveAs: 'Ctrl+Maj+S' },
 };
 
 /** Choisit la forme singulier/pluriel selon n (0 et 1 : singulier). */

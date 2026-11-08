@@ -17,7 +17,7 @@ export interface TauriFileHandle {
   createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }>;
 }
 
-export const baseName = (path: string): string => path.split('/').pop() || path;
+export const baseName = (path: string): string => path.split(/[\\/]/).pop() || path;
 
 interface AtomicFs {
   writeFile(path: string, data: Uint8Array): Promise<void>;

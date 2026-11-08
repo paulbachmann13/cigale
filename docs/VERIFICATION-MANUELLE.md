@@ -82,6 +82,16 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 - [ ] Enregistrer pendant qu'on continue à travailler (annuler, repivoter) : l'indicateur « modifié » reste juste.
 - [ ] Application Mac : fichier sur le Bureau et sur iCloud Drive / clé USB ; ⌘S ; le .bak apparaît ; rouvrir.
 
+## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
+
+1. Télécharger `Cigale_…_x64-setup.exe` (Releases) ; l'installer ; passer l'avertissement SmartScreen (Informations complémentaires → Exécuter quand même).
+2. Ouvrir un PDF (⌘ = Ctrl) ; Ctrl+S ; vérifier que le `.bak` apparaît à côté ; modifier une page, enregistrer, rouvrir.
+3. Fichier sur un disque autre que C: et sur une clé USB : ouvrir, enregistrer.
+4. Double-clic sur un PDF (Cigale fermée, puis ouverte) ; « Ouvrir avec » ; un 2ᵉ PDF double-cliqué s'ouvre dans la même fenêtre.
+5. Fermer avec des modifications non enregistrées : la question apparaît.
+6. Bouton « Version » → Rechercher les mises à jour (nécessite une version plus récente publiée) ; imprimer (Ctrl+P).
+7. Associer Cigale comme lecteur PDF par défaut (Paramètres Windows → Applications par défaut).
+
 ## Application Mac (.dmg)
 
 1. GitHub → Actions → « Application Mac » → Run workflow ; télécharger l'artefact `Cigale-mac` (ou, après une étiquette `vX.Y.Z`, le .dmg des Releases).

@@ -1,7 +1,7 @@
 {
   "name": "cigale",
   "private": true,
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Cigale — éditeur PDF local et gratuit (PWA)",
   "license": "Apache-2.0",
   "type": "module",
@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "check:licenses": "node scripts/check-licenses.mjs",
     "tauri": "tauri",
-    "build:mac": "tauri build --target universal-apple-darwin"
+    "build:mac": "tauri build --target universal-apple-darwin",
+    "build:win": "tauri build --bundles nsis"
   },
   "engines": {
     "node": ">=22.13"

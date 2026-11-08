@@ -45,6 +45,11 @@
 - Les récents gardent le chemin du fichier : rouverture directe.
 - Application **non signée** (pas de compte développeur Apple) : au premier lancement, clic droit sur Cigale → Ouvrir. **Mises à jour automatiques** : vérification discrète 5 s après le démarrage (réglable) et Fichier → Rechercher les mises à jour ; notes de la version, téléchargement avec progression, installation, redémarrage sans deuxième icône dans le Dock ; le travail non enregistré est sauvegardé avant le redémarrage ; refus propre si Cigale est lancée depuis le .dmg ou Téléchargements ; signature vérifiée.
 
+### Application Windows (.exe, 1.4)
+- Même code que sur Mac (Tauri 2, WebView2). Installateur `Cigale_X.Y.Z_x64-setup.exe`, installation pour l'utilisateur courant (pas de droits d'administrateur, donc mises à jour sans question de Windows). Mêmes fonctions de fichiers que sur Mac (écriture atomique, `.bak`, récents, « Ouvrir avec », fermeture avec modifications).
+- Double-clic sur un PDF alors que Cigale tourne déjà : le fichier s'ouvre dans un onglet de la fenêtre existante (instance unique).
+- **Limites** : non signée par Microsoft (pas de certificat de signature de code) → au premier lancement, « Informations complémentaires » puis « Exécuter quand même » ; WebView2 doit être présent (déjà installé sur Windows 10/11 à jour, sinon l'installateur le télécharge) ; Windows sur ARM : tourne par émulation ; **jamais testée sur un vrai PC par l'auteur** avant la première installation (voir docs/VERIFICATION-MANUELLE.md).
+
 ### Commenter (étape 4)
 - **Outils** : surligner / souligner / barrer (d'après le texte sélectionné, une zone par ligne), note, zone de texte (texte qui passe à la ligne, taille réglable), dessin à main levée, rectangle, ellipse, ligne, flèche, tampons (6 modèles dessinés par Cigale). Couleur (7 teintes, mémorisée par outil) et épaisseur.
 - **Vraies annotations PDF** (Highlight, Underline, StrikeOut, Text + Popup, FreeText, Ink, Square, Circle, Line, Stamp) avec **flux d'apparence** : le rendu vient du fichier lui-même. Auteur (réglable), date, `NM` unique.

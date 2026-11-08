@@ -2,6 +2,15 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.4.0] — 2026-11-08
+
+### Ajouté
+- **Cigale pour Windows** (64 bits) : un installateur `.exe`, sans droits d'administrateur. Même application que sur Mac : boîtes Ouvrir / Enregistrer natives, enregistrement sécurisé avec copie « .bak » à côté du fichier, double-clic sur un PDF (« Ouvrir avec »), et **mises à jour automatiques** (Fichier → Rechercher les mises à jour, ou le bouton « Version »). Au premier lancement, Windows affiche « Windows a protégé votre ordinateur » : cliquer sur « Informations complémentaires » puis « Exécuter quand même ».
+- Si Cigale est déjà ouverte, un double-clic sur un autre PDF l'ajoute dans un nouvel onglet au lieu de lancer une deuxième fenêtre (Windows).
+
+### Modifié
+- Les raccourcis affichés dans les info-bulles et les menus suivent le système : Ctrl sur Windows, ⌘ sur Mac.
+
 ## [1.3.1] — 2026-11-05
 
 ### Corrigé

@@ -141,13 +141,20 @@ describe('configuration des mises à jour (ce qui, mal réglé, casserait toutes
     expect(conf.plugins.updater.endpoints).toEqual(['https://github.com/paulbachmann13/cigale/releases/latest/download/latest.json']);
     expect(conf.bundle.createUpdaterArtifacts).toBe(true);
   });
+  it('Windows : installateur NSIS pour l’utilisateur courant (mises à jour sans droits d’administrateur), en français', () => {
+    const win = JSON.parse(readFileSync(new URL('../../src-tauri/tauri.windows.conf.json', import.meta.url), 'utf8'));
+    expect(win.bundle.targets).toEqual(['nsis']);
+    expect(win.bundle.windows.nsis.installMode).toBe('currentUser');
+    expect(win.bundle.windows.nsis.languages).toEqual(['French']);
+    expect(conf.bundle.fileAssociations[0].ext).toEqual(['pdf']);
+  });
   it('la fenêtre a le droit d’utiliser le module de mise à jour', () => {
     const caps = JSON.parse(readFileSync(new URL('../../src-tauri/capabilities/default.json', import.meta.url), 'utf8'));
     expect(caps.permissions).toContain('updater:default');
   });
   it('le workflow publie le .dmg, l’archive signée et latest.json, et vérifie l’étiquette', () => {
-    const wf = readFileSync(new URL('../../.github/workflows/mac.yml', import.meta.url), 'utf8');
-    for (const needle of ['TAURI_SIGNING_PRIVATE_KEY', 'latest.json', 'app.tar.gz.sig', 'ne correspond pas à la version']) expect(wf).toContain(needle);
+    const wf = readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8');
+    for (const needle of ['TAURI_SIGNING_PRIVATE_KEY', 'latest.json', 'app.tar.gz.sig', 'x64-setup.exe', 'windows-latest', 'ne correspond pas à la version']) expect(wf).toContain(needle);
   });
 });
 

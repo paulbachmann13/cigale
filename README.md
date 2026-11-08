@@ -16,6 +16,10 @@ Version 1.0.0 : ouvrir et afficher (onglets, miniatures, signets, zoom, recherch
 
 Téléchargez le `.dmg` dans les [Releases](https://github.com/paulbachmann13/cigale/releases) (ou dans GitHub → Actions → « Application Mac »), ouvrez-le et glissez Cigale dans Applications. Application non signée : au premier lancement, clic droit sur Cigale → Ouvrir.
 
+## Application Windows (.exe)
+
+Téléchargez `Cigale_…_x64-setup.exe` dans les [Releases](https://github.com/paulbachmann13/cigale/releases) et lancez-le (aucun droit d'administrateur nécessaire). Application non signée : au premier lancement, « Windows a protégé votre ordinateur » → *Informations complémentaires* → *Exécuter quand même*. Les mises à jour se font ensuite toutes seules.
+
 ## Installer l'application (PWA)
 
 - **Chrome ou Edge (Mac, Windows)** : ouvrez le site, puis l'icône « Installer » dans la barre d'adresse (ou ⋮ → « Installer Cigale »).

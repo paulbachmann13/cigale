@@ -55,3 +55,12 @@ describe('numéro de version', () => {
     expect(cargo).toBe(pkg);
   });
 });
+
+describe('chemins Windows', () => {
+  it('le nom d’un fichier se lit aussi avec des « \\ »', async () => {
+    const { baseName } = await import('../../src/app/tauri-files');
+    expect(baseName('C:\\Users\\Papa\\Documents\\facture.pdf')).toBe('facture.pdf');
+    expect(baseName('/Users/paul/facture.pdf')).toBe('facture.pdf');
+    expect(baseName('D:/dossier/a.pdf')).toBe('a.pdf');
+  });
+});

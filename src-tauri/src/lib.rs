@@ -4,6 +4,7 @@
 //! (« Ouvrir avec »), y compris quand Cigale n'est pas encore lancée.
 
 use std::sync::Mutex;
+#[cfg(target_os = "macos")]
 use tauri::menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -62,6 +63,7 @@ fn quit_app(app: AppHandle) {
 
 /// Barre des menus du Mac en français (celle de Tauri par défaut est en anglais). Les commandes d'édition
 /// restent les éléments du système : ⌘C, ⌘V… arrivent ainsi à la page comme avant.
+#[cfg(target_os = "macos")]
 fn french_menu<R: tauri::Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let about = AboutMetadata { name: Some("Cigale".into()), ..Default::default() };
     let sep = || PredefinedMenuItem::separator(app);
@@ -107,15 +109,68 @@ fn french_menu<R: tauri::Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> 
     )
 }
 
+/// Les arguments qui sont des fichiers PDF existants (Windows : « Ouvrir avec », double-clic).
+#[cfg(windows)]
+fn pdf_args(args: impl Iterator<Item = String>, cwd: Option<&str>) -> Vec<String> {
+    args.filter(|a| !a.starts_with('-') && a.to_lowercase().ends_with(".pdf"))
+        // un chemin relatif se lit depuis le dossier de la commande qui a lancé Cigale, pas celui de l'instance déjà ouverte
+        .map(|a| match cwd {
+            Some(dir) if std::path::Path::new(&a).is_relative() => std::path::Path::new(dir).join(&a).to_string_lossy().into_owned(),
+            _ => a,
+        })
+        .filter(|a| std::path::Path::new(a).is_file())
+        .collect()
+}
+
+/// Donne des fichiers à ouvrir à l'interface (tout de suite si elle tourne, sinon au démarrage). Chaque fichier
+/// est ajouté aux accès autorisés (le disque D:, une clé USB… ne sont pas dans les dossiers prévus par défaut).
+fn deliver(app: &AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    use tauri_plugin_fs::FsExt;
+    for p in &paths {
+        if let Some(dir) = std::path::Path::new(p).parent() {
+            let _ = app.fs_scope().allow_directory(dir, false);
+        }
+    }
+    let state = app.state::<Opens>();
+    if *state.ready.lock().unwrap() {
+        // L'interface tourne déjà : elle ouvre chaque fichier dans un nouvel onglet.
+        let _ = app.emit("cigale://open", paths);
+    } else {
+        state.pending.lock().unwrap().extend(paths);
+    }
+}
+
 pub fn run() {
-    tauri::Builder::default()
-        .menu(|app| french_menu(app))
+    let builder = tauri::Builder::default();
+    // Windows : pas de barre de menus du système (l'application a son propre menu « Fichier »).
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(|app| french_menu(app));
+    // Windows : un double-clic sur un deuxième PDF relance Cigale ; la nouvelle instance transmet le fichier à celle qui tourne.
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        deliver(app, pdf_args(argv.into_iter().skip(1), Some(&cwd)));
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         // Mises à jour automatiques (Releases GitHub signées) : vérification et installation depuis l'interface.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Opens::default())
         .invoke_handler(tauri::generate_handler![take_pending_opens, quit_app, relaunch_app])
+        .setup(|app| {
+            // Windows : le PDF double-cliqué arrive dans les arguments de la ligne de commande.
+            #[cfg(windows)]
+            deliver(app.handle(), pdf_args(std::env::args().skip(1), None));
+            let _ = app;
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("erreur au démarrage de Cigale")
         .run(|app, event| {
@@ -137,15 +192,9 @@ pub fn run() {
                 if paths.is_empty() {
                     return;
                 }
-                let state = app.state::<Opens>();
-                if *state.ready.lock().unwrap() {
-                    // L'interface tourne déjà : elle ouvre chaque fichier dans un nouvel onglet.
-                    let _ = app.emit("cigale://open", paths);
-                    if let Some(w) = app.get_webview_window("main") {
-                        let _ = w.set_focus();
-                    }
-                } else {
-                    state.pending.lock().unwrap().extend(paths);
+                deliver(app, paths);
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_focus();
                 }
             }
             #[cfg(not(target_os = "macos"))]

@@ -69,6 +69,7 @@ tests/unit, e2e, fixtures/out (générées)
 
 ## Décisions de l'application Mac (Tauri)
 
+- **Windows (1.4)** : mêmes sources, `tauri.windows.conf.json` (NSIS `currentUser`, français) ; job `windows` de `release.yml` ; `latest.json` unique avec `darwin-*` et `windows-x86_64` (clé de signature identique, `make-latest-json.mjs`). Pas de menu natif hors Mac (l'appli a son menu « Fichier »). Ouverture d'un PDF : arguments de la ligne de commande au démarrage + `tauri-plugin-single-instance` (MIT/Apache) si Cigale tourne ; chaque dossier reçu est ajouté à la portée `fs` à l'exécution (D:, USB). Pas de certificat de signature de code Microsoft (coût, inutile pour un usage familial) : SmartScreen avertit au premier lancement ; la signature des mises à jour (minisign) est indépendante.
 - **Même architecture que Grillon** : `src-tauri/` (Tauri 2, Rust), plugins `dialog` et `fs`, workflow GitHub `mac.yml` (.dmg universel Intel + Apple Silicon, publié dans les Releases quand on pousse une étiquette `vX.Y.Z`), signature « ad hoc » (`signingIdentity: "-"`), pas de notarisation (pas de compte développeur Apple).
 - **Une seule fenêtre à onglets** (Grillon ouvre une fenêtre par classeur) : les documents sont déjà des onglets.
 - **Un « handle » maison** (`src/app/tauri-files.ts`) imite `FileSystemFileHandle` (`getFile`, `createWritable`) : tout le code d'enregistrement (`writeVerified`, relecture, comparaison SHA-256) est le même que dans le navigateur. L'écriture est atomique (`fichier.cigale-tmp` puis `rename`) ; jamais d'écriture directe.

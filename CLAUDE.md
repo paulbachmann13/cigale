@@ -30,7 +30,8 @@ npm run test:e2e       # Playwright sur le build de production sous /cigale/ ; C
 npm run build          # build de production
 npm run check:licenses
 npm run tauri dev      # application Mac en développement (Rust requis)
-npm run build:mac      # .dmg universel (Mac avec Rust ; sinon GitHub Actions → « Application Mac »)
+npm run build:mac      # .dmg universel (Mac avec Rust ; sinon GitHub Actions → « Application Mac et Windows »)
+npm run build:win      # installateur Windows (à lancer sur un PC Windows avec Rust ; sinon GitHub Actions)
 ```
 
 Avant de pousser : `npm run typecheck && npm test && npm run fixtures && npm run test:e2e`.
@@ -69,7 +70,8 @@ Un `vite preview` déjà lancé sur le port 4173 est réutilisé par Playwright 
 - Sauvegarde automatique : `scheduleDraft` dans `App.refreshState` ; supprimer le brouillon quand on enregistre/ferme/abandonne. Impression : `print.ts` (image 200 dpi + `@media print`).
 - Tests : `npm run test:e2e` lance aussi `webkit` (Safari) ; `tests/unit/corpus.test.ts` = PDF difficiles + mutations (graine fixe).
 
-- **Mises à jour de l'app Mac** : `src/app/updater.ts` (logique testée), vérification discrète 5 s après le démarrage + Fichier → Rechercher les mises à jour. Publier = pousser l'étiquette `vX.Y.Z` (égale à `package.json`) : le workflow « Application Mac » publie le .dmg, `Cigale_X.Y.Z_universal.app.tar.gz` et `latest.json`. **Clé de signature** : privée dans `~/.tauri/cigale-updater.key` (À SAUVEGARDER) et secret GitHub `TAURI_SIGNING_PRIVATE_KEY` ; publique dans `tauri.conf.json` — ne JAMAIS la changer. Test sans publier : construire deux copies avec `--config` (clé jetable, `endpoints` locaux, `dangerousInsecureTransportProtocol`) et servir `latest.json` avec `python3 -m http.server` (fait le 03/11 : 1.0.0 → 1.0.1 OK).
+- **Application Windows (1.4)** : `src-tauri/tauri.windows.conf.json` (NSIS, installation « utilisateur courant », français) fusionné automatiquement par Tauri ; `lib.rs` : pas de menu système hors Mac, `tauri-plugin-single-instance` + arguments de ligne de commande pour « Ouvrir avec », chaque fichier reçu est ajouté à la portée `fs` (disques D:, clés USB). Libellés de raccourcis via `IS_MAC` (`fr.ts`). **Jamais testé sur un vrai PC Windows depuis le Mac** : le code Windows ne se compile que sur GitHub Actions.
+- **Mises à jour de l'app Mac** : `src/app/updater.ts` (logique testée), vérification discrète 5 s après le démarrage + Fichier → Rechercher les mises à jour. Publier = pousser l'étiquette `vX.Y.Z` (égale à `package.json`) : le workflow « Application Mac et Windows » (`release.yml`, jobs `mac` + `windows` + `publier`) publie le .dmg, `Cigale_X.Y.Z_universal.app.tar.gz`, `Cigale_X.Y.Z_x64-setup.exe` et `latest.json` (entrées darwin-* et windows-x86_64). **Clé de signature** : privée dans `~/.tauri/cigale-updater.key` (À SAUVEGARDER) et secret GitHub `TAURI_SIGNING_PRIVATE_KEY` ; publique dans `tauri.conf.json` — ne JAMAIS la changer. Test sans publier : construire deux copies avec `--config` (clé jetable, `endpoints` locaux, `dangerousInsecureTransportProtocol`) et servir `latest.json` avec `python3 -m http.server` (fait le 03/11 : 1.0.0 → 1.0.1 OK).
 
 - **Caviardage / formulaires / signature (1.1)** : voir docs/ARCHITECTURE.md (« version 1.1 »). Tests de fuite : toujours `everything(bytes)` (tests/unit/helpers.ts), jamais une recherche dans les octets bruts. Après un caviardage : `Session.noBackup`, historique remplacé. `isDirty(s)` au lieu de `s.history.dirty`. `flushForm` avant toute opération qui lit `history.current`.
 - **OCR (1.2)** : `src/app/ocr.ts` (tesseract.js, import dynamique, ressources locales dans `public/ocr/` copiées par `scripts/copy-pdfjs-assets.mjs`, un seul cœur SIMD-LSTM) + `src/pdf/ocr-ops.ts` (couche invisible `3 Tr`, pur, testé) via `Editing.ocrLayer`. Jamais de CDN : tous les chemins tesseract (`workerPath`, `corePath`, `langPath`) sont fixés.

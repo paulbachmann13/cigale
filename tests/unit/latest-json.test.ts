@@ -37,4 +37,17 @@ describe('latest.json (mises à jour)', () => {
       },
     });
   });
+
+  it('avec Windows : une entrée de plus, sans toucher à celles du Mac', () => {
+    const m = buildManifest({
+      version: '1.4.0',
+      signature: 'mac',
+      url: 'https://example.com/Cigale.app.tar.gz',
+      notes: 'n',
+      windows: { signature: 'win\n', url: 'https://example.com/Cigale_1.4.0_x64-setup.exe' },
+    });
+    expect(Object.keys(m.platforms).sort()).toEqual(['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64']);
+    expect(m.platforms['windows-x86_64']).toEqual({ signature: 'win', url: 'https://example.com/Cigale_1.4.0_x64-setup.exe' });
+    expect(m.platforms['darwin-aarch64'].signature).toBe('mac');
+  });
 });
