@@ -95,7 +95,8 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 9. Ajouter une image (photo prise à l'iPad) : l'orientation est-elle bonne ? la déplacer, la redimensionner.
 10. Étoile à côté des stylos : mémoriser un stylo, le retrouver après avoir fermé et rouvert Cigale. Paramètres → Écriture à la main : essayer les deux réglages.
 11. Nouveau carnet : les 9 vignettes ressemblent-elles aux vraies pages ? (Cornell, musique, millimétré). Imprimer une page millimétrée : 1 mm / 5 mm / 10 mm justes ? Coller une capture d'écran (⌘V) dans un PDF ; « Insérer des pages… » → copie de la page 3 après la page 1.
-12. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
+12. Ouvrir un PDF quelconque, cliquer « Stylet » : écrire, gommer, lasso, ajouter une page ; plus aucun clignotement après chaque trait ? Lasso : entourer un trait redressé, une image, un rectangle.
+13. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
 
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 

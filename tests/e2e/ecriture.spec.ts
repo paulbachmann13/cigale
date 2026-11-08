@@ -527,3 +527,103 @@ test.describe('finition : favoris, réglages, tablette', () => {
     expect(await top()).toBe(before);
   });
 });
+
+test.describe('mode stylet en un clic, sans clignotement, lasso fiable', () => {
+  test('bouton Stylet : ouvre d’un clic la barre d’écriture sur le document ouvert, un 2ᵉ clic la ferme', async ({ page }) => {
+    await page.click('#btn-comment'); // (beforeEach l'a ouvert) : on le referme pour partir de zéro
+    await expect(page.locator('.annot-toolbar')).toBeHidden();
+    await page.click('#btn-pen');
+    await expect(page.locator('.annot-toolbar')).toBeVisible();
+    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#btn-pen')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#pen-favs')).toBeVisible();
+    await page.click('#btn-pen');
+    await expect(page.locator('.annot-toolbar')).toBeHidden();
+  });
+
+  test('réglage « ouvrir en mode stylet » : le stylo est prêt dès l’ouverture d’un PDF', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ penOnOpen: true })));
+    await page.reload();
+    await openPdf(page, 'simple-3p.pdf');
+    await waitFirstPage(page);
+    await expect(page.locator('.annot-toolbar')).toBeVisible();
+    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('après un trait, la page ne clignote pas (jamais de page blanche entre deux affichages)', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    // on observe, image par image, l'affichage visible : la page 1 doit toujours avoir son texte dessiné
+    const recording = page.evaluate(
+      () =>
+        new Promise<{ frames: number; blank: number }>((resolve) => {
+          let frames = 0;
+          let blank = 0;
+          const end = performance.now() + 4500;
+          const tick = () => {
+            const views = [...document.querySelectorAll<HTMLElement>('.doc-view')].filter((v) => !v.hidden && getComputedStyle(v).visibility !== 'hidden');
+            const top = views[views.length - 1];
+            const c = top?.querySelector('.page[data-page-number="1"] canvas:not(.ink-canvas)') as HTMLCanvasElement | null;
+            frames++;
+            let dark = 0;
+            if (c && c.width > 0) {
+              const d = c.getContext('2d')!.getImageData(0, 0, c.width, Math.min(c.height, 400)).data;
+              for (let i = 0; i < d.length; i += 16) if (d[i] < 100) dark++;
+            }
+            if (dark === 0) blank++;
+            if (performance.now() < end) requestAnimationFrame(tick);
+            else resolve({ frames, blank });
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    await wave(page, pb.x + 100, pb.y + 300);
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    const r = await recording;
+    expect(r.frames).toBeGreaterThan(30);
+    expect(r.blank).toBe(0);
+  });
+
+  test('lasso juste après avoir écrit (traits pas encore dans le document) : tout ce qui est dedans est choisi', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await wave(page, pb.x + 100, pb.y + 300);
+    await wave(page, pb.x + 100, pb.y + 360);
+    await page.click('#tool-lasso'); // tout de suite : les 2 traits ne sont pas encore enregistrés
+    await page.mouse.move(pb.x + 70, pb.y + 260);
+    await page.mouse.down();
+    for (const [x, y] of [[300, 260], [300, 410], [70, 410], [70, 262]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2', { timeout: 10_000 });
+  });
+
+  test('lasso : un trait redressé (2 points seulement), une forme et une image sont choisis s’ils sont dedans', async ({ page }) => {
+    const pb = await pageBox(page);
+    // une ligne redressée (2 points) au stylo
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+    // un rectangle (outil Rectangle)
+    await page.click('#tool-rect');
+    await page.mouse.move(pb.x + 120, pb.y + 340);
+    await page.mouse.down();
+    await page.mouse.move(pb.x + 220, pb.y + 400, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(2);
+    await page.click('#tool-lasso');
+    await page.mouse.move(pb.x + 70, pb.y + 270);
+    await page.mouse.down();
+    for (const [x, y] of [[300, 270], [300, 430], [70, 430], [70, 272]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2');
+    // un lasso trop petit pour entourer la moitié d'une forme : rien
+    await page.mouse.move(pb.x + 400, pb.y + 600);
+    await page.mouse.down();
+    for (const [x, y] of [[440, 600], [440, 640], [400, 640], [400, 602]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 3 });
+    await page.mouse.up();
+    await expect(page.locator('.lasso-box')).toHaveCount(0);
+  });
+});

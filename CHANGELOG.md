@@ -9,6 +9,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Insérer des pages, enfin partout** : « Insérer des pages… » propose une page avec un papier (avec aperçus), **la copie d'une page du document** (une ou plusieurs), ou les pages d'un autre PDF, **avant ou après une page précise**, au tout début ou à la fin.
 - **Coller une image** : Ctrl+V (⌘V) avec une capture d'écran ou une image copiée la pose au milieu de la page affichée, prête à être déplacée ou redimensionnée. Le menu « Insérer » a aussi « Coller une image du presse-papiers » (utile sur iPad).
 
+- **Bouton « Stylet »** (barre du haut) : d'un clic, toute l'interface d'écriture apparaît sur le PDF ouvert (stylos, favoris, gomme, règle, lasso, couleurs), sans passer par un carnet ; un second clic la referme. Pour annoter, ajouter des pages ou des images, tout est dans la même fenêtre. Réglage facultatif : « Ouvrir les PDF directement en mode stylet ».
+
+### Corrigé
+- **Plus de clignotement** après un trait, une rotation, un ajout de page, etc. : le nouvel affichage est préparé en coulisses et n'apparaît que lorsque la page est dessinée ; l'ancien reste à l'écran entre-temps. On n'interrompt plus un trait ou un geste de lasso en cours.
+- **Lasso** : il choisit maintenant tout ce qui est vraiment dedans, y compris les traits redressés (qui n'ont que deux points), les formes, les images, les surlignages et les zones de texte (au moins la moitié de l'objet dans la boucle). Entourer juste après avoir écrit marche aussi : le lasso attend que les traits soient enregistrés. Dupliquer marche pour les traits, rectangles, ellipses, lignes, flèches et zones de texte.
+
 ### Modifié
 - Pivoter, dupliquer, extraire, insérer : sans page sélectionnée, ces boutons agissent sur la **page affichée** au lieu d'être grisés.
 

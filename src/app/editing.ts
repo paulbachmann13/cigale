@@ -298,6 +298,7 @@ export class Editing {
   private async flushInkInner(s: Session): Promise<boolean> {
     const strokes = s.ink.take();
     if (strokes.length === 0) return true;
+    s.ink.flushing = true;
     try {
       if (!(await this.confirmRisks(s))) {
         s.ink.restore(strokes);
@@ -313,6 +314,8 @@ export class Editing {
       this.host.refresh(s);
       await showMessage(t.editErrors.title, fmt(t.annot.failed, { name: s.name, detail: describe(err) }));
       return false;
+    } finally {
+      s.ink.flushing = false;
     }
   }
 

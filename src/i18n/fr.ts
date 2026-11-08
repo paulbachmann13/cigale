@@ -157,6 +157,8 @@ export const fr = {
     autosaveHint: 'Une copie du travail en cours est gardée sur cet ordinateur (jamais envoyée ailleurs) et supprimée dès que vous enregistrez ou fermez. Décochez pour ne rien garder.',
     autoUpdate: 'Rechercher les mises à jour au démarrage (application Mac)',
     writing: 'Écriture à la main',
+    penOnOpen: 'Ouvrir les PDF directement en mode stylet',
+    penOnOpenHint: 'La barre d’écriture (stylos, gomme, règle, lasso) est affichée dès l’ouverture. Vous pouvez aussi l’ouvrir d’un clic avec le bouton Stylet.',
     shapeSnap: 'Redresser les traits quand je maintiens le stylet',
     shapeSnapHint: 'Tracez une ligne, un cercle, un rectangle… puis gardez le stylet immobile une demi-seconde : le trait devient parfait. L’écriture n’est jamais transformée.',
     fingerWrites: 'Le doigt peut aussi écrire',
@@ -276,6 +278,7 @@ export const fr = {
   },
   annot: {
     mode: 'Commenter',
+    penMode: 'Stylet : écrire et dessiner directement sur le document (stylos, gomme, règle, lasso)',
     toolbar: 'Outils de commentaire',
     defaultAuthor: 'Utilisateur',
     tools: {
@@ -308,7 +311,7 @@ export const fr = {
     favRemove: 'Retirer : {name}',
     favExists: 'Ce stylo est déjà dans vos favoris.',
     favFull: 'Six stylos au plus : le plus ancien a été remplacé.',
-    lasso: { duplicate: 'Dupliquer', delete: 'Supprimer' },
+    lasso: { duplicate: 'Dupliquer', delete: 'Supprimer', noCopy: 'Les images, tampons et signatures ne se dupliquent pas.' },
     ruler: 'Règle',
     rulerMove: 'Déplacer la règle',
     rulerRotate: 'Tourner la règle',

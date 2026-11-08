@@ -5,7 +5,7 @@
 import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate, unionRect } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
-import { type Shape, magnetAngle, pointInPolygon, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
+import { type Shape, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
 import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
 import { h } from './dom';
 import { loadSettings } from './settings';
@@ -83,6 +83,8 @@ export class Annotator {
   private inkTimer: number | undefined;
   private paintQueued = false;
   private paintFrame = 0;
+  /** Gestes en cours qui ne doivent pas être coupés par un changement d'affichage (boucle du lasso, déplacement de la sélection). */
+  private gestures = 0;
   /** Traits en attente que la gomme vient de toucher (supprimés au relâchement seulement : un geste annulé ne supprime rien). */
   private erasingPending = new Set<InkStroke>();
   private annots: Annot[] = [];
@@ -126,7 +128,7 @@ export class Annotator {
   /** `null` : mode commentaire désactivé (aucun calque). */
   setTool(tool: Tool | null) {
     this.tool = tool;
-    if (tool !== 'lasso') this.ink.lasso = null;
+    if (tool !== 'lasso') this.ink.lasso = this.ink.lassoPoly = null;
     if (tool !== 'ink' && tool !== 'eraser') this.scheduleInkFlush(0); // on quitte l'écriture : tout part dans le document
     if (tool !== 'select') this.select(null);
     this.syncRuler();
@@ -138,6 +140,11 @@ export class Annotator {
   setAnnots(list: Annot[]) {
     this.annots = list;
     this.annotsLoaded = true;
+    if (this.ink.lassoPoly && !this.ink.hasPending && !this.ink.flushing) {
+      const { page, poly } = this.ink.lassoPoly;
+      this.ink.lassoPoly = null;
+      this.lassoBy(page, poly);
+    }
     if (this.selectedId && !list.some((a) => a.id === this.selectedId)) this.selectedId = null;
     this.renderAll();
   }
@@ -390,6 +397,11 @@ export class Annotator {
 
   // ───────────── lasso : choisir des traits, les déplacer, les dupliquer, les supprimer ─────────────
 
+  /** Un trait, un geste de gomme ou un déplacement est en cours : on ne doit pas changer d'affichage maintenant. */
+  get isBusy(): boolean {
+    return !!this.live || this.erasing.size > 0 || this.erasingPending.size > 0 || this.gestures > 0;
+  }
+
   get hasLasso(): boolean {
     return !!this.ink.lasso && this.ink.lasso.ids.length > 0;
   }
@@ -409,12 +421,28 @@ export class Annotator {
     const items = this.lassoItems();
     this.ink.lasso = null;
     if (!items.length) return;
-    // la copie est décalée pour qu'on la voie, et devient un nouveau trait indépendant
-    const drafts: AnnotDraft[] = items.map((a) => {
-      const m = translate(a, 14, -14);
-      return { kind: 'ink', page: a.page, color: a.color, fill: null, opacity: a.opacity, width: a.width, contents: '', rect: m.rect, strokes: m.strokes, pen: a.pen, pressures: a.pressures };
-    });
-    void this.host.add(drafts);
+    // la copie est décalée pour qu'on la voie, et devient un objet indépendant. Les images, tampons et signatures n'ont pas de
+    // description à recopier : ils ne sont pas dupliqués (on le dit).
+    const copyable = new Set(['ink', 'rect', 'ellipse', 'line', 'arrow', 'freetext']);
+    const drafts: AnnotDraft[] = items
+      .filter((a) => copyable.has(a.kind))
+      .map((a) => {
+        const m = translate(a, 14, -14);
+        return { kind: a.kind, page: a.page, color: a.color, fill: a.fill, opacity: a.opacity, width: a.width, contents: a.contents, fontSize: a.fontSize, rect: m.rect, strokes: m.strokes, line: m.line, pen: a.pen, pressures: a.pressures };
+      });
+    if (drafts.length < items.length) this.host.notify(t.annot.lasso.noCopy);
+    if (drafts.length) void this.host.add(drafts);
+  }
+
+  /** Choisit ce qu'entoure la boucle `poly` (repère PDF) sur la page `page`. Si des traits viennent d'être écrits, on attend qu'ils soient dans le document. */
+  private lassoBy(page: number, poly: Pt[]) {
+    if (this.ink.hasPending || this.ink.flushing || !this.annotsLoaded) {
+      this.ink.lassoPoly = { page, poly };
+      this.scheduleInkFlush(0);
+      return;
+    }
+    const ids = this.annots.filter((a) => a.page === page && !a.replyTo && lassoSelects(a, poly)).map((a) => a.id);
+    this.ink.lasso = ids.length ? { page, ids } : null;
   }
 
   private beginLasso(e: PointerEvent, layer: HTMLElement, n: number) {
@@ -425,6 +453,7 @@ export class Annotator {
     capture(layer, e.pointerId);
     const vp = this.pageView(n)!.viewport;
     const pts: [number, number][] = [this.local(layer, e)];
+    this.gestures++;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'annot-preview');
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
@@ -439,20 +468,12 @@ export class Annotator {
       layer.removeEventListener('pointermove', move);
       layer.removeEventListener('pointerup', up);
       layer.removeEventListener('pointercancel', cancel);
+      this.gestures--;
       svg.remove();
       if (cancelled) return;
       const poly = pts.map((p) => vp.convertToPdfPoint(p[0], p[1]) as Pt);
-      let ids: string[] = [];
-      if (pts.length >= 6) {
-        ids = this.annots
-          .filter((a) => a.kind === 'ink' && a.page === n - 1 && !a.replyTo && a.strokes?.length)
-          .filter((a) => {
-            const all = a.strokes!.flat();
-            return all.filter((p) => pointInPolygon(p, poly)).length >= all.length / 2; // au moins la moitié du trait est dans la boucle
-          })
-          .map((a) => a.id);
-      }
-      this.ink.lasso = ids.length ? { page: n - 1, ids } : null;
+      if (pts.length >= 6) this.lassoBy(n - 1, poly);
+      else this.ink.lasso = null;
       this.renderAll();
     };
     const up = () => finish(false);
@@ -490,6 +511,7 @@ export class Annotator {
       e.preventDefault();
       e.stopPropagation();
       capture(box, e.pointerId);
+      this.gestures++;
       const start = this.local(layer, e);
       let moved = false;
       const move = (ev: PointerEvent) => {
@@ -498,6 +520,7 @@ export class Annotator {
         if (moved) box.style.transform = `translate(${p[0] - start[0]}px, ${p[1] - start[1]}px)`;
       };
       const stop = () => {
+        this.gestures--;
         box.removeEventListener('pointermove', move);
         box.removeEventListener('pointerup', end);
         box.removeEventListener('pointercancel', cancel);

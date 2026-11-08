@@ -225,6 +225,7 @@ export class App {
       this.editButton('btn-extract', t.pages.extract, 'extract', () => void this.withActive((s) => this.editing.extract(s))),
       h('span', { class: 'sep' }),
       this.iconButton('btn-organize', t.pages.organize, 'grid', () => this.toggleOrganize()),
+      this.iconButton('btn-pen', t.annot.penMode, 'pen', () => this.togglePenMode()),
       this.iconButton('btn-comment', t.annot.mode, 'comment', () => this.toggleCommentMode()),
       this.iconButton('btn-tools', t.docTools.menu, 'tools', () => this.openToolsMenu()),
       this.thumbSize,
@@ -862,6 +863,8 @@ export class App {
     this.bindView(session);
     this.attachAnnotations(session, bytes);
     this.activate(id);
+    // Réglage « ouvrir directement en mode stylet » : la barre d'écriture est là dès l'ouverture
+    if (loadSettings().penOnOpen && this.annotTool === null) this.setAnnotTool('ink');
   }
 
   /** Remplace le contenu affiché par de nouveaux octets (après une opération, annuler ou rétablir). */
@@ -875,7 +878,10 @@ export class App {
       throw new Error(t.editErrors.codes.structure);
     }
     const view = new DocView(pdf, state.zoom, performance.now(), this.docsEl);
+    // Le nouvel affichage se prépare en coulisses (invisible mais mis en page) pendant que l'ancien reste à l'écran : on ne le montre
+    // qu'une fois la page affichée dessiné, pour qu'il n'y ait aucun clignotement blanc après un trait, une rotation, etc.
     view.root.hidden = this.active !== s;
+    if (this.active === s) view.root.style.visibility = 'hidden';
     await view.ready;
     if (state.mode !== 'continuous') view.setViewMode(state.mode);
     if (state.rotation) view.setRotation(state.rotation);
@@ -883,6 +889,11 @@ export class App {
     // même position de défilement qu'avant (le zoom est le même, donc la mise en page aussi) : on reste là où on travaillait
     view.container.scrollTop = state.top;
     view.container.scrollLeft = state.left;
+    if (this.active === s) {
+      await this.whenPageRendered(view, 1200);
+      await this.whenNotWriting(old.annotator, 3000); // jamais pendant qu'un trait est en cours : le changement d'affichage le couperait
+      view.root.style.visibility = '';
+    }
     s.view = view;
     s.selection = selection.filter((i) => i < view.pageCount);
     s.thumbs = this.makeList(s, 'list', pdf, PANEL_THUMB);
@@ -904,6 +915,28 @@ export class App {
       this.updateZoomUi(s);
       s.thumbs.setCurrent(view.page);
     }
+  }
+
+  /** Se résout quand la page affichée de `view` est dessinée (ou après `ms`, pour ne jamais rester bloqué). */
+  private whenPageRendered(view: DocView, ms: number): Promise<void> {
+    const rendered = () => (view.viewer as unknown as { getPageView(i: number): { renderingState?: number } | undefined }).getPageView(view.page - 1)?.renderingState === 3; // 3 = terminé
+    if (rendered()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        window.clearTimeout(timer);
+        view.eventBus.off('pagerendered', on);
+        resolve();
+      };
+      const on = ({ pageNumber }: { pageNumber: number }) => pageNumber === view.page && done();
+      const timer = window.setTimeout(done, ms);
+      view.eventBus.on('pagerendered', on);
+    });
+  }
+
+  /** Attend (au plus `ms`) la fin du trait ou du geste de gomme en cours sur l'ancien affichage. */
+  private async whenNotWriting(annotator: Annotator | undefined, ms: number): Promise<void> {
+    const end = performance.now() + ms;
+    while (annotator?.isBusy && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
   }
 
   private ensureGrid(s: Session, pdf = s.view.pdf) {
@@ -1209,6 +1242,11 @@ export class App {
     toast(t.sign.placeHint);
   }
 
+  /** Bouton « Stylet » : ouvre d'un clic toute l'interface d'écriture (stylos, gomme, règle, lasso, couleurs) sur le document ouvert ; un 2ᵉ clic la referme. */
+  private togglePenMode() {
+    this.setAnnotTool(this.annotTool === 'ink' || this.annotTool === 'eraser' || this.annotTool === 'lasso' ? null : 'ink');
+  }
+
   private toggleCommentMode() {
     this.setAnnotTool(this.annotTool === null ? 'select' : null);
   }
@@ -1224,6 +1262,9 @@ export class App {
     this.annotBar.hidden = tool === null;
     this.editButtons['btn-comment']?.classList.toggle('on', tool !== null);
     this.workspace.querySelector('#btn-comment')?.classList.toggle('on', tool !== null);
+    const writing = tool === 'ink' || tool === 'eraser' || tool === 'lasso';
+    this.workspace.querySelector('#btn-pen')?.classList.toggle('on', writing);
+    this.workspace.querySelector('#btn-pen')?.setAttribute('aria-pressed', String(writing));
     for (const [name, b] of Object.entries(this.toolButtons)) {
       b.classList.toggle('on', name === tool);
       b.setAttribute('aria-pressed', String(name === tool));

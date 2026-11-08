@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pt } from '../../src/data/annotations';
-import { distToLine, magnetAngle, nearestRulerEdge, pointInPolygon, projectOnLine, projectOnSegment, recognizeShape, resample, rulerEdges, simplify } from '../../src/data/shapes';
+import { annotSamples, densify, distToLine, lassoSelects, magnetAngle, nearestRulerEdge, pointInPolygon, projectOnLine, projectOnSegment, recognizeShape, resample, rulerEdges, simplify } from '../../src/data/shapes';
 
 /** Bruit déterministe (graine fixe) : la main tremble un peu. */
 let seed = 7;
@@ -119,5 +119,35 @@ describe('règle', () => {
     expect(magnetAngle(rad(44))).toBeCloseTo(rad(45));
     expect(magnetAngle(rad(91.9))).toBeCloseTo(rad(90));
     expect(magnetAngle(rad(37))).toBeCloseTo(rad(37)); // loin d'un multiple de 15° : inchangé
+  });
+});
+
+describe('lasso : qu’est-ce qui est entouré ?', () => {
+  const box: Pt[] = [[0, 0], [100, 0], [100, 100], [0, 100]];
+  it('un long trait droit à deux points est entouré s’il est dedans (pas seulement ses deux bouts)', () => {
+    expect(lassoSelects({ rect: [10, 50, 90, 50], strokes: [[[10, 50], [90, 50]]] }, box)).toBe(true);
+    // à cheval : seul un bout est dedans mais la majorité du tracé est dehors
+    expect(lassoSelects({ rect: [90, 50, 400, 50], strokes: [[[90, 50], [400, 50]]] }, box)).toBe(false);
+    // à cheval, mais surtout dedans
+    expect(lassoSelects({ rect: [10, 50, 130, 50], strokes: [[[10, 50], [130, 50]]] }, box)).toBe(true);
+  });
+  it('une forme ou une image : au moins la moitié de sa surface dans la boucle', () => {
+    expect(lassoSelects({ rect: [20, 20, 80, 80] }, box)).toBe(true);
+    expect(lassoSelects({ rect: [60, 20, 160, 80] }, box)).toBe(false); // 40 % dedans
+    expect(lassoSelects({ rect: [40, 20, 140, 80] }, box)).toBe(true); // 60 % dedans
+    expect(lassoSelects({ rect: [200, 200, 300, 300] }, box)).toBe(false);
+  });
+  it('un surlignage (plusieurs rectangles) et une ligne', () => {
+    expect(lassoSelects({ rect: [10, 10, 90, 40], quads: [[10, 30, 90, 40], [10, 10, 60, 20]] }, box)).toBe(true);
+    expect(lassoSelects({ rect: [10, 10, 90, 90], line: [10, 10, 90, 90] }, box)).toBe(true);
+  });
+  it('un point (trait d’un seul point) et densification', () => {
+    expect(lassoSelects({ rect: [50, 50, 50, 50], strokes: [[[50, 50]]] }, box)).toBe(true);
+    expect(densify([[0, 0], [30, 0]], 3).length).toBeGreaterThan(9);
+    expect(annotSamples({ rect: [0, 0, 10, 10] })).toHaveLength(49);
+  });
+  it('un lasso mal fermé (le départ n’est pas la fin) entoure quand même', () => {
+    const open: Pt[] = [[0, 0], [100, 0], [100, 100], [0, 100], [5, 8]];
+    expect(lassoSelects({ rect: [20, 20, 80, 80] }, open)).toBe(true);
   });
 });

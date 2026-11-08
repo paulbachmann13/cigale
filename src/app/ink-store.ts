@@ -17,6 +17,10 @@ export interface RulerState {
 }
 
 export class InkStore {
+  /** Des traits sont en cours d'envoi au document (entre leur prise en charge et la fin du rechargement). */
+  flushing = false;
+  /** Boucle du lasso tracée alors que des traits n'étaient pas encore dans le document : elle est appliquée dès qu'ils y sont. */
+  lassoPoly: { page: number; poly: [number, number][] } | null = null;
   /** Traits choisis au lasso (déjà dans le document) ; garde la sélection d'un rechargement à l'autre. */
   lasso: { page: number; ids: string[] } | null = null;
   ruler: RulerState = { visible: false, cx: 0, cy: 0, angle: 0, length: 0 };

@@ -224,3 +224,43 @@ export function magnetAngle(angle: number, tol = 2.5): number {
   const near = Math.round(deg / 15) * 15;
   return Math.abs(deg - near) <= tol ? (near * Math.PI) / 180 : angle;
 }
+
+/** Ajoute des points le long d'un chemin pour qu'aucun segment ne dépasse `step` (sinon un long trait droit n'a que ses deux bouts). */
+export function densify(pts: Pt[], step: number): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    out.push(pts[i]);
+    if (i === 0) continue;
+    const a = pts[i - 1];
+    const b = pts[i];
+    const n = Math.min(400, Math.floor(dist(a, b) / step));
+    for (let k = 1; k < n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+  }
+  return out;
+}
+
+/** Points qui représentent une annotation quand on teste si le lasso l'entoure : le tracé pour un trait, une grille sur la boîte sinon. */
+export function annotSamples(a: { rect: [number, number, number, number]; strokes?: Pt[][]; quads?: [number, number, number, number][]; line?: [number, number, number, number] }): Pt[] {
+  const grid = (r: [number, number, number, number], nx: number, ny: number): Pt[] => {
+    const out: Pt[] = [];
+    for (let i = 0; i <= nx; i++) for (let j = 0; j <= ny; j++) out.push([r[0] + ((r[2] - r[0]) * i) / nx, r[1] + ((r[3] - r[1]) * j) / ny]);
+    return out;
+  };
+  if (a.strokes?.length) return a.strokes.flatMap((s) => densify(s, 3));
+  if (a.quads?.length) return a.quads.flatMap((q) => grid(q, 6, 1));
+  if (a.line) return densify([[a.line[0], a.line[1]], [a.line[2], a.line[3]]], 3);
+  return grid(a.rect, 6, 6);
+}
+
+/** Part des points (0 à 1) qui sont dans le polygone. */
+export function insideFraction(points: Pt[], poly: Pt[]): number {
+  if (!points.length) return 0;
+  let n = 0;
+  for (const p of points) if (pointInPolygon(p, poly)) n++;
+  return n / points.length;
+}
+
+/** Le lasso `poly` entoure-t-il l'annotation ? Oui si au moins la moitié de ce qui la représente est dedans. */
+export function lassoSelects(a: Parameters<typeof annotSamples>[0], poly: Pt[]): boolean {
+  return insideFraction(annotSamples(a), poly) >= 0.5;
+}
