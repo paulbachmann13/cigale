@@ -28,6 +28,10 @@ export interface Annot {
   quads?: Rect[];
   /** Dessin à main levée : une liste de points par trait. */
   strokes?: Pt[][];
+  /** Stylo qui a écrit ce trait (absent : trait d'épaisseur constante, comme les anciennes versions). */
+  pen?: import('./ink').PenKind;
+  /** Pression (0–1) de chaque point, trait par trait (même forme que `strokes`) ; absent pour une souris. */
+  pressures?: number[][];
   /** Ligne ou flèche : x1, y1, x2, y2 (la flèche est à la fin). */
   line?: Rect;
   fontSize?: number;

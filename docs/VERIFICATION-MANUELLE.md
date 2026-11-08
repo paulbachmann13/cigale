@@ -82,6 +82,14 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 - [ ] Enregistrer pendant qu'on continue à travailler (annuler, repivoter) : l'indicateur « modifié » reste juste.
 - [ ] Application Mac : fichier sur le Bureau et sur iCloud Drive / clé USB ; ⌘S ; le .bak apparaît ; rouvrir.
 
+## Écriture manuscrite (1.5) — à essayer sur l'iPad avec l'Apple Pencil
+
+1. Ouvrir un PDF dans Cigale (Safari ou PWA installée) → Commenter → « Écrire et dessiner ».
+2. Stylo, Plume, Surligneur : le trait suit-il le Pencil sans retard gênant ? La Plume s'épaissit-elle quand on appuie ?
+3. Poser la paume sur l'écran en écrivant : aucun trait parasite ? Un doigt fait-il défiler la page (après un premier trait au Pencil) ?
+4. Gomme ; Annuler / Rétablir (trait par trait) ; attendre 2 s puis enregistrer, rouvrir dans Aperçu / Acrobat : même forme, surligneur transparent sur le texte.
+5. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
+
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 
 1. Télécharger `Cigale_…_x64-setup.exe` (Releases) ; l'installer ; passer l'avertissement SmartScreen (Informations complémentaires → Exécuter quand même).

@@ -3,6 +3,7 @@ import type { DocView } from '../pdf/viewer';
 import type { Annot } from '../data/annotations';
 import type { Annotator } from './annotator';
 import type { CommentsPanel } from './comments';
+import type { InkStore } from './ink-store';
 import type { PageList } from './pagelist';
 
 /**
@@ -35,6 +36,8 @@ export interface Session {
   /** Identifiant de la sauvegarde automatique de ce document. */
   draftId: string;
   draftTimer?: number;
+  /** Traits écrits au stylet, pas encore envoyés au document. */
+  ink: InkStore;
   /** Des champs de formulaire ont été remplis à l'écran mais pas encore écrits dans le document. */
   formModified: boolean;
   /** Le document a des champs de formulaire. */
@@ -45,5 +48,5 @@ export interface Session {
   encryptedAck?: boolean;
 }
 
-/** Modifié = historique modifié OU saisie de formulaire en attente. */
-export const isDirty = (s: Pick<Session, 'history' | 'formModified'>): boolean => s.history.dirty || s.formModified;
+/** Modifié = historique modifié OU saisie de formulaire OU traits en attente. */
+export const isDirty = (s: Pick<Session, 'history' | 'formModified' | 'ink'>): boolean => s.history.dirty || s.formModified || s.ink.hasPending;

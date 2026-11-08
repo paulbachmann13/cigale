@@ -242,7 +242,8 @@ export const fr = {
       strikeout: 'Barrer le texte',
       note: 'Ajouter une note',
       freetext: 'Ajouter une zone de texte',
-      ink: 'Dessiner',
+      ink: 'Écrire et dessiner à la main',
+      eraser: 'Gomme (efface le trait touché)',
       rect: 'Rectangle',
       ellipse: 'Ellipse',
       line: 'Ligne',
@@ -252,6 +253,8 @@ export const fr = {
       sign: 'Signer',
       clip: 'Extraire une zone en nouveau PDF',
     },
+    pen: 'Type de stylo',
+    pens: { pen: 'Stylo', fountain: 'Plume', highlighter: 'Surligneur' },
     kinds: {
       highlight: 'Surlignage',
       underline: 'Soulignement',
@@ -274,6 +277,7 @@ export const fr = {
     fontSize: 'Taille du texte',
     labels: {
       add: 'ajouter un commentaire',
+      draw: 'écrire à la main',
       edit: 'modifier un commentaire',
       move: 'déplacer un commentaire',
       delete: 'supprimer un commentaire',

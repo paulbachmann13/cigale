@@ -22,6 +22,7 @@ const PATHS = {
   note: ['M4 4h16v12H10l-4 4v-4H4z'],
   text: ['M5 5h14', 'M12 5v14', 'M9 19h6'],
   pen: ['M4 20l1-4L16 5l3 3L8 19z', 'M14 7l3 3'],
+  eraser: ['M8 20h11', 'M5 14l8-8 6 6-6 6H8z', 'M9 10l6 6'],
   rect: ['M4 6h16v12H4z'],
   ellipse: ['M4 12a8 6 0 1 0 16 0a8 6 0 1 0-16 0'],
   line: ['M5 19L19 5'],

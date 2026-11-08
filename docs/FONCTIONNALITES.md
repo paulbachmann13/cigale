@@ -50,6 +50,10 @@
 - Double-clic sur un PDF alors que Cigale tourne déjà : le fichier s'ouvre dans un onglet de la fenêtre existante (instance unique).
 - **Limites** : non signée par Microsoft (pas de certificat de signature de code) → au premier lancement, « Informations complémentaires » puis « Exécuter quand même » ; WebView2 doit être présent (déjà installé sur Windows 10/11 à jour, sinon l'installateur le télécharge) ; Windows sur ARM : tourne par émulation ; **jamais testée sur un vrai PC par l'auteur** avant la première installation (voir docs/VERIFICATION-MANUELLE.md).
 
+### Écriture manuscrite (1.5, étape A du mode « Notes »)
+- Outil « Écrire et dessiner » : Stylo, Plume (pression), Surligneur (multiplication avec le texte), couleurs et épaisseurs par stylo, Gomme (trait entier). Les traits vivent d'abord en mémoire (`ink-store.ts`) et sont écrits d'un coup (annotations `Ink` avec flux d'apparence rempli, clés `/CigalePen` et `/CigaleP` pour garder stylo et pression) après 1,5 s sans écrire, à tout changement d'outil, et avant toute autre opération ou enregistrement.
+- Stylet : pression et événements groupés (`getCoalescedEvents`) ; dès qu'un stylet a servi, le doigt fait défiler. **Limites** : pas de pincement pour zoomer pendant qu'on écrit (zoom par les boutons) ; la latence est celle d'une page web (un peu supérieure à une application native) ; **jamais essayé avec un vrai Apple Pencil** (voir VERIFICATION-MANUELLE) ; pas encore de règle, de formes ni de lasso (étape B) ; la gomme efface un trait entier, pas une partie.
+
 ### Commenter (étape 4)
 - **Outils** : surligner / souligner / barrer (d'après le texte sélectionné, une zone par ligne), note, zone de texte (texte qui passe à la ligne, taille réglable), dessin à main levée, rectangle, ellipse, ligne, flèche, tampons (6 modèles dessinés par Cigale). Couleur (7 teintes, mémorisée par outil) et épaisseur.
 - **Vraies annotations PDF** (Highlight, Underline, StrikeOut, Text + Popup, FreeText, Ink, Square, Circle, Line, Stamp) avec **flux d'apparence** : le rendu vient du fichier lui-même. Auteur (réglable), date, `NM` unique.

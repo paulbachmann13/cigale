@@ -214,6 +214,10 @@ button.mini:disabled { opacity: 0.35; }
 .swatch.on { box-shadow: 0 0 0 2px var(--accent); }
 .annot-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
 .annot-layer.capture { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.annot-layer.eraser { cursor: cell; }
+/* écriture à la main : deux calques par page (le surligneur se multiplie avec le texte, comme dans le PDF) */
+.ink-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.ink-canvas.multiply { mix-blend-mode: multiply; }
 .annot-hit { position: absolute; border: 1px dashed transparent; pointer-events: auto; cursor: move; touch-action: none; box-sizing: border-box; }
 .annot-hit:hover { border-color: var(--accent); }
 .annot-hit.selected { border: 2px solid var(--accent); background: rgba(180, 83, 42, 0.08); }

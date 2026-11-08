@@ -5,15 +5,19 @@
 import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
+import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
 import { h } from './dom';
+import type { InkStore } from './ink-store';
 
-export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
+export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
 
 export interface Style {
   color: Rgb;
   width: number;
   fontSize: number;
   stamp: string;
+  /** Stylo de l'outil « Écrire » (stylo, plume, surligneur). */
+  pen: PenKind;
 }
 
 export interface AnnotHost {
@@ -24,6 +28,10 @@ export interface AnnotHost {
   notify(message: string): void;
   /** Outil « Extraire une zone » : une zone (repère PDF de la page, x0 y0 x1 y1) a été tracée. */
   region(page: number, rect: [number, number, number, number]): void;
+  /** Écrit dans le document les traits en attente (et retient l'état « modifié » en attendant). */
+  flushInk(): Promise<void>;
+  /** Des traits viennent d'apparaître ou de disparaître (état « modifié »). */
+  inkChanged(): void;
 }
 
 /** Même partie de l'API de PageViewport que pdf.js expose : on n'en utilise que ces deux conversions. */
@@ -37,15 +45,33 @@ interface PageViewLike {
   viewport: Viewport;
 }
 
-const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
+const SHAPE_TOOLS = new Set<Tool>(['sign', 'redact', 'clip', 'ink', 'eraser', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
 const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature']);
+
+/** Le calque garde le stylet même s'il sort de la page (sans erreur si le système a déjà lâché ce pointeur). */
+function capture(el: HTMLElement, id: number) {
+  try {
+    el.setPointerCapture(id);
+  } catch {
+    /* pointeur déjà terminé */
+  }
+}
 
 export class Annotator {
   private tool: Tool | null = null;
   /** Signature choisie, posée par un clic avec l'outil « Signer ». */
   signature: { png: Uint8Array; width: number; height: number } | null = null;
-  style: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved' };
+  style: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved', pen: 'pen' };
+  /** Une écriture au stylet a eu lieu : le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits). */
+  private penSeen = false;
+  private inkCanvases = new Map<number, { normal: HTMLCanvasElement; multiply: HTMLCanvasElement }>();
+  /** Trait en cours d'écriture. */
+  private live: { page: number; points: Pt[]; pressures: number[]; usesPressure: boolean } | null = null;
+  /** Traits déjà enregistrés que la gomme vient de toucher (supprimés au relâchement). */
+  private erasing = new Map<string, Annot>();
+  private inkTimer: number | undefined;
+  private paintQueued = false;
   private annots: Annot[] = [];
   private selectedId: string | null = null;
   private layers = new Map<number, HTMLElement>();
@@ -53,13 +79,17 @@ export class Annotator {
   private onMouseUp = () => this.captureTextSelection();
   private onPageRendered = ({ pageNumber }: { pageNumber: number }) => this.layoutPage(pageNumber);
 
-  constructor(private view: DocView, private host: AnnotHost) {
+  constructor(private view: DocView, private host: AnnotHost, private ink: InkStore) {
     view.eventBus.on('pagerendered', this.onPageRendered);
+    if (ink.hasPending) this.scheduleInkFlush(1500); // des traits attendaient pendant un rechargement
     // sur le document : la sélection peut se terminer hors de la zone de lecture
     document.addEventListener('mouseup', this.onMouseUp);
   }
 
   destroy() {
+    window.clearTimeout(this.inkTimer);
+    this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove()));
+    this.inkCanvases.clear();
     this.closeEditor();
     document.removeEventListener('mouseup', this.onMouseUp);
     this.view.eventBus.off('pagerendered', this.onPageRendered);
@@ -79,6 +109,7 @@ export class Annotator {
   /** `null` : mode commentaire désactivé (aucun calque). */
   setTool(tool: Tool | null) {
     this.tool = tool;
+    if (tool !== 'ink' && tool !== 'eraser') this.scheduleInkFlush(0); // on quitte l'écriture : tout part dans le document
     if (tool !== 'select') this.select(null);
     this.view.container.classList.toggle('annotating', tool !== null);
     this.view.container.classList.toggle('annot-markup', tool !== null && MARKUP_TOOLS.has(tool));
@@ -120,6 +151,8 @@ export class Annotator {
     }
     layer.replaceChildren();
     layer.classList.toggle('capture', this.tool !== null && SHAPE_TOOLS.has(this.tool));
+    layer.classList.toggle('eraser', this.tool === 'eraser');
+    this.paintInk(n);
     if (this.tool !== 'select') return; // les zones cliquables n'existent qu'avec l'outil Sélectionner (sinon elles gêneraient la sélection de texte)
     const vp = pv.viewport;
     for (const a of this.annots) {
@@ -220,6 +253,7 @@ export class Annotator {
   private bindLayer(layer: HTMLElement, n: number) {
     layer.addEventListener('pointerdown', (e) => {
       if (e.target !== layer || this.tool === null || !SHAPE_TOOLS.has(this.tool)) return;
+      if (this.tool === 'ink' || this.tool === 'eraser') return this.beginInk(e, layer, n);
       e.preventDefault();
       const tool = this.tool;
       const vp = this.pageView(n)!.viewport;
@@ -241,8 +275,7 @@ export class Annotator {
         const [x1, y1] = start;
         const [x2, y2] = end;
         const common = { stroke: color, 'stroke-width': sw, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
-        if (tool === 'ink') el('polyline', { ...common, points: points.map((p) => p.join(',')).join(' ') });
-        else if (tool === 'redact') el('rect', { stroke: '#d9231a', 'stroke-width': 2, fill: 'rgba(217,35,26,0.18)', 'stroke-dasharray': '5 3', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
+        if (tool === 'redact') el('rect', { stroke: '#d9231a', 'stroke-width': 2, fill: 'rgba(217,35,26,0.18)', 'stroke-dasharray': '5 3', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'clip') el('rect', { stroke: '#1a6fd9', 'stroke-width': 2, fill: 'rgba(26,111,217,0.14)', 'stroke-dasharray': '6 4', x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'rect') el('rect', { ...common, x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
         else if (tool === 'ellipse') el('ellipse', { ...common, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, rx: Math.abs(x2 - x1) / 2, ry: Math.abs(y2 - y1) / 2 });
@@ -251,10 +284,6 @@ export class Annotator {
       };
       const move = (ev: PointerEvent) => {
         const p = this.local(layer, ev);
-        if (tool === 'ink') {
-          const last = points[points.length - 1];
-          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 1.5) points.push(p);
-        }
         draw(p);
       };
       const up = (ev: PointerEvent) => {
@@ -276,11 +305,7 @@ export class Annotator {
     const pdf = (p: [number, number]): Pt => vp.convertToPdfPoint(p[0], p[1]);
     const dragged = Math.hypot(b[0] - a[0], b[1] - a[1]) > 4;
     const base = this.base(n);
-    if (tool === 'ink') {
-      const pts = points.map(pdf);
-      if (pts.length < 2) pts.push([pts[0][0] + 0.1, pts[0][1]]);
-      void this.host.add([{ ...base, kind: 'ink', strokes: [pts], rect: normalizeRect([pts[0][0], pts[0][1], pts[0][0], pts[0][1]]) }]);
-    } else if (tool === 'sign' && this.signature) {
+    if (tool === 'sign' && this.signature) {
       const [x, y] = pdf(a);
       const w = 150;
       const hgt = (w * this.signature.height) / this.signature.width;
@@ -311,6 +336,200 @@ export class Annotator {
       const [x, y] = pdf(a);
       void this.host.add([{ ...base, kind: 'stamp', width: 2, rect: [x - 75, y - 22, x + 75, y + 22], stamp: this.style.stamp }]);
     }
+  }
+
+  // ───────────── écriture manuscrite (stylo, plume, surligneur, gomme) ─────────────
+
+  /** Envoie les traits en attente au document, après `ms` millisecondes sans nouveau trait. */
+  private scheduleInkFlush(ms: number) {
+    window.clearTimeout(this.inkTimer);
+    if (!this.ink.hasPending) return;
+    this.inkTimer = window.setTimeout(() => void this.host.flushInk(), ms);
+  }
+
+  refreshInk() {
+    for (const n of this.layers.keys()) this.paintInk(n);
+  }
+
+  private inkCanvasesFor(n: number) {
+    const pv = this.pageView(n);
+    if (!pv) return null;
+    let c = this.inkCanvases.get(n);
+    if (!c || !pv.div.contains(c.normal)) {
+      const mk = (cls: string) => h('canvas', { class: `ink-canvas ${cls}`, 'aria-hidden': 'true' });
+      c = { normal: mk('normal'), multiply: mk('multiply') };
+      pv.div.append(c.normal, c.multiply);
+      this.inkCanvases.set(n, c);
+    }
+    return c;
+  }
+
+  /** Dessine, sur le calque de la page, les traits en attente et celui qu'on écrit. Même contour que dans le PDF. */
+  private paintInk(n: number) {
+    const pv = this.pageView(n);
+    const layer = this.layers.get(n);
+    if (!pv || !layer) return;
+    const strokes: InkStroke[] = this.ink.forPage(n - 1);
+    const liveHere = this.live && this.live.page === n - 1 ? this.live : null;
+    const erasedHere = [...this.erasing.values()].filter((a) => a.page === n - 1);
+    if (strokes.length === 0 && !liveHere && erasedHere.length === 0 && !this.inkCanvases.has(n)) return;
+    const c = this.inkCanvasesFor(n);
+    if (!c) return;
+    const w = layer.clientWidth;
+    const hgt = layer.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const vp = pv.viewport;
+    const toScreen = (poly: Pt[]) => poly.map((p) => vp.convertToViewportPoint(p[0], p[1]));
+    for (const [cv, multiply] of [[c.normal, false], [c.multiply, true]] as const) {
+      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hgt * dpr)) {
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(hgt * dpr);
+      }
+      const g = cv.getContext('2d')!;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, w, hgt);
+      const all: { s: Pick<InkStroke, 'points' | 'pressures' | 'width' | 'pen' | 'color'> }[] = strokes.map((s) => ({ s }));
+      if (liveHere) all.push({ s: { points: liveHere.points, pressures: liveHere.usesPressure ? liveHere.pressures : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
+      for (const { s } of all) {
+        if ((PENS[s.pen].blend === 'Multiply') !== multiply) continue;
+        const poly = toScreen(inkOutline(s.points, s.pressures, s.width, s.pen));
+        g.globalAlpha = PENS[s.pen].opacity;
+        g.fillStyle = rgbToCss(s.color);
+        g.beginPath();
+        poly.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.closePath();
+        g.fill();
+      }
+      if (!multiply) {
+        // gomme : les traits déjà enregistrés qu'elle va supprimer apparaissent barrés en rouge
+        g.globalAlpha = 0.55;
+        g.strokeStyle = '#d9231a';
+        g.lineCap = 'round';
+        for (const a of erasedHere) {
+          g.lineWidth = Math.max(3, a.width * vp.scale) + 2;
+          for (const st of a.strokes ?? []) {
+            const pts = toScreen(st);
+            g.beginPath();
+            pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+            if (pts.length === 1) g.lineTo(pts[0][0] + 0.1, pts[0][1]);
+            g.stroke();
+          }
+        }
+      }
+      g.globalAlpha = 1;
+    }
+  }
+
+  private queuePaint(n: number) {
+    if (this.paintQueued) return;
+    this.paintQueued = true;
+    requestAnimationFrame(() => {
+      this.paintQueued = false;
+      this.paintInk(n);
+    });
+  }
+
+  private beginInk(e: PointerEvent, layer: HTMLElement, n: number) {
+    if (e.pointerType === 'pen') this.penSeen = true;
+    if (e.pointerType === 'touch' && this.penSeen) return this.panWithFinger(e, layer); // doigt = défiler, stylet = écrire
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    capture(layer, e.pointerId);
+    const vp = this.pageView(n)!.viewport;
+    const toPdf = (ev: PointerEvent): Pt => {
+      const [x, y] = this.local(layer, ev);
+      return vp.convertToPdfPoint(x, y);
+    };
+    if (this.tool === 'eraser') return this.beginErase(e, layer, n, toPdf, vp.scale);
+    const usesPressure = e.pointerType === 'pen';
+    const live = { page: n - 1, points: [] as Pt[], pressures: [] as number[], usesPressure };
+    this.live = live;
+    const minGap = 0.8 / vp.scale; // moins d'un pixel d'écran : inutile
+    const add = (ev: PointerEvent, force = false) => {
+      const p = toPdf(ev);
+      const last = live.points[live.points.length - 1];
+      if (!force && last && Math.hypot(p[0] - last[0], p[1] - last[1]) < minGap) return;
+      live.points.push(p);
+      live.pressures.push(ev.pressure > 0 ? ev.pressure : 0.5);
+    };
+    add(e, true);
+    this.paintInk(n);
+    const move = (ev: PointerEvent) => {
+      for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
+      this.queuePaint(n);
+    };
+    const finish = (ev: PointerEvent, cancelled: boolean) => {
+      layer.removeEventListener('pointermove', move);
+      layer.removeEventListener('pointerup', up);
+      layer.removeEventListener('pointercancel', cancel);
+      if (!cancelled) add(ev);
+      this.live = null;
+      if (!cancelled && live.points.length > 0) {
+        this.ink.add({ page: n - 1, points: live.points, pressures: usesPressure ? live.pressures : undefined, color: this.style.color, width: this.style.width, pen: this.style.pen });
+        this.scheduleInkFlush(1500);
+        this.host.inkChanged();
+      }
+      this.paintInk(n);
+    };
+    const up = (ev: PointerEvent) => finish(ev, false);
+    const cancel = (ev: PointerEvent) => finish(ev, true);
+    layer.addEventListener('pointermove', move);
+    layer.addEventListener('pointerup', up);
+    layer.addEventListener('pointercancel', cancel);
+  }
+
+  /** Doigt sur la page pendant qu'on écrit au stylet : on fait défiler. */
+  private panWithFinger(e: PointerEvent, layer: HTMLElement) {
+    capture(layer, e.pointerId);
+    let x = e.clientX;
+    let y = e.clientY;
+    const move = (ev: PointerEvent) => {
+      this.view.container.scrollLeft -= ev.clientX - x;
+      this.view.container.scrollTop -= ev.clientY - y;
+      x = ev.clientX;
+      y = ev.clientY;
+    };
+    const end = () => {
+      layer.removeEventListener('pointermove', move);
+      layer.removeEventListener('pointerup', end);
+      layer.removeEventListener('pointercancel', end);
+    };
+    layer.addEventListener('pointermove', move);
+    layer.addEventListener('pointerup', end);
+    layer.addEventListener('pointercancel', end);
+  }
+
+  private beginErase(e: PointerEvent, layer: HTMLElement, n: number, toPdf: (ev: PointerEvent) => Pt, scale: number) {
+    const radius = 9 / scale; // 9 pixels d'écran
+    const hit = (ev: PointerEvent) => {
+      const at = toPdf(ev);
+      let changed = this.ink.removeWhere((s) => s.page === n - 1 && strokeTouched(s.points, s.width, at, radius));
+      for (const a of this.annots) {
+        if (a.kind !== 'ink' || a.page !== n - 1 || a.replyTo || this.erasing.has(a.id)) continue;
+        if ((a.strokes ?? []).some((st) => strokeTouched(st, a.width, at, radius))) {
+          this.erasing.set(a.id, a);
+          changed = true;
+        }
+      }
+      if (changed) this.queuePaint(n);
+    };
+    hit(e);
+    const move = (ev: PointerEvent) => {
+      for (const c of ev.getCoalescedEvents?.() ?? [ev]) hit(c);
+    };
+    const end = () => {
+      layer.removeEventListener('pointermove', move);
+      layer.removeEventListener('pointerup', end);
+      layer.removeEventListener('pointercancel', end);
+      const ids = [...this.erasing.keys()];
+      this.erasing.clear();
+      this.paintInk(n);
+      this.host.inkChanged();
+      if (ids.length) void this.host.remove(ids);
+    };
+    layer.addEventListener('pointermove', move);
+    layer.addEventListener('pointerup', end);
+    layer.addEventListener('pointercancel', end);
   }
 
   // ───────────── surlignage, soulignement, barré : d'après le texte sélectionné ─────────────

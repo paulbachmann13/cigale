@@ -9,6 +9,8 @@ import { DocView, type ViewMode } from '../pdf/viewer';
 import { deleteBackupsNamed } from '../storage/backups';
 import { deleteDraft, listDrafts, newDraftId, readDraft, saveDraft } from '../storage/autosave';
 import { forgetRecent, recentHandle, rememberFile } from '../storage/recent';
+import { type PenKind, PENS } from '../data/ink';
+import { InkStore } from './ink-store';
 import { type AnnotHost, Annotator, type Style, type Tool } from './annotator';
 import { CommentsPanel } from './comments';
 import { hasFormFields } from './forms';
@@ -38,7 +40,7 @@ const ZOOM_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8];
 const PANEL_THUMB = 132;
 const GRID_THUMB_DEFAULT = 170;
 
-const isDirtyForm = (s: Session) => s.formModified;
+const isDirtyForm = (s: Session) => s.formModified || s.ink.hasPending;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac OS/.test(navigator.userAgent);
 const mod = isMac ? '⌘' : 'Ctrl+';
 
@@ -48,7 +50,11 @@ export class App {
   private nextId = 1;
   private panelTab: 'thumbnails' | 'bookmarks' | 'comments' = 'thumbnails';
   private annotTool: Tool | null = null;
-  private annotStyle: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved' };
+  private annotStyle: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved', pen: 'pen' };
+  /** Couleur et épaisseur retenues pour chaque stylo. */
+  private penColors: Record<PenKind, Rgb> = { pen: PENS.pen.color, fountain: PENS.fountain.color, highlighter: PENS.highlighter.color };
+  private penWidths: Record<PenKind, number> = { pen: PENS.pen.width, fountain: PENS.fountain.width, highlighter: PENS.highlighter.width };
+  private penSelect = h('select', { id: 'annot-pen', 'aria-label': t.annot.pen });
   private annotBar = h('div', { class: 'toolbar annot-toolbar', id: 'annot-toolbar', role: 'toolbar', 'aria-label': t.annot.toolbar, hidden: true });
   private toolButtons: Record<string, HTMLButtonElement> = {};
   private widthSelect = h('select', { id: 'annot-width', 'aria-label': t.annot.width });
@@ -793,6 +799,7 @@ export class App {
       pendingSelect: null,
       draftId: opts.draftId ?? newDraftId(),
       formModified: false,
+      ink: new InkStore(),
       hasForm: false,
     } as unknown as Session;
     session.comments = new CommentsPanel(this.commentsHost(session));
@@ -1032,6 +1039,15 @@ export class App {
     for (const z of [10, 12, 14, 18, 24, 32]) this.sizeSelect.append(h('option', { value: String(z) }, `${z} pt`));
     this.widthSelect.value = String(this.annotStyle.width);
     this.sizeSelect.value = String(this.annotStyle.fontSize);
+    for (const k of Object.keys(PENS) as PenKind[]) this.penSelect.append(h('option', { value: k }, t.annot.pens[k]));
+    this.penSelect.value = this.annotStyle.pen;
+    this.penSelect.onchange = () => {
+      this.rememberPen();
+      this.annotStyle.pen = this.penSelect.value as PenKind;
+      this.annotStyle.color = this.penColors[this.annotStyle.pen];
+      this.annotStyle.width = this.penWidths[this.annotStyle.pen];
+      this.pushStyle();
+    };
     this.widthSelect.onchange = () => {
       this.annotStyle.width = Number(this.widthSelect.value);
       this.pushStyle({ width: this.annotStyle.width });
@@ -1053,6 +1069,8 @@ export class App {
       mk('note', 'note'),
       mk('freetext', 'text'),
       mk('ink', 'pen'),
+      this.penSelect,
+      mk('eraser', 'eraser'),
       mk('rect', 'rect'),
       mk('ellipse', 'ellipse'),
       mk('line', 'line'),
@@ -1083,8 +1101,12 @@ export class App {
   }
 
   private setAnnotTool(tool: Tool | null) {
+    this.rememberPen(); // avant de changer d'outil : on garde la couleur du stylo qu'on quitte
     this.annotTool = tool;
-    if (tool && tool !== 'select') this.annotStyle.color = this.toolColors[tool] ?? COLORS[3].rgb; // chaque outil retrouve sa couleur (rouge par défaut)
+    if (tool === 'ink') {
+      this.annotStyle.color = this.penColors[this.annotStyle.pen]; // chaque stylo retrouve sa couleur et son épaisseur
+      this.annotStyle.width = this.penWidths[this.annotStyle.pen];
+    } else if (tool && tool !== 'select' && tool !== 'eraser') this.annotStyle.color = this.toolColors[tool] ?? COLORS[3].rgb; // chaque outil retrouve sa couleur (rouge par défaut)
     this.sessions.forEach((x) => (x.annotator.style = this.annotStyle));
     this.annotBar.hidden = tool === null;
     this.editButtons['btn-comment']?.classList.toggle('on', tool !== null);
@@ -1136,9 +1158,18 @@ export class App {
     this.redactApplyBtn.hidden = !list.some((a) => a.kind === 'redact');
   }
 
+  /** Garde la couleur et l'épaisseur du stylo qu'on quitte. */
+  private rememberPen() {
+    if (this.annotTool === 'ink') {
+      this.penColors[this.annotStyle.pen] = this.annotStyle.color;
+      this.penWidths[this.annotStyle.pen] = this.annotStyle.width;
+    }
+  }
+
   private setColor(rgb: Rgb) {
     this.annotStyle.color = rgb;
-    if (this.annotTool && this.annotTool !== 'select') this.toolColors[this.annotTool] = rgb;
+    if (this.annotTool === 'ink') this.penColors[this.annotStyle.pen] = rgb;
+    else if (this.annotTool && this.annotTool !== 'select') this.toolColors[this.annotTool] = rgb;
     this.pushStyle({ color: rgb });
   }
 
@@ -1146,9 +1177,24 @@ export class App {
     const sel = this.active?.annotator.selection;
     const color = sel?.color ?? this.annotStyle.color;
     this.swatches.forEach((b, i) => b.classList.toggle('on', COLORS[i].rgb.every((c, k) => Math.abs(c - color[k]) < 0.01)));
+    const tool = this.annotTool;
+    if (tool === 'ink') {
+      // les épaisseurs proposées dépendent du stylo
+      const widths = PENS[this.annotStyle.pen].widths;
+      if (this.widthSelect.dataset.pen !== this.annotStyle.pen) {
+        this.widthSelect.replaceChildren(...widths.map((w) => h('option', { value: String(w) }, `${w} pt`)));
+        this.widthSelect.dataset.pen = this.annotStyle.pen;
+      }
+    } else if (this.widthSelect.dataset.pen) {
+      this.widthSelect.replaceChildren(...[1, 2, 3, 5, 8].map((w) => h('option', { value: String(w) }, `${w} pt`)));
+      delete this.widthSelect.dataset.pen;
+    }
+    this.penSelect.value = this.annotStyle.pen;
+    this.penSelect.hidden = tool !== 'ink';
+    this.widthSelect.hidden = tool === 'eraser';
+    this.swatches.forEach((b) => (b.hidden = tool === 'eraser'));
     this.widthSelect.value = String(sel && sel.width ? Math.round(sel.width) : this.annotStyle.width);
     this.sizeSelect.value = String(sel?.fontSize ?? this.annotStyle.fontSize);
-    const tool = this.annotTool;
     this.sizeSelect.hidden = !(tool === 'freetext' || sel?.kind === 'freetext');
   }
 
@@ -1162,6 +1208,8 @@ export class App {
         this.syncStyleUi();
       },
       notify: (m) => toast(m),
+      flushInk: () => this.editing.flushForm(s).then(() => undefined),
+      inkChanged: () => this.refreshState(s),
       region: (page, rect) => {
         this.setAnnotTool('select');
         openRegionDialog(this.toolsHost(), s, page, rect);
@@ -1191,7 +1239,7 @@ export class App {
 
   /** Crée le calque de commentaires de la vue courante de la session et relit la liste des commentaires. */
   private attachAnnotations(s: Session, bytes: Uint8Array) {
-    const annotator = new Annotator(s.view, this.annotHost(s));
+    const annotator = new Annotator(s.view, this.annotHost(s), s.ink);
     annotator.style = this.annotStyle;
     annotator.signature = this.signature;
     annotator.setTool(this.annotTool);

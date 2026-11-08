@@ -1,7 +1,7 @@
 {
   "name": "cigale",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Cigale — éditeur PDF local et gratuit (PWA)",
   "license": "Apache-2.0",
   "type": "module",
@@ -31,6 +31,7 @@
     "@tesseract.js-data/fra": "1.0.0",
     "fflate": "0.8.3",
     "pdfjs-dist": "6.5.438",
+    "perfect-freehand": "1.2.3",
     "tesseract.js": "7.0.0"
   },
   "devDependencies": {

@@ -33,6 +33,7 @@ import {
   toPdfDate,
   unionRect,
 } from '../data/annotations';
+import { PENS, inkOutline, isPenKind, polygonOps, strokeBounds } from '../data/ink';
 import { loadForEdit, pruneUnreachable } from './page-ops';
 import { saveDoc } from './protection';
 
@@ -129,6 +130,12 @@ function readAnnot(doc: PDFDocument, pageIndex: number, ref: PDFRef, d: PDFDict)
       const pts: Pt[] = [];
       for (let k = 0; k + 1 < v.length; k += 2) pts.push([v[k], v[k + 1]]);
       if (pts.length) a.strokes.push(pts);
+    }
+    const pen = d.lookupMaybe(N('CigalePen'), PDFName)?.decodeText();
+    if (isPenKind(pen)) {
+      a.pen = pen;
+      const pl = d.lookupMaybe(N('CigaleP'), PDFArray);
+      if (pl && pl.size() === a.strokes.length) a.pressures = a.strokes.map((s, i) => numbers(pl.lookupMaybe(i, PDFArray)).slice(0, s.length));
     }
   } else if (kind === 'line') {
     const l = arr4(d.lookupMaybe(N('L'), PDFArray));
@@ -239,7 +246,7 @@ function arrowHead(x1: number, y1: number, x2: number, y2: number, width: number
 }
 
 /** Contenu du flux d'apparence pour une annotation (sans le dictionnaire). */
-function buildAppearance(a: Pick<Annot, 'kind' | 'rect' | 'color' | 'fill' | 'opacity' | 'width' | 'contents' | 'quads' | 'strokes' | 'line' | 'fontSize' | 'stamp'>, fonts: { helv: PDFFont; bold: PDFFont }): Built {
+function buildAppearance(a: Pick<Annot, 'kind' | 'rect' | 'color' | 'fill' | 'opacity' | 'width' | 'contents' | 'quads' | 'strokes' | 'line' | 'fontSize' | 'stamp' | 'pen' | 'pressures'>, fonts: { helv: PDFFont; bold: PDFFont }): Built {
   const gs = (blend: 'Normal' | 'Multiply' = 'Normal') => ({ GS: { Type: 'ExtGState', CA: a.opacity, ca: a.opacity, BM: blend } });
   const [x1, y1, x2, y2] = a.rect;
   switch (a.kind) {
@@ -278,6 +285,11 @@ function buildAppearance(a: Pick<Annot, 'kind' | 'rect' | 'color' | 'fill' | 'op
       return { content: `/GS gs\n${colorOp(a.color, true)}\n${f(w)} w 1 J 1 j\n${f(lx1)} ${f(ly1)} m ${f(lx2)} ${f(ly2)} l S${head}`, bbox: a.rect, resources: { ExtGState: gs() } };
     }
     case 'ink': {
+      if (a.pen && a.strokes?.length) {
+        // stylo : chaque trait est un contour rempli (épaisseur selon la pression), identique à l'aperçu à l'écran
+        const body = a.strokes.map((s, i) => `${polygonOps(inkOutline(s, a.pressures?.[i], a.width, a.pen!), f)} f`).join('\n');
+        return { content: `/GS gs\n${colorOp(a.color, false)}\n${body}`, bbox: a.rect, resources: { ExtGState: gs(PENS[a.pen].blend) } };
+      }
       const w = Math.max(0.5, a.width);
       const body = (a.strokes ?? [])
         .map((s) => (s.length === 1 ? `${f(s[0][0])} ${f(s[0][1])} m ${f(s[0][0] + 0.01)} ${f(s[0][1])} l S` : s.map((p, i) => `${f(p[0])} ${f(p[1])} ${i ? 'l' : 'm'}`).join(' ') + ' S'))
@@ -355,8 +367,9 @@ const SUBTYPE_OF: Record<AnnotKind, string> = {
 };
 
 /** Rectangle de l'annotation d'après sa géométrie (+ marge pour l'épaisseur du trait). */
-export function boundsOf(a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line'>): Rect {
+export function boundsOf(a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line'> & { pen?: Annot['pen'] }): Rect {
   if (a.quads?.length) return unionRect(a.quads);
+  if (a.pen && a.strokes?.length) return strokeBounds(a.strokes.flat(), a.width);
   if (a.strokes?.length) return inflate(pointsBounds(a.strokes.flat()), Math.max(1, a.width) / 2 + 0.5);
   if (a.line) return inflate(normalizeRect(a.line), a.kind === 'arrow' ? Math.max(8, a.width * 5) : Math.max(1, a.width) / 2 + 0.5);
   return normalizeRect(a.rect);
@@ -372,11 +385,16 @@ function setAppearance(doc: PDFDocument, dict: PDFDict, built: Built): void {
   dict.set(N('AP'), ctx.obj({ N: ctx.register(stream) }));
 }
 
-function writeGeometry(dict: PDFDict, a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line' | 'fill'>, ctx: PDFDocument['context']): void {
+function writeGeometry(dict: PDFDict, a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line' | 'fill' | 'pen' | 'pressures'>, ctx: PDFDocument['context']): void {
   const rect = boundsOf(a);
   dict.set(N('Rect'), ctx.obj(rect.map(num)));
   if (a.quads) dict.set(N('QuadPoints'), ctx.obj(a.quads.flatMap((q) => [q[0], q[3], q[2], q[3], q[0], q[1], q[2], q[1]].map(num))));
   if (a.strokes) dict.set(N('InkList'), ctx.obj(a.strokes.map((s) => s.flatMap((p) => [num(p[0]), num(p[1])]))));
+  if (a.pen && a.strokes) {
+    // clés propres à Cigale (ignorées par les autres lecteurs) : le stylo et la pression, pour redessiner le même trait après un déplacement
+    dict.set(N('CigalePen'), N(a.pen));
+    if (a.pressures) dict.set(N('CigaleP'), ctx.obj(a.pressures.map((s) => s.map((v) => PDFNumber.of(Math.round(v * 1000) / 1000)))));
+  }
   if (a.line) {
     dict.set(N('L'), ctx.obj(a.line.map(num)));
     dict.set(N('LE'), ctx.obj([N('None'), N(a.kind === 'arrow' ? 'OpenArrow' : 'None')]));

@@ -22,6 +22,7 @@ import { collectFormValues } from './forms';
 import { loadSettings } from './settings';
 import { backupPathFor, baseName, pathOfHandle, writeBackupCopy } from './tauri-files';
 import { pickOnePdf } from './files';
+import { strokeToDraft } from './ink-store';
 import { downloadBytes, ensureWritable, pickSaveHandle, withPdfExtension, writeVerified } from './save';
 import type { Session } from './session';
 
@@ -278,7 +279,30 @@ export class Editing {
     return this.serial(() => this.flushFormInner(s));
   }
 
+  /** Écrit dans le document les traits en attente (une seule étape annuler/rétablir). Appelée avant toute autre opération. */
+  private async flushInkInner(s: Session): Promise<boolean> {
+    const strokes = s.ink.take();
+    if (strokes.length === 0) return true;
+    try {
+      if (!(await this.confirmRisks(s))) {
+        s.ink.restore(strokes);
+        return false;
+      }
+      const r = await addAnnotationsOp(s.history.current, strokes.map(strokeToDraft), s.password, s.view.pageCount, this.host.author()).promise;
+      await this.host.reload(s, r.bytes, s.selection, s.view.pageCount);
+      s.history.push(r.bytes, t.annot.labels.draw);
+      this.host.refresh(s);
+      return true;
+    } catch (err) {
+      s.ink.restore(strokes); // rien ne se perd : les traits restent à l'écran
+      this.host.refresh(s);
+      await showMessage(t.editErrors.title, fmt(t.annot.failed, { name: s.name, detail: describe(err) }));
+      return false;
+    }
+  }
+
   private async flushFormInner(s: Session): Promise<boolean> {
+    if (!(await this.flushInkInner(s))) return false;
     if (!s.formModified) return true;
     try {
       const values = await collectFormValues(s.view.pdf);
@@ -353,6 +377,12 @@ export class Editing {
   }
 
   private async step(s: Session, dir: 'undo' | 'redo'): Promise<void> {
+    // Traits pas encore envoyés au document : on les défait un par un, sans toucher au document.
+    if (dir === 'undo' ? s.ink.undoOne() : s.ink.canRedo && s.ink.redoOne()) {
+      s.annotator.refreshInk();
+      this.host.refresh(s);
+      return;
+    }
     if (!(await this.flushFormInner(s))) return;
     const bytes = dir === 'undo' ? s.history.undo() : s.history.redo();
     if (!bytes) return;

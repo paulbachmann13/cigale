@@ -2,6 +2,18 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.5.0] — 2026-11-08
+
+### Ajouté
+- **Écrire à la main sur un PDF** (Commenter → l'outil « Écrire et dessiner »). Trois stylos : **Stylo**, **Plume** (le trait s'épaissit quand on appuie, avec un Apple Pencil ou un stylet) et **Surligneur** (translucide, il ne cache pas le texte). Chaque stylo retient sa couleur et son épaisseur. Le trait apparaît instantanément, sans attendre.
+- **Gomme** : passez sur un trait pour l'effacer (il devient rouge avant de disparaître). Elle efface aussi les traits des versions précédentes.
+- **Annuler trait par trait** tant qu'on écrit ; Rétablir les rend.
+- **Stylet et doigt** : une fois qu'un stylet a servi, le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits).
+- Les traits sont de vrais commentaires du PDF : on les retrouve dans Aperçu et Acrobat, avec la même forme. Un trait déplacé garde sa forme.
+
+### Modifié
+- Un trait écrit n'est plus un pas « Annuler » à lui seul : tout ce qu'on écrit d'un coup forme une seule étape une fois envoyé au document (la page ne se recharge plus à chaque trait).
+
 ## [1.4.0] — 2026-11-08
 
 ### Ajouté
