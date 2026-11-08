@@ -93,7 +93,8 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 7. Lasso : entourer des traits au Pencil ; les déplacer avec le doigt/Pencil ; Dupliquer ; Supprimer.
 8. Nouveau carnet (accueil) : Seyès, quadrillé, ligné, pointillé ; imprimer une page Seyès et vérifier les carreaux (2 mm / 8 mm) ; ouvrir le carnet enregistré dans Aperçu / Acrobat.
 9. Ajouter une image (photo prise à l'iPad) : l'orientation est-elle bonne ? la déplacer, la redimensionner.
-10. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
+10. Étoile à côté des stylos : mémoriser un stylo, le retrouver après avoir fermé et rouvert Cigale. Paramètres → Écriture à la main : essayer les deux réglages.
+11. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
 
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 

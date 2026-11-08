@@ -210,6 +210,19 @@ button.mini:disabled { opacity: 0.35; }
 /* Commentaires */
 .annot-toolbar { border-top: 0; flex-wrap: nowrap; box-sizing: border-box; height: 41px; } /* hauteur fixe : le bouton « Appliquer le caviardage » ne doit pas faire sauter la page sous la souris */
 .annot-toolbar select { min-width: 70px; }
+.annot-toolbar { overflow-x: auto; }
+.pen-favs { display: inline-flex; gap: 4px; align-items: center; }
+.pen-fav { width: 26px; height: 26px; border-radius: 50%; padding: 0; border: 2px solid var(--c, #333); background: var(--c, #333); cursor: pointer; flex: none; }
+.pen-fav[data-pen='highlighter'] { border-radius: 6px; opacity: .75; }
+.pen-fav[data-pen='fountain'] { border-radius: 50% 50% 50% 8%; }
+/* tablette (écran tactile) : cibles plus grandes pour le doigt et le stylet */
+@media (pointer: coarse) {
+  .annot-toolbar { height: 56px; gap: 6px; }
+  .annot-toolbar button, .annot-toolbar select { min-height: 42px; min-width: 42px; }
+  .annot-toolbar .swatch { width: 32px; height: 32px; }
+  .pen-fav { width: 34px; height: 34px; }
+  .lasso-actions button { font-size: 15px; padding: 8px 14px; }
+}
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border); padding: 0; flex: none; }
 .swatch.on { box-shadow: 0 0 0 2px var(--accent); }
 .annot-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; }

@@ -435,3 +435,95 @@ test.describe('lasso', () => {
     await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(2);
   });
 });
+
+test.describe('finition : favoris, réglages, tablette', () => {
+  test('stylos favoris : trois au départ, un clic reprend type, couleur et épaisseur ; on en mémorise et on en retire', async ({ page }) => {
+    await page.click('#tool-ink');
+    await expect(page.locator('.pen-fav')).toHaveCount(3);
+    const style = () => page.evaluate(() => (window as unknown as { cigale: { app: { annotStyle: { pen: string; width: number; color: number[] } } } }).cigale.app.annotStyle);
+    await page.locator('.pen-fav').nth(2).click(); // le surligneur jaune
+    expect(await style()).toMatchObject({ pen: 'highlighter', width: 14 });
+    await page.locator('.pen-fav').nth(1).click(); // la plume bleue
+    expect(await style()).toMatchObject({ pen: 'fountain', width: 3 });
+    await expect(page.locator('#annot-pen')).toHaveValue('fountain');
+    // mémoriser un nouveau stylo : stylo rouge de 5 pt
+    await page.selectOption('#annot-pen', 'pen');
+    await page.click('.swatch[data-color="Rouge"]');
+    await page.selectOption('#annot-width', '5');
+    await page.click('#pen-fav-add');
+    await page.click('[data-id="fav-save"]');
+    await expect(page.locator('.pen-fav')).toHaveCount(4);
+    // déjà présent : pas de doublon
+    await page.click('#pen-fav-add');
+    await page.click('[data-id="fav-save"]');
+    await expect(page.locator('.pen-fav')).toHaveCount(4);
+    await page.click('#pen-fav-add');
+    await page.click('[data-id="fav-del-3"]');
+    await expect(page.locator('.pen-fav')).toHaveCount(3);
+  });
+
+  test('les favoris sont gardés (réglages) et les autres outils les cachent', async ({ page }) => {
+    await page.click('#tool-ink');
+    await expect(page.locator('#pen-favs')).toBeVisible();
+    await page.click('#tool-eraser');
+    await expect(page.locator('#pen-favs')).toBeHidden();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cigale-settings') ?? '{}').penFavorites);
+    expect(saved === undefined || saved.length === 3).toBe(true);
+  });
+
+  test('réglage « redresser les traits » désactivé : maintenir le stylet ne change rien', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ shapeSnap: false })));
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+    expect((await annots(page))[0].strokes![0].length).toBeGreaterThan(10);
+  });
+
+  test('réglage « le doigt peut aussi écrire » : un doigt écrit même après un stylet', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ fingerWrites: true })));
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 10 }, () => 0.5));
+    expect(await pending(page)).toBe(1);
+    await page.evaluate(
+      ({ x, y }) => {
+        const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
+        const mk = (type: string, dx: number) => new PointerEvent(type, { pointerId: 9, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true, clientX: x + dx, clientY: y, pressure: 0.5, button: 0, buttons: 1 });
+        layer.dispatchEvent(mk('pointerdown', 0));
+        for (let i = 1; i < 8; i++) layer.dispatchEvent(mk('pointermove', i * 10));
+        layer.dispatchEvent(mk('pointerup', 80));
+      },
+      { x: pb.x + 300, y: pb.y + 400 },
+    );
+    expect(await pending(page)).toBe(2);
+  });
+
+  test('deux doigts : pas de défilement en plus du zoom (le pincement est géré par la visionneuse)', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 6 }, () => 0.5)); // un stylet a servi : les doigts font défiler
+    const top = () => page.evaluate(() => (document.querySelector('.doc-view:not([hidden]) .viewer-container') as HTMLElement).scrollTop);
+    const before = await top();
+    await page.evaluate(
+      ({ x, y }) => {
+        const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
+        const mk = (type: string, id: number, dy: number) => new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 21, bubbles: true, cancelable: true, clientX: x + (id === 21 ? 0 : 100), clientY: y + dy, pressure: 0.5, button: 0, buttons: 1 });
+        layer.dispatchEvent(mk('pointerdown', 21, 0));
+        layer.dispatchEvent(mk('pointerdown', 22, 0));
+        for (let i = 1; i < 6; i++) {
+          layer.dispatchEvent(mk('pointermove', 21, i * 15));
+          layer.dispatchEvent(mk('pointermove', 22, i * 15));
+        }
+        layer.dispatchEvent(mk('pointerup', 21, 90));
+        layer.dispatchEvent(mk('pointerup', 22, 90));
+      },
+      { x: pb.x + 300, y: pb.y + 300 },
+    );
+    expect(await top()).toBe(before);
+  });
+});

@@ -35,7 +35,7 @@ import { openRegionDialog } from './region';
 import { askSignature } from './signature';
 import { openCropDialog, openProtectDialog, openHeaderFooterDialog, openWatermarkDialog } from './page-tools';
 import { type Session, isDirty } from './session';
-import { loadSettings } from './settings';
+import { type PenFavorite, loadSettings, saveSettings } from './settings';
 
 const FIT_VALUES = ['page-width', 'page-fit', 'page-actual'] as const;
 const ZOOM_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8];
@@ -63,6 +63,8 @@ export class App {
     s.annotator.syncRuler();
     this.syncStyleUi();
   });
+  private favBox = h('span', { class: 'pen-favs', id: 'pen-favs' });
+  private favAdd = this.iconButton('pen-fav-add', t.annot.favAdd, 'star', () => this.openFavoritesMenu());
   private penSelect = h('select', { id: 'annot-pen', 'aria-label': t.annot.pen });
   private annotBar = h('div', { class: 'toolbar annot-toolbar', id: 'annot-toolbar', role: 'toolbar', 'aria-label': t.annot.toolbar, hidden: true });
   private toolButtons: Record<string, HTMLButtonElement> = {};
@@ -1099,6 +1101,8 @@ export class App {
       mk('freetext', 'text'),
       mk('ink', 'pen'),
       this.penSelect,
+      this.favBox,
+      this.favAdd,
       this.rulerBtn,
       mk('eraser', 'eraser'),
       mk('lasso', 'lasso'),
@@ -1205,6 +1209,66 @@ export class App {
     this.redactApplyBtn.hidden = !list.some((a) => a.kind === 'redact');
   }
 
+  private penLabel(f: PenFavorite): string {
+    return `${t.annot.pens[f.pen]} · ${f.width} pt`;
+  }
+
+  /** Les stylos favoris : un clic reprend le type, la couleur et l'épaisseur. */
+  private renderFavorites() {
+    const favs = loadSettings().penFavorites;
+    this.favBox.replaceChildren(
+      ...favs.map((f, i) => {
+        const b = h('button', { type: 'button', class: 'pen-fav', 'data-index': String(i), title: this.penLabel(f), 'aria-label': this.penLabel(f), onclick: () => this.applyFavorite(f) });
+        b.style.setProperty('--c', rgbToCss(f.color));
+        b.dataset.pen = f.pen;
+        return b;
+      }),
+    );
+  }
+
+  private applyFavorite(f: PenFavorite) {
+    this.rememberPen();
+    this.annotStyle.pen = f.pen;
+    this.annotStyle.color = f.color;
+    this.annotStyle.width = f.width;
+    this.rememberPen();
+    this.pushStyle();
+  }
+
+  private openFavoritesMenu() {
+    const prefs = loadSettings();
+    const same = (a: PenFavorite, b: PenFavorite) => a.pen === b.pen && a.width === b.width && a.color.every((c, i) => Math.abs(c - b.color[i]) < 0.01);
+    const current: PenFavorite = { pen: this.annotStyle.pen, color: [...this.annotStyle.color] as Rgb, width: this.annotStyle.width };
+    showMenu(
+      [
+        {
+          id: 'fav-save',
+          label: t.annot.favSave,
+          run: () => {
+            if (prefs.penFavorites.some((f) => same(f, current))) return toast(t.annot.favExists);
+            const list = [...prefs.penFavorites, current];
+            if (list.length > 6) {
+              list.shift();
+              toast(t.annot.favFull);
+            }
+            saveSettings({ ...prefs, penFavorites: list });
+            this.renderFavorites();
+          },
+        },
+        ...prefs.penFavorites.map((f, i) => ({
+          id: `fav-del-${i}`,
+          label: fmt(t.annot.favRemove, { name: this.penLabel(f) }),
+          separatorBefore: i === 0,
+          run: () => {
+            saveSettings({ ...prefs, penFavorites: prefs.penFavorites.filter((_, k) => k !== i) });
+            this.renderFavorites();
+          },
+        })),
+      ],
+      this.favAdd,
+    );
+  }
+
   /** Garde la couleur et l'épaisseur du stylo qu'on quitte. */
   private rememberPen() {
     if (this.annotTool === 'ink') {
@@ -1238,6 +1302,8 @@ export class App {
     }
     this.penSelect.value = this.annotStyle.pen;
     this.penSelect.hidden = tool !== 'ink';
+    this.favBox.hidden = this.favAdd.hidden = tool !== 'ink';
+    if (tool === 'ink') this.renderFavorites();
     this.rulerBtn.hidden = tool !== 'ink';
     this.rulerBtn.classList.toggle('on', !!this.active?.ink.ruler.visible);
     this.rulerBtn.setAttribute('aria-pressed', String(!!this.active?.ink.ruler.visible));

@@ -13,6 +13,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Nouveau carnet** (accueil, ou Fichier → Nouveau carnet) : un document neuf sur le papier de votre choix — uni, ligné, quadrillé 5 mm, pointillé ou **Seyès** — en A4, A5 ou Lettre, portrait ou paysage, de 1 à 500 pages. Il s'ouvre directement avec le stylo, et s'enregistre en PDF comme les autres.
 - **Insérer des pages avec un papier** (menu Insérer des pages, ou clic droit sur une page) : une ou plusieurs pages lignées, quadrillées, Seyès… avant ou après la sélection, dans n'importe quel document.
 - **Ajouter une image** (Commenter → Image) : une photo, une capture ou un schéma, posée d'un clic puis déplaçable et redimensionnable. L'orientation de la photo est respectée et les très grandes images sont réduites.
+- **Stylos favoris** : trois stylos prêts à l'emploi (stylo noir, plume bleue, surligneur jaune). Un clic reprend le type, la couleur et l'épaisseur ; l'étoile permet de mémoriser le stylo en cours (six au plus) ou d'en retirer.
+- **Réglages d'écriture** (Paramètres) : redresser ou non les traits quand on maintient le stylet ; laisser le doigt écrire aussi.
+- **Tablette** : boutons de la barre d'outils plus grands sur un écran tactile ; le pincement à deux doigts zoome sans faire défiler la page ; le trait suit mieux le stylet (affichage à faible latence et anticipation de quelques points quand le navigateur le permet).
 - **Annuler trait par trait** tant qu'on écrit ; Rétablir les rend.
 - **Stylet et doigt** : une fois qu'un stylet a servi, le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits).
 - Les traits sont de vrais commentaires du PDF : on les retrouve dans Aperçu et Acrobat, avec la même forme. Un trait déplacé garde sa forme.

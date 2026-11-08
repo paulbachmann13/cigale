@@ -1,3 +1,9 @@
+export interface PenFavorite {
+  pen: 'pen' | 'fountain' | 'highlighter';
+  color: [number, number, number];
+  width: number;
+}
+
 export type ThemeChoice = 'auto' | 'light' | 'dark';
 export type DefaultZoom = 'page-width' | 'page-fit' | 'page-actual';
 
@@ -12,10 +18,20 @@ export interface Settings {
   autosave: boolean;
   /** Application Mac : chercher une mise à jour au démarrage. */
   autoUpdate: boolean;
+  /** Écriture : maintenir le stylet immobile en fin de trait le redresse (ligne, cercle, rectangle…). */
+  shapeSnap: boolean;
+  /** Écriture : le doigt écrit aussi, même après l'usage d'un stylet (sinon il fait défiler la page). */
+  fingerWrites: boolean;
+  /** Stylos favoris (type, couleur, épaisseur), 6 au plus. */
+  penFavorites: PenFavorite[];
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true };
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true, shapeSnap: true, fingerWrites: false, penFavorites: [
+  { pen: 'pen', color: [0.1, 0.1, 0.15], width: 2 },
+  { pen: 'fountain', color: [0.1, 0.25, 0.6], width: 3 },
+  { pen: 'highlighter', color: [1, 0.9, 0.1], width: 14 },
+] };
 
 export function loadSettings(): Settings {
   try {

@@ -8,6 +8,7 @@ import type { DocView } from '../pdf/viewer';
 import { type Shape, magnetAngle, pointInPolygon, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
 import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
 import { h } from './dom';
+import { loadSettings } from './settings';
 import type { InkStore } from './ink-store';
 
 export type Tool = 'select' | 'redact' | 'clip' | 'sign' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'freetext' | 'ink' | 'eraser' | 'lasso' | 'image' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'stamp';
@@ -72,9 +73,11 @@ export class Annotator {
   style: Style = { color: [0.85, 0.15, 0.15], width: 2, fontSize: 14, stamp: 'approved', pen: 'pen' };
   /** Une écriture au stylet a eu lieu : le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits). */
   private penSeen = false;
+  /** Doigts posés pour faire défiler (le pincement à deux doigts est géré par la visionneuse). */
+  private fingers = new Set<number>();
   private inkCanvases = new Map<number, { normal: HTMLCanvasElement; multiply: HTMLCanvasElement }>();
   /** Trait en cours d'écriture. */
-  private live: { page: number; points: Pt[]; pressures: number[]; usesPressure: boolean } | null = null;
+  private live: { page: number; points: Pt[]; pressures: number[]; usesPressure: boolean; predicted: Pt[] } | null = null;
   /** Traits déjà enregistrés que la gomme vient de toucher (supprimés au relâchement). */
   private erasing = new Map<string, Annot>();
   private inkTimer: number | undefined;
@@ -269,6 +272,11 @@ export class Annotator {
   // ───────────── dessin ─────────────
 
   private bindLayer(layer: HTMLElement, n: number) {
+    // Les doigts posés (même le 2ᵉ, qui n'est pas « principal ») : deux doigts = pincement, pas de défilement ni d'écriture
+    layer.addEventListener('pointerdown', (e) => void (e.pointerType === 'touch' && this.fingers.add(e.pointerId)));
+    const lift = (e: PointerEvent) => this.fingers.delete(e.pointerId);
+    layer.addEventListener('pointerup', lift);
+    layer.addEventListener('pointercancel', lift);
     layer.addEventListener('pointerdown', (e) => {
       if (e.target !== layer || this.tool === null || !SHAPE_TOOLS.has(this.tool)) return;
       if (this.tool === 'ink' || this.tool === 'eraser') return this.beginInk(e, layer, n);
@@ -407,7 +415,7 @@ export class Annotator {
 
   private beginLasso(e: PointerEvent, layer: HTMLElement, n: number) {
     if (!e.isPrimary) return;
-    if (e.pointerType === 'touch' && this.penSeen) return this.panWithFinger(e, layer);
+    if (e.pointerType === 'touch' && this.penSeen && !loadSettings().fingerWrites) return this.panWithFinger(e, layer);
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     capture(layer, e.pointerId);
@@ -641,11 +649,11 @@ export class Annotator {
         cv.width = Math.round(w * dpr);
         cv.height = Math.round(hgt * dpr);
       }
-      const g = cv.getContext('2d')!;
+      const g = cv.getContext('2d', multiply ? undefined : { desynchronized: true })!; // « desynchronized » : affichage à faible latence quand le navigateur le permet
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, w, hgt);
       const all: { s: Pick<InkStroke, 'points' | 'pressures' | 'width' | 'pen' | 'color'> }[] = strokes.map((s) => ({ s }));
-      if (liveHere) all.push({ s: { points: liveHere.points, pressures: liveHere.usesPressure ? liveHere.pressures : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
+      if (liveHere) all.push({ s: { points: [...liveHere.points, ...liveHere.predicted], pressures: liveHere.usesPressure ? liveHere.pressures : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
       for (const { s } of all) {
         if ((PENS[s.pen].blend === 'Multiply') !== multiply) continue;
         if (this.erasingPending.has(s as InkStroke)) continue; // dessiné en rouge plus bas
@@ -699,7 +707,8 @@ export class Annotator {
     if (!e.isPrimary) return; // un 2ᵉ doigt pendant un tracé ne doit rien casser
     window.clearTimeout(this.inkTimer); // pas d'envoi au document pendant qu'on écrit
     if (e.pointerType === 'pen') this.penSeen = true;
-    if (e.pointerType === 'touch' && this.penSeen) return this.panWithFinger(e, layer); // doigt = défiler, stylet = écrire
+    const prefs = loadSettings();
+    if (e.pointerType === 'touch' && this.penSeen && !prefs.fingerWrites) return this.panWithFinger(e, layer); // doigt = défiler, stylet = écrire
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault();
     capture(layer, e.pointerId);
@@ -711,7 +720,7 @@ export class Annotator {
     const toPdf = (ev: PointerEvent): Pt => toPdfXY(ev.clientX, ev.clientY);
     if (this.tool === 'eraser') return this.beginErase(e, layer, n, toPdf, vp.scale);
     const usesPressure = e.pointerType === 'pen';
-    const live = { page: n - 1, points: [] as Pt[], pressures: [] as number[], usesPressure };
+    const live = { page: n - 1, points: [] as Pt[], pressures: [] as number[], usesPressure, predicted: [] as Pt[] };
     this.live = live;
     const minGap = 0.8 / vp.scale; // moins d'un pixel d'écran : inutile
     const add = (ev: PointerEvent, force = false) => {
@@ -742,6 +751,7 @@ export class Annotator {
       const shape = recognizeShape(live.points);
       if (!shape) return;
       snapped = shape;
+      live.predicted = [];
       const avg = live.pressures.reduce((a, v) => a + v, 0) / live.pressures.length;
       live.points = shape.points.slice();
       live.pressures = live.points.map(() => avg);
@@ -749,7 +759,7 @@ export class Annotator {
     };
     const arm = () => {
       window.clearTimeout(holdTimer);
-      if (!snapped) holdTimer = window.setTimeout(snap, 550);
+      if (!snapped && prefs.shapeSnap) holdTimer = window.setTimeout(snap, 550);
     };
     if (!edge) arm();
     const move = (ev: PointerEvent) => {
@@ -768,6 +778,7 @@ export class Annotator {
         return;
       }
       for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
+      live.predicted = (ev.getPredictedEvents?.() ?? []).slice(0, 3).map(toPdf); // quelques points d'avance : le trait « colle » au stylet
       if (Math.hypot(ev.clientX - anchor[0], ev.clientY - anchor[1]) > 2.5) {
         anchor = [ev.clientX, ev.clientY];
         arm();
@@ -779,6 +790,7 @@ export class Annotator {
       layer.removeEventListener('pointerup', up);
       layer.removeEventListener('pointercancel', cancel);
       window.clearTimeout(holdTimer);
+      live.predicted = [];
       if (!cancelled && edge) live.points = [live.points[0], ruled(ev)];
       else if (!cancelled && !snapped) add(ev);
       else if (!cancelled && snapped && (snapped as Shape).kind === 'line') live.points = [live.points[0], toPdf(ev)];
@@ -803,6 +815,12 @@ export class Annotator {
     let x = e.clientX;
     let y = e.clientY;
     const move = (ev: PointerEvent) => {
+      if (this.fingers.size > 1) {
+        // deux doigts : c'est un pincement (zoom), géré par la visionneuse ; on ne fait pas défiler en plus
+        x = ev.clientX;
+        y = ev.clientY;
+        return;
+      }
       this.view.container.scrollLeft -= ev.clientX - x;
       this.view.container.scrollTop -= ev.clientY - y;
       x = ev.clientX;

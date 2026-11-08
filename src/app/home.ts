@@ -184,6 +184,10 @@ export function openSettings(app: App) {
   };
   const autoUp = h('input', { type: 'checkbox', id: 'setting-autoupdate', checked: s.autoUpdate });
   autoUp.onchange = () => saveSettings({ ...loadSettings(), autoUpdate: autoUp.checked });
+  const snap = h('input', { type: 'checkbox', id: 'setting-shapesnap', checked: s.shapeSnap });
+  snap.onchange = () => saveSettings({ ...loadSettings(), shapeSnap: snap.checked });
+  const finger = h('input', { type: 'checkbox', id: 'setting-fingerwrites', checked: s.fingerWrites });
+  finger.onchange = () => saveSettings({ ...loadSettings(), fingerWrites: finger.checked });
   const keep = h('input', { type: 'checkbox', id: 'setting-versions', checked: s.keepVersions });
   keep.onchange = () => saveSettings({ ...loadSettings(), keepVersions: keep.checked });
   showCustom(
@@ -197,6 +201,11 @@ export function openSettings(app: App) {
       isTauri() ? h('label', { class: 'check' }, autoUp, t.settings.autoUpdate) : null,
       h('label', { class: 'check' }, auto, t.settings.autosave),
       h('p', { class: 'hint' }, t.settings.autosaveHint),
+      h('h3', {}, t.settings.writing),
+      h('label', { class: 'check' }, snap, t.settings.shapeSnap),
+      h('p', { class: 'hint' }, t.settings.shapeSnapHint),
+      h('label', { class: 'check' }, finger, t.settings.fingerWrites),
+      h('p', { class: 'hint' }, t.settings.fingerWritesHint),
       h('label', { class: 'check' }, keep, t.settings.keepVersions),
       h('p', { class: 'hint' }, t.settings.keepVersionsHint),
     ),
