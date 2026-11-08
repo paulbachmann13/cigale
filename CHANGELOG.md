@@ -20,6 +20,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Stylet et doigt** : une fois qu'un stylet a servi, le doigt fait défiler la page au lieu d'écrire (la paume ne laisse plus de traits).
 - Les traits sont de vrais commentaires du PDF : on les retrouve dans Aperçu et Acrobat, avec la même forme. Un trait déplacé garde sa forme.
 
+### Corrigé
+- **Windows** : après avoir fermé Cigale, un double-clic sur un PDF (ou « Ouvrir avec ») ne l'ouvrait plus : le programme restait caché en tâche de fond. Fermer la fenêtre arrête maintenant vraiment Cigale.
+
 ### Modifié
 - Un trait écrit n'est plus un pas « Annuler » à lui seul : tout ce qu'on écrit d'un coup forme une seule étape une fois envoyé au document (la page ne se recharge plus à chaque trait).
 
