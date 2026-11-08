@@ -1083,7 +1083,6 @@ export class App {
       this.rulerBtn,
       mk('eraser', 'eraser'),
       mk('lasso', 'lasso'),
-      mk('lasso', 'lasso'),
       mk('rect', 'rect'),
       mk('ellipse', 'ellipse'),
       mk('line', 'line'),

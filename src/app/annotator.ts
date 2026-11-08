@@ -464,7 +464,7 @@ export class Annotator {
     box.append(actions);
     layer.append(box);
     box.addEventListener('pointerdown', (e) => {
-      if ((e.target as HTMLElement).closest('.lasso-actions')) return;
+      if ((e.target as HTMLElement).closest('.lasso-actions') || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
       e.preventDefault();
       e.stopPropagation();
       capture(box, e.pointerId);
@@ -475,9 +475,17 @@ export class Annotator {
         if (Math.hypot(p[0] - start[0], p[1] - start[1]) > 3) moved = true;
         if (moved) box.style.transform = `translate(${p[0] - start[0]}px, ${p[1] - start[1]}px)`;
       };
-      const end = (ev: PointerEvent) => {
+      const stop = () => {
         box.removeEventListener('pointermove', move);
         box.removeEventListener('pointerup', end);
+        box.removeEventListener('pointercancel', cancel);
+      };
+      const cancel = () => {
+        stop();
+        box.style.transform = ''; // geste annulé par le système : rien ne bouge
+      };
+      const end = (ev: PointerEvent) => {
+        stop();
         if (!moved) return;
         const p = this.local(layer, ev);
         const [ax, ay] = vp.convertToPdfPoint(start[0], start[1]);
@@ -486,6 +494,7 @@ export class Annotator {
       };
       box.addEventListener('pointermove', move);
       box.addEventListener('pointerup', end);
+      box.addEventListener('pointercancel', cancel);
     });
   }
 

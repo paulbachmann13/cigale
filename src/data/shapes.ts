@@ -25,7 +25,7 @@ export function pathLength(pts: Pt[]): number {
 /** Rééchantillonne à n points régulièrement espacés le long du chemin. */
 export function resample(pts: Pt[], n: number): Pt[] {
   const total = pathLength(pts);
-  if (pts.length < 2 || total === 0) return pts.slice();
+  if (n < 2 || pts.length < 2 || total === 0) return pts.slice(0, Math.max(0, n < 2 ? n : pts.length));
   const step = total / (n - 1);
   const out: Pt[] = [pts[0]];
   let acc = 0;

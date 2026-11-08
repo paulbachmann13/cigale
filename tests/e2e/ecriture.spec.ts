@@ -419,6 +419,10 @@ test.describe('lasso', () => {
     await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBeLessThan(5);
   });
 
+  test('un seul bouton par outil dans la barre', async ({ page }) => {
+    for (const id of ['ink', 'eraser', 'lasso']) await expect(page.locator(`#tool-${id}`)).toHaveCount(1);
+  });
+
   test('une boucle vide désélectionne ; Suppr efface la sélection', async ({ page }) => {
     const pb = await threeStrokes(page);
     await page.click('#tool-lasso');
