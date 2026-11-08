@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFArray, PDFContentStream, PDFDocument, PDFRawStream, decodePDFRawStream } from '@cantoo/pdf-lib';
+import { PDFArray, PDFContentStream, PDFDocument, PDFRawStream, decodePDFRawStream, degrees } from '@cantoo/pdf-lib';
 import { PAPER_SIZES, PAPER_TEMPLATES, createNotebook } from '../../src/pdf/notebook-ops';
 import { applyOp } from '../../src/pdf/page-ops';
 import { makePdf, readPages } from './helpers';
@@ -64,5 +64,30 @@ describe('insérer des pages avec un papier', () => {
     expect(r.pageCount).toBe(3);
     expect(r.selection).toEqual([0]);
     expect(await strokes(r.bytes, 0)).toBe(0);
+  });
+});
+
+describe('papier partagé et cas limites', () => {
+  it('500 pages pointillées ne pèsent pas 500 fois une page (flux partagé)', async () => {
+    const one = (await createNotebook({ template: 'dots', size: 'a4', landscape: false, pages: 1 })).length;
+    const many = (await createNotebook({ template: 'dots', size: 'a4', landscape: false, pages: 200 })).length;
+    expect(many).toBeLessThan(one * 6);
+    const doc = await PDFDocument.load(await createNotebook({ template: 'dots', size: 'a4', landscape: false, pages: 3 }));
+    expect(doc.getPageCount()).toBe(3);
+  });
+  it('un nombre de pages NaN à l’insertion : une seule page', async () => {
+    const r = await applyOp(await makePdf(1), { op: 'insertBlank', at: 1, template: 'lined', count: NaN }, undefined, 1);
+    expect(r.pageCount).toBe(2);
+    expect(r.selection).toEqual([1]);
+  });
+  it('à côté d’une page tournée de 90°, le papier est droit (largeur et hauteur échangées, pas de rotation)', async () => {
+    const src = await PDFDocument.load(await makePdf(1));
+    src.getPage(0).setRotation(degrees(90));
+    const r = await applyOp(await src.save(), { op: 'insertBlank', at: 1, template: 'grid' }, undefined, 1);
+    const doc = await PDFDocument.load(r.bytes);
+    const { width, height } = doc.getPage(0).getSize();
+    expect(doc.getPage(1).getRotation().angle).toBe(0);
+    expect(doc.getPage(1).getSize().width).toBeCloseTo(height, 1);
+    expect(doc.getPage(1).getSize().height).toBeCloseTo(width, 1);
   });
 });

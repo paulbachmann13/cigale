@@ -3,7 +3,7 @@
  * d'un document neuf. Fonctions pures : paramètres → octets. Le papier est du vrai contenu PDF (vectoriel, léger),
  * pas une image : il s'imprime et s'affiche partout pareil.
  */
-import { PDFDocument, type PDFPage, rgb } from '@cantoo/pdf-lib';
+import { PDFDocument, PDFName, type PDFPage, rgb } from '@cantoo/pdf-lib';
 import { saveDoc } from './protection';
 
 export type PaperTemplate = 'blank' | 'lined' | 'grid' | 'dots' | 'seyes';
@@ -59,6 +59,12 @@ export function drawPaper(page: PDFPage, template: PaperTemplate): void {
   }
 }
 
+/** Fait partager à `page` le papier déjà dessiné sur `source` : un seul flux dans le fichier pour toutes les pages (500 pages pointillées ne pèsent pas 500 fois plus). */
+export function sharePaper(source: PDFPage, page: PDFPage): void {
+  const contents = source.node.get(PDFName.of('Contents'));
+  if (contents) page.node.set(PDFName.of('Contents'), contents);
+}
+
 /** Crée un document neuf (carnet) : `pages` pages du même papier. */
 export async function createNotebook(options: NotebookOptions): Promise<Uint8Array> {
   const pages = Math.floor(options.pages);
@@ -66,6 +72,13 @@ export async function createNotebook(options: NotebookOptions): Promise<Uint8Arr
   const doc = await PDFDocument.create();
   const [pw, ph] = PAPER_SIZES[options.size];
   const size: [number, number] = options.landscape ? [ph, pw] : [pw, ph];
-  for (let i = 0; i < pages; i++) drawPaper(doc.addPage(size), options.template);
+  let first: PDFPage | undefined;
+  for (let i = 0; i < pages; i++) {
+    const page = doc.addPage(size);
+    if (!first) {
+      drawPaper(page, options.template);
+      first = page;
+    } else sharePaper(first, page);
+  }
   return saveDoc(doc);
 }

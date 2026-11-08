@@ -12,6 +12,7 @@ import {
   PDFDict,
   PDFDocument,
   type PDFObject,
+  type PDFPage,
   PDFName,
   PDFNumber,
   PDFRef,
@@ -19,7 +20,7 @@ import {
   degrees,
 } from '@cantoo/pdf-lib';
 import { moveOrder, normalizeSelection } from '../data/page-order';
-import { type PaperTemplate, drawPaper } from './notebook-ops';
+import { type PaperTemplate, drawPaper, sharePaper } from './notebook-ops';
 import { type Permissions, RESTRICTIVE, getProtection, inheritProtection, permissionsFromP, saveDoc, setProtection } from './protection';
 
 export type PageOp =
@@ -202,13 +203,22 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, 
       const at = Math.min(Math.max(op.at, 0), count);
       const ref = doc.getPage(Math.min(Math.max(at - 1, 0), count - 1));
       const { width, height } = ref.getSize();
-      const many = Math.min(Math.max(Math.floor(op.count ?? 1), 1), 200);
+      const many = Number.isFinite(op.count) ? Math.min(Math.max(Math.floor(op.count!), 1), 200) : 1;
+      const rot = ref.getRotation().angle;
+      // Avec un papier, la page est droite : pour une voisine tournée de 90° ou 270°, on échange largeur et hauteur au lieu de la tourner
+      // (sinon les lignes du papier apparaîtraient à la verticale).
+      const upright = !!op.template && rot % 180 !== 0;
       selection = [];
+      let firstNew: PDFPage | undefined;
       for (let k = 0; k < many; k++) {
-        const page = doc.insertPage(at + k, [width, height]);
-        const rot = ref.getRotation().angle;
-        if (rot) page.setRotation(degrees(rot));
-        if (op.template) drawPaper(page, op.template);
+        const page = doc.insertPage(at + k, upright ? [height, width] : [width, height]);
+        if (rot && !upright) page.setRotation(degrees(rot));
+        if (op.template) {
+          if (!firstNew) {
+            drawPaper(page, op.template);
+            firstNew = page;
+          } else sharePaper(firstNew, page);
+        }
         selection.push(at + k);
       }
       break;
