@@ -1,6 +1,6 @@
 [package]
 name = "cigale"
-version = "1.6.1"
+version = "1.6.2"
 description = "Cigale — éditeur PDF local et gratuit"
 license = "Apache-2.0"
 edition = "2021"

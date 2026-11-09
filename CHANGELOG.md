@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.6.2] — 2026-11-09
+
+### Corrigé
+- **Mises à jour** : quand le serveur des mises à jour ne répond pas (ou que la connexion est coupée), Cigale l'explique maintenant en français et propose de réessayer plus tard, au lieu d'afficher un message technique en anglais.
+
 ## [1.6.1] — 2026-11-08
 
 ### Corrigé
