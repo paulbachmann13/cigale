@@ -520,6 +520,7 @@ export const fr = {
     moveApp: 'La version {version} de Cigale est disponible, mais Cigale ne peut pas se mettre à jour depuis le disque d’installation ou le dossier Téléchargements.\n\nFaites glisser Cigale dans le dossier Applications, éjectez le disque Cigale, puis lancez Cigale depuis le dossier Applications.',
     upToDate: 'Vous utilisez la dernière version de Cigale ({version}).',
     checkFailed: 'Impossible de vérifier les mises à jour : {message}',
+    unreachable: 'Impossible de joindre le serveur des mises à jour pour le moment (GitHub ne répond pas, ou la connexion est coupée). Réessayez dans quelques minutes. Si cela dure, téléchargez la dernière version sur https://github.com/paulbachmann13/cigale/releases/latest.',
     progressTitle: 'Mise à jour de Cigale',
     progressHint: 'Vous n’avez rien à faire : Cigale redémarrera tout seul.',
     busy: 'Une mise à jour est déjà en cours : Cigale redémarrera tout seul quand elle sera installée.',

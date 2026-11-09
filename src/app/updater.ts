@@ -60,6 +60,15 @@ export async function runUpdateCheck(deps: Deps, silent: boolean): Promise<Updat
   }
 }
 
+/** Erreurs techniques (anglais) d'un serveur ou d'un réseau injoignable : on les remplace par une phrase claire. */
+const UNREACHABLE = /could not fetch|release json|error sending request|network|dns|connect|timed? ?out|timeout|50[0-4]|gateway|unreachable|offline|failed to fetch/i;
+
+/** Message affiché quand la vérification des mises à jour échoue. */
+export function checkFailedMessage(err: unknown): string {
+  const message = (err as Error)?.message ?? String(err);
+  return UNREACHABLE.test(message) ? t.update.unreachable : fmt(t.update.checkFailed, { message });
+}
+
 /**
  * `silent` : vérification au démarrage (pas de message si tout est à jour ou si la vérification échoue,
  * par exemple hors connexion). Sinon (demande de l'utilisateur) on répond toujours.
@@ -69,7 +78,7 @@ async function checkAndInstall(deps: Deps, silent: boolean): Promise<UpdateResul
   try {
     update = await deps.check();
   } catch (e) {
-    if (!silent) await deps.tell(fmt(t.update.checkFailed, { message: (e as Error)?.message ?? String(e) }));
+    if (!silent) await deps.tell(checkFailedMessage(e));
     return 'error';
   }
   if (!update) {

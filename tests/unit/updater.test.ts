@@ -46,6 +46,15 @@ describe('mise à jour automatique', () => {
     expect(asked.log[0]).toContain('Impossible de vérifier les mises à jour : réseau');
   });
 
+  it('serveur ou réseau injoignable : message clair en français, pas le texte technique anglais', async () => {
+    for (const msg of ['Could not fetch a valid release JSON from the remote', 'error sending request for url', 'HTTP 504 Gateway Time-out', 'Failed to fetch', 'network error']) {
+      const asked = deps({ check: () => Promise.reject(new Error(msg)) });
+      await runUpdateCheck(asked.d, false);
+      expect(asked.log[0], msg).toContain('Impossible de joindre le serveur des mises à jour');
+      expect(asked.log[0], msg).not.toContain('release JSON');
+    }
+  });
+
   it('nouvelle version acceptée : téléchargement, sauvegarde, puis redémarrage', async () => {
     const { d, log } = deps({}, update());
     expect(await runUpdateCheck(d, true)).toBe('installed');
