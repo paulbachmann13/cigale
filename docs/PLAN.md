@@ -52,3 +52,15 @@ Décidé avec Paul le 08/11/2026 : un univers d'écriture dans Cigale (importer 
 - **C. Carnet** ✔ (1.5.0) : pages vierges (lignées, quadrillées, points), ajout de pages, zones de texte, images, signature intégrée.
 - **D. Finition** ✔ (1.5.0) : stylos favoris, interface tablette, réglages fins, latence.
 Puis : améliorations à partir des retours du père de Paul (version Windows 1.4).
+
+## Refonte de l'encre (en cours — décidée le 10/11/2026)
+
+**Constat** (mesuré sur l'appli réelle, Chromium et WebKit, dpr 1 / 1,5 / 2) : l'écriture paraissait floue parce que `box-sizing: border-box` global écrasait chaque page pdf.js de 18 px (page rééchantillonnée, annotations décalées) — **corrigé** (`.pdfViewer .page { box-sizing: content-box }`). Autres défauts : stylo trop épais (1,5 pt par défaut maintenant), contour en polygone (maintenant courbes), liste d'événements groupés vide (corrigé : `coalesced()`).
+
+**Architecture visée** (avis Gemini + analyse pdf.js 6.5, qui respecte `/OC` sur les annotations) :
+- l'encre = `InkModel` en mémoire (source de vérité) + calque de canevas Cigale ; le PDF n'est écrit qu'à l'enregistrement, avant une opération sur les pages et pour le brouillon, **sans recharger la vue** ;
+- annotations `/Ink` standard (une « feuille » par suite de traits de même style) rangées dans un calque OCG « Écriture manuscrite (Cigale) » que Cigale masque dans pdf.js (`optionalContentConfig`) pour dessiner l'encre elle-même ;
+- historique par actions légères (`History.pushInk`, `InkAction`) au lieu d'un PDF complet par trait ; gomme précise (`eraseFromStroke`), lasso et déplacement instantanés.
+
+**Fait** (non branché à l'interface, testé : `tests/unit/ink-model.test.ts`) : `data/ink.ts` (stylos, contour lissé en courbes, gomme précise, identifiants de traits), `data/ink-model.ts`, `History.pushInk/replaceCurrent`, `pdf/ink-layer.ts` (calque OCG, normalisé à chaque `saveDoc`), `pdf/ink-ops.ts` (`setInk`, `strokesFromAnnots`, migration des anciens fichiers), worker (`marks`, `inkSet`, `inkNormalize`).
+**Reste** : brancher `InkModel` à `Annotator`/`Editing`/`Session` (remplacer `InkStore` en attente), masquer le calque dans pdf.js au chargement, écriture différée sans rechargement, annulation par actions, gomme/lasso sur le modèle, brouillon automatique et enregistrement via `setInk`, tests e2e, puis l'enquête Acrobat Pro (comparaison des fonctions payantes : modifier le texte et les images, comparer, remplacer des pages, compresser, Bates, traitement par lots, signature à certificat, formulaires créés, conversions Word/Excel).

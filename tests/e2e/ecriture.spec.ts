@@ -444,12 +444,12 @@ test.describe('finition : favoris, réglages, tablette', () => {
     await page.locator('.pen-fav').nth(2).click(); // le surligneur jaune
     expect(await style()).toMatchObject({ pen: 'highlighter', width: 14 });
     await page.locator('.pen-fav').nth(1).click(); // la plume bleue
-    expect(await style()).toMatchObject({ pen: 'fountain', width: 3 });
+    expect(await style()).toMatchObject({ pen: 'fountain', width: 2.5 });
     await expect(page.locator('#annot-pen')).toHaveValue('fountain');
     // mémoriser un nouveau stylo : stylo rouge de 5 pt
     await page.selectOption('#annot-pen', 'pen');
     await page.click('.swatch[data-color="Rouge"]');
-    await page.selectOption('#annot-width', '5');
+    await page.selectOption('#annot-width', '4');
     await page.click('#pen-fav-add');
     await page.click('[data-id="fav-save"]');
     await expect(page.locator('.pen-fav')).toHaveCount(4);

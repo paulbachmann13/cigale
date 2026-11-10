@@ -10,7 +10,8 @@ import { type OcrPage, addTextLayer } from './ocr-ops';
 import { type RegionRect, extractRegion, regionImagePdf } from './region-ops';
 import { type FillResult, type FormValue, fillForm } from './form-ops';
 import { type NotebookOptions, createNotebook } from './notebook-ops';
-import { type AddResult, addAnnotations, deleteAnnotations, listAnnotations, updateAnnotation, updateAnnotations } from './annot-ops';
+import { type AddResult, type Marks, addAnnotations, deleteAnnotations, listAnnotations, listMarks, updateAnnotation, updateAnnotations } from './annot-ops';
+import { type InkPage, normalizeInk, setInk } from './ink-ops';
 import { type Inspection, type OpResult, type PageOp, applyOp, extractPages, inspect, normalizeDocument } from './page-ops';
 
 export type WorkerRequest =
@@ -24,6 +25,9 @@ export type WorkerRequest =
   | { kind: 'zip'; parts: Part[] }
   | { kind: 'bookmarks'; bytes: Uint8Array; password?: string }
   | { kind: 'annotList'; bytes: Uint8Array; password?: string; expectedPages?: number }
+  | { kind: 'marks'; bytes: Uint8Array; password?: string; expectedPages?: number }
+  | { kind: 'inkSet'; bytes: Uint8Array; pages: InkPage[]; password?: string; expectedPages?: number; author?: string }
+  | { kind: 'inkNormalize'; bytes: Uint8Array; password?: string }
   | { kind: 'annotAdd'; bytes: Uint8Array; drafts: AnnotDraft[]; password?: string; expectedPages?: number; author: string }
   | { kind: 'annotUpdate'; bytes: Uint8Array; id: string; patch: AnnotPatch; password?: string; expectedPages?: number }
   | { kind: 'annotUpdateMany'; bytes: Uint8Array; items: { id: string; patch: AnnotPatch }[]; password?: string; expectedPages?: number }
@@ -42,7 +46,7 @@ export type WorkerRequest =
 export type MergeResult = { bytes: Uint8Array; pageCount: number };
 
 export type WorkerResponse =
-  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | FillResult | CropResult | RedactResult | ProtectResult | Annot[] | { title: string; page: number }[] }
+  | { ok: true; result: OpResult | MergeResult | Part[] | Uint8Array | Inspection | AddResult | FillResult | CropResult | RedactResult | ProtectResult | Marks | Annot[] | { title: string; page: number }[] }
   | { ok: false; error: string; name: string; file?: string }
   | { progress: number };
 
@@ -86,6 +90,16 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         return post({ ok: true, result: await topLevelBookmarks(req.bytes, req.password) });
       case 'annotList':
         return post({ ok: true, result: await listAnnotations(req.bytes, req.password, req.expectedPages) });
+      case 'marks':
+        return post({ ok: true, result: await listMarks(req.bytes, req.password, req.expectedPages) });
+      case 'inkSet': {
+        const bytes = await setInk(req.bytes, req.pages, req.password, req.expectedPages, req.author);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'inkNormalize': {
+        const bytes = await normalizeInk(req.bytes, req.password);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
       case 'annotAdd': {
         const result = await addAnnotations(req.bytes, req.drafts, req.password, req.expectedPages, req.author);
         return post({ ok: true, result }, buffers(result.bytes));

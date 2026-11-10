@@ -5,7 +5,8 @@
 import type { NotebookOptions } from './notebook-ops';
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import type { Range } from '../data/page-ranges';
-import type { AddResult } from './annot-ops';
+import type { AddResult, Marks } from './annot-ops';
+import type { InkPage } from './ink-ops';
 import type { CropMargins, CropResult } from './crop-ops';
 import type { FillResult, FormValue } from './form-ops';
 import type { ProtectOptions, ProtectResult } from './protect-ops';
@@ -73,6 +74,9 @@ export const splitOperation = (bytes: Uint8Array, ranges: Range[], names: string
 export const zipOperation = (parts: Part[]) => run<Uint8Array>({ kind: 'zip', parts });
 export const bookmarksOperation = (bytes: Uint8Array, password?: string) => run<{ title: string; page: number }[]>({ kind: 'bookmarks', bytes, password });
 
+export const listMarksOp = (bytes: Uint8Array, password?: string, expectedPages?: number) => run<Marks>({ kind: 'marks', bytes, password, expectedPages });
+export const setInkOp = (bytes: Uint8Array, pages: InkPage[], password: string | undefined, expectedPages: number, author: string) => run<Uint8Array>({ kind: 'inkSet', bytes, pages, password, expectedPages, author });
+export const normalizeInkOp = (bytes: Uint8Array, password?: string) => run<Uint8Array>({ kind: 'inkNormalize', bytes, password });
 export const listAnnotationsOp = (bytes: Uint8Array, password?: string, expectedPages?: number) => run<Annot[]>({ kind: 'annotList', bytes, password, expectedPages });
 export const addAnnotationsOp = (bytes: Uint8Array, drafts: AnnotDraft[], password: string | undefined, expectedPages: number, author: string) => run<AddResult>({ kind: 'annotAdd', bytes, drafts, password, expectedPages, author });
 export const updateAnnotationsOp = (bytes: Uint8Array, items: { id: string; patch: AnnotPatch }[], password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'annotUpdateMany', bytes, items, password, expectedPages });

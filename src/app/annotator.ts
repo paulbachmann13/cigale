@@ -6,7 +6,7 @@ import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type 
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
 import { type Shape, eraseOutline, eraseTouched, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
-import { type InkStroke, type PenKind, PENS, inkOutline, strokeTouched } from '../data/ink';
+import { type InkStroke, type PenKind, PENS, inkOutline, newStrokeId, strokeTouched } from '../data/ink';
 import { h } from './dom';
 import { loadSettings } from './settings';
 import type { InkStore } from './ink-store';
@@ -57,6 +57,13 @@ interface PageViewLike {
 const SHAPE_TOOLS = new Set<Tool>(['sign', 'image', 'redact', 'clip', 'ink', 'eraser', 'lasso', 'rect', 'ellipse', 'line', 'arrow', 'note', 'freetext', 'stamp']);
 const MARKUP_TOOLS = new Set<Tool>(['highlight', 'underline', 'strikeout']);
 const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'signature', 'image']);
+
+/** Les positions intermédiaires d'un déplacement (le navigateur en regroupe plusieurs par image). Jamais vide : certains navigateurs,
+ * et les événements fabriqués par les tests, renvoient une liste vide — on prend alors l'événement lui-même. */
+function coalesced(ev: PointerEvent): PointerEvent[] {
+  const list = ev.getCoalescedEvents?.();
+  return list && list.length ? list : [ev];
+}
 
 /** Le calque garde le stylet même s'il sort de la page (sans erreur si le système a déjà lâché ce pointeur). */
 function capture(el: HTMLElement, id: number) {
@@ -466,7 +473,7 @@ export class Annotator {
     svg.append(line);
     layer.append(svg);
     const move = (ev: PointerEvent) => {
-      for (const c of ev.getCoalescedEvents?.() ?? [ev]) pts.push(this.local(layer, c));
+      for (const c of coalesced(ev)) pts.push(this.local(layer, c));
       line.setAttribute('points', pts.map((p) => p.join(',')).join(' '));
     };
     const finish = (cancelled: boolean) => {
@@ -809,7 +816,7 @@ export class Annotator {
         }
         return;
       }
-      for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
+      for (const c of coalesced(ev)) add(c);
       live.predicted = (ev.getPredictedEvents?.() ?? []).slice(0, 3).map(toPdf); // quelques points d'avance : le trait « colle » au stylet
       if (Math.hypot(ev.clientX - anchor[0], ev.clientY - anchor[1]) > 2.5) {
         anchor = [ev.clientX, ev.clientY];
@@ -828,7 +835,7 @@ export class Annotator {
       else if (!cancelled && snapped && (snapped as Shape).kind === 'line') live.points = [live.points[0], toPdf(ev)];
       this.live = null;
       if (!cancelled && live.points.length > 0) {
-        this.ink.add({ page: n - 1, points: live.points, pressures: usesPressure ? live.pressures : undefined, color: this.style.color, width: this.style.width, pen: this.style.pen });
+        this.ink.add({ id: newStrokeId(), page: n - 1, points: live.points, pressures: usesPressure ? live.pressures : undefined, color: this.style.color, width: this.style.width, pen: this.style.pen });
         this.scheduleInkFlush(1500);
         this.host.inkChanged();
       }
@@ -890,7 +897,7 @@ export class Annotator {
     };
     hit(e);
     const move = (ev: PointerEvent) => {
-      for (const c of ev.getCoalescedEvents?.() ?? [ev]) hit(c);
+      for (const c of coalesced(ev)) hit(c);
     };
     const finish = (cancelled: boolean) => {
       layer.removeEventListener('pointermove', move);

@@ -74,7 +74,7 @@ describe('écriture manuscrite : dans le PDF', () => {
     expect(list).toHaveLength(2);
     expect(list[0]).toMatchObject({ kind: 'ink', pen: 'fountain', width: 3, foreign: false });
     expect(list[0].strokes![0]).toHaveLength(40);
-    list[0].pressures![0].forEach((v, i) => expect(v).toBeCloseTo(press[i], 2));
+    list[0].pressures![0].forEach((v, i) => expect(Math.abs(v - press[i])).toBeLessThan(0.006)); // arrondi à 0,01
     expect(list[1]).toMatchObject({ pen: 'highlighter', opacity: 0.4 });
     expect(list[1].pressures).toBeUndefined();
     expect((await readPages(bytes)).length).toBe(1);

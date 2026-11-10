@@ -106,6 +106,9 @@ button.tool.text { border-color: var(--border); }
 .doc-view { position: absolute; inset: 0; }
 .viewer-container { position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .pdfViewer { --scale-factor: 1; }
+/* pdf.js dimensionne chaque page SANS compter sa bordure (9 px transparents) : avec le « border-box » global ci-dessus, le contenu
+   était écrasé de 18 px — page rééchantillonnée (floue), texte sélectionnable et annotations décalés jusqu'à 18 px. */
+.pdfViewer .page { box-sizing: content-box; }
 
 /* Accueil (disposition de Grillon : colonne colorée + tuiles) */
 .home { flex: 1; min-height: 0; display: flex; background: var(--bg); }

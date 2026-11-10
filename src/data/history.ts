@@ -1,8 +1,17 @@
-/** Historique des modifications d'un document : chaque étape garde les octets complets (simple et sûr). */
+/**
+ * Historique des modifications d'un document. Deux sortes d'étapes :
+ *  - une opération sur le PDF (pages, commentaires…) garde les octets complets du résultat (simple et sûr) ;
+ *  - une étape d'écriture à la main ne garde que la petite action sur l'encre (`ink`) et PARTAGE les octets de l'étape
+ *    précédente : écrire mille traits ne coûte pas mille copies du PDF.
+ */
+import type { InkAction } from './ink-model';
+
 export interface Snapshot {
   bytes: Uint8Array;
   /** Ce qui a mené à cet état (« Pivoter 2 pages »). Vide pour l'état d'origine. */
   label: string;
+  /** Étape d'écriture : les actions sur l'encre qui mènent à cet état (les octets sont ceux de l'étape d'avant, ou une version où l'encre a été écrite). */
+  ink?: InkAction[];
 }
 
 export class History {
@@ -35,6 +44,31 @@ export class History {
   get dirty(): boolean {
     return this.saved !== this.cursor;
   }
+  /** Actions d'encre qu'« Annuler » déferait (absent si l'étape courante est une opération sur le PDF). */
+  get undoInk(): InkAction[] | undefined {
+    return this.canUndo ? this.stack[this.cursor].ink : undefined;
+  }
+  /** Actions d'encre que « Rétablir » referait. */
+  get redoInk(): InkAction[] | undefined {
+    return this.canRedo ? this.stack[this.cursor + 1].ink : undefined;
+  }
+
+  /** Étape d'écriture à la main : aucune copie du PDF, seulement l'action. */
+  pushInk(ink: InkAction[], label: string): void {
+    this.stack.length = this.cursor + 1;
+    if (this.saved !== null && this.saved > this.cursor) this.saved = null;
+    this.stack.push({ bytes: this.current, label, ink });
+    this.cursor++;
+    this.trim();
+  }
+
+  /**
+   * L'encre vient d'être écrite dans le PDF : l'étape courante garde ces nouveaux octets (même état pour l'utilisateur, autre
+   * représentation). Les étapes voisines gardent les leurs : annuler un trait revient à leur encre, pas à ces octets.
+   */
+  replaceCurrent(bytes: Uint8Array): void {
+    this.stack[this.cursor] = { ...this.stack[this.cursor], bytes };
+  }
 
   push(bytes: Uint8Array, label: string): void {
     this.stack.length = this.cursor + 1; // on perd les « rétablir »
@@ -65,16 +99,19 @@ export class History {
       this.saved = this.cursor;
       return;
     }
-    const at = this.stack.findIndex((s) => s.bytes === bytes);
+    // plusieurs étapes d'écriture peuvent partager les mêmes octets : l'étape courante d'abord
+    const at = this.stack[this.cursor].bytes === bytes ? this.cursor : this.stack.findIndex((s) => s.bytes === bytes);
     this.saved = at >= 0 ? at : null; // état oublié ou inconnu : le document reste « modifié »
   }
 
   /** Oublie les plus anciennes étapes quand la mémoire dépasse la limite (au moins 2 étapes restent). */
   private trim(): void {
-    let total = this.stack.reduce((n, s) => n + s.bytes.length, 0);
+    // des étapes d'écriture partagent leurs octets : chaque tableau ne compte qu'une fois
+    const size = () => [...new Set(this.stack.map((s) => s.bytes))].reduce((n, b) => n + b.length, 0);
+    let total = size();
     while (total > this.maxBytes && this.cursor > 0 && this.stack.length > 2) {
-      total -= this.stack[0].bytes.length;
       this.stack.shift();
+      total = size();
       this.cursor--;
       if (this.saved !== null) this.saved = this.saved > 0 ? this.saved - 1 : null;
     }

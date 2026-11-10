@@ -33,7 +33,8 @@ import {
   toPdfDate,
   unionRect,
 } from '../data/annotations';
-import { PENS, inkOutline, isPenKind, polygonOps, strokeBounds } from '../data/ink';
+import { PENS, inkOutline, isPenKind, outlineOps, strokeBounds } from '../data/ink';
+import { inkNeedsLayer } from './ink-layer';
 import { loadForEdit, pruneUnreachable } from './page-ops';
 import { saveDoc } from './protection';
 
@@ -47,6 +48,8 @@ export class AnnotError extends Error {
 const N = (s: string) => PDFName.of(s);
 const num = (n: number) => PDFNumber.of(Math.round(n * 1000) / 1000);
 const f = (n: number) => String(Math.round(n * 1000) / 1000);
+/** Deux décimales (0,0035 mm) : bien assez pour le contour d'un trait, et des flux d'apparence plus légers. */
+const f2 = (n: number) => String(Math.round(n * 100) / 100);
 const colorOp = (c: Rgb, stroke: boolean) => `${f(c[0])} ${f(c[1])} ${f(c[2])} ${stroke ? 'RG' : 'rg'}`;
 const idOf = (ref: PDFRef) => `${ref.objectNumber} ${ref.generationNumber}`;
 const refOf = (id: string): PDFRef => {
@@ -136,6 +139,8 @@ function readAnnot(doc: PDFDocument, pageIndex: number, ref: PDFRef, d: PDFDict)
       a.pen = pen;
       const pl = d.lookupMaybe(N('CigaleP'), PDFArray);
       if (pl && pl.size() === a.strokes.length) a.pressures = a.strokes.map((s, i) => numbers(pl.lookupMaybe(i, PDFArray)).slice(0, s.length));
+      const ul = d.lookupMaybe(N('CigaleU'), PDFArray);
+      if (ul && ul.size() === a.strokes.length) a.strokeIds = a.strokes.map((_, i) => text(ul.lookup(i)));
     }
   } else if (kind === 'line') {
     const l = arr4(d.lookupMaybe(N('L'), PDFArray));
@@ -175,8 +180,24 @@ function pageAnnots(doc: PDFDocument, page: PDFPage): { ref: PDFRef; dict: PDFDi
 }
 
 export async function listAnnotations(bytes: Uint8Array, password?: string, expectedPages?: number): Promise<Annot[]> {
+  return (await listMarks(bytes, password, expectedPages)).annots;
+}
+
+export interface Marks {
+  /** Toutes les annotations, écriture manuscrite de Cigale comprise (celles qui ont un `pen`). */
+  annots: Annot[];
+  /** De l'encre Cigale n'est pas dans son calque (fichier d'une ancienne version) : à ranger avant de la dessiner nous-mêmes. */
+  inkLegacy: boolean;
+}
+
+/** Une seule lecture du document pour tout ce qui est posé sur les pages. */
+export async function listMarks(bytes: Uint8Array, password?: string, expectedPages?: number): Promise<Marks> {
   const doc = await loadForEdit(bytes, password);
   if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new AnnotError('structure');
+  return { annots: collect(doc), inkLegacy: inkNeedsLayer(doc) };
+}
+
+function collect(doc: PDFDocument): Annot[] {
   const out: Annot[] = [];
   doc.getPages().forEach((page, i) => {
     for (const { ref, dict } of pageAnnots(doc, page)) {
@@ -287,7 +308,7 @@ function buildAppearance(a: Pick<Annot, 'kind' | 'rect' | 'color' | 'fill' | 'op
     case 'ink': {
       if (a.pen && a.strokes?.length) {
         // stylo : chaque trait est un contour rempli (épaisseur selon la pression), identique à l'aperçu à l'écran
-        const body = a.strokes.map((s, i) => `${polygonOps(inkOutline(s, a.pressures?.[i], a.width, a.pen!), f)} f`).join('\n');
+        const body = a.strokes.map((s, i) => `${outlineOps(inkOutline(s, a.pressures?.[i], a.width, a.pen!), f2)} f`).join('\n');
         return { content: `/GS gs\n${colorOp(a.color, false)}\n${body}`, bbox: a.rect, resources: { ExtGState: gs(PENS[a.pen].blend) } };
       }
       const w = Math.max(0.5, a.width);
@@ -386,7 +407,7 @@ function setAppearance(doc: PDFDocument, dict: PDFDict, built: Built): void {
   dict.set(N('AP'), ctx.obj({ N: ctx.register(stream) }));
 }
 
-function writeGeometry(dict: PDFDict, a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line' | 'fill' | 'pen' | 'pressures'>, ctx: PDFDocument['context']): void {
+function writeGeometry(dict: PDFDict, a: Pick<Annot, 'kind' | 'rect' | 'width' | 'quads' | 'strokes' | 'line' | 'fill' | 'pen' | 'pressures' | 'strokeIds'>, ctx: PDFDocument['context']): void {
   const rect = boundsOf(a);
   dict.set(N('Rect'), ctx.obj(rect.map(num)));
   if (a.quads) dict.set(N('QuadPoints'), ctx.obj(a.quads.flatMap((q) => [q[0], q[3], q[2], q[3], q[0], q[1], q[2], q[1]].map(num))));
@@ -394,7 +415,9 @@ function writeGeometry(dict: PDFDict, a: Pick<Annot, 'kind' | 'rect' | 'width' |
   if (a.pen && a.strokes) {
     // clés propres à Cigale (ignorées par les autres lecteurs) : le stylo et la pression, pour redessiner le même trait après un déplacement
     dict.set(N('CigalePen'), N(a.pen));
-    if (a.pressures) dict.set(N('CigaleP'), ctx.obj(a.pressures.map((s) => s.map((v) => PDFNumber.of(Math.round(v * 1000) / 1000)))));
+    if (a.pressures) dict.set(N('CigaleP'), ctx.obj(a.pressures.map((s) => s.map((v) => PDFNumber.of(Math.round(v * 100) / 100)))));
+    else dict.delete(N('CigaleP'));
+    if (a.strokeIds) dict.set(N('CigaleU'), ctx.obj(a.strokeIds.map((id) => PDFString.of(id))));
   }
   if (a.line) {
     dict.set(N('L'), ctx.obj(a.line.map(num)));
@@ -424,6 +447,13 @@ export interface AddResult {
 export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], password?: string, expectedPages?: number, author = '', now = new Date()): Promise<AddResult> {
   const doc = await loadForEdit(bytes, password);
   if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new AnnotError('structure');
+  const ids = await addAnnotationsToDoc(doc, drafts, author, now);
+  pruneUnreachable(doc); // polices non utilisées par ces annotations
+  return { bytes: await saveDoc(doc), ids };
+}
+
+/** Ajoute des annotations à un document déjà ouvert (sans l'enregistrer). Renvoie leurs identifiants. */
+export async function addAnnotationsToDoc(doc: PDFDocument, drafts: AnnotDraft[], author = '', now = new Date()): Promise<string[]> {
   const ctx = doc.context;
   const fonts = await fontsFor(doc);
   const ids: string[] = [];
@@ -483,8 +513,7 @@ export async function addAnnotations(bytes: Uint8Array, drafts: AnnotDraft[], pa
     appendAnnot(page, ctx, ref);
     ids.push(idOf(ref));
   }
-  pruneUnreachable(doc); // polices non utilisées par ces annotations
-  return { bytes: await saveDoc(doc), ids };
+  return ids;
 }
 
 function appendAnnot(page: PDFPage, ctx: PDFDocument['context'], ref: PDFRef): void {

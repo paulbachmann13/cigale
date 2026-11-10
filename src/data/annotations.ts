@@ -32,6 +32,8 @@ export interface Annot {
   pen?: import('./ink').PenKind;
   /** Pression (0–1) de chaque point, trait par trait (même forme que `strokes`) ; absent pour une souris. */
   pressures?: number[][];
+  /** Identifiant de chaque trait (écriture Cigale) : gardé dans le PDF pour l'historique. */
+  strokeIds?: string[];
   /** Ligne ou flèche : x1, y1, x2, y2 (la flèche est à la fin). */
   line?: Rect;
   fontSize?: number;

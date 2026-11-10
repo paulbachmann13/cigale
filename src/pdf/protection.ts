@@ -4,6 +4,7 @@
  * avec mot de passe, ce qu'il faut pour le protéger de nouveau (même mot de passe d'ouverture, mêmes restrictions) :
  * `saveDoc` remplace `doc.save()` partout.
  */
+import { normalizeInkLayer } from './ink-layer';
 import { PDFArray, PDFDict, type PDFDocument, PDFHexString, type PDFRef, PDFString } from '@cantoo/pdf-lib';
 
 export interface Permissions {
@@ -127,6 +128,7 @@ function hoistNestedStrings(doc: PDFDocument): void {
 
 /** Enregistre le document, protégé comme à l'ouverture le cas échéant. Chiffrement AES-256. */
 export async function saveDoc(doc: PDFDocument): Promise<Uint8Array> {
+  normalizeInkLayer(doc); // l'écriture manuscrite reste dans son calque, quelle que soit l'opération qui précède
   const p = registry.get(doc);
   if (p) {
     hoistNestedStrings(doc);

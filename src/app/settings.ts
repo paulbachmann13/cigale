@@ -30,8 +30,8 @@ export interface Settings {
 
 const KEY = 'cigale-settings';
 const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true, shapeSnap: true, fingerWrites: false, penOnOpen: false, penFavorites: [
-  { pen: 'pen', color: [0.1, 0.1, 0.15], width: 2 },
-  { pen: 'fountain', color: [0.1, 0.25, 0.6], width: 3 },
+  { pen: 'pen', color: [0.1, 0.1, 0.15], width: 1.5 },
+  { pen: 'fountain', color: [0.1, 0.25, 0.6], width: 2.5 },
   { pen: 'highlighter', color: [1, 0.9, 0.1], width: 14 },
 ] };
 
