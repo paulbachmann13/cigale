@@ -1444,7 +1444,7 @@ export class App {
       inkAction: (action, label) => this.editing.recordInk(s, action, label),
       region: (page, rect) => {
         this.setAnnotTool('select');
-        openRegionDialog(this.toolsHost(), s, page, rect);
+        void this.editing.settleView(s).then(() => openRegionDialog(this.toolsHost(), s, page, rect)); // l'écriture doit être dans l'affichage avant le rendu
       },
     };
   }

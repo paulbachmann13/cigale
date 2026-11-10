@@ -317,6 +317,17 @@ export async function normalizeDocument(bytes: Uint8Array, password?: string): P
 export function pruneUnreachable(doc: PDFDocument, pagesBefore: PDFRef[] = [], alsoDead: PDFRef[] = []): number {
   const ctx = doc.context;
   const live = new Set<PDFRef>(doc.getPages().map((p) => p.ref));
+  // Annotations copiées avec leur page (fusion, découpe, extraction, insertion, duplication) : pdf-lib laisse leur /P (page) pointer vers
+  // un clone égaré de la page d'origine. Sans ce rattachement, elles passeraient plus bas pour « posées sur une page supprimée »
+  // et seraient effacées : commentaires, signatures, images et écriture manuscrite perdus en silence.
+  for (const page of doc.getPages()) {
+    const annots = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray);
+    for (let i = 0; annots && i < annots.size(); i++) {
+      const a = annots.lookupMaybe(i, PDFDict);
+      const p = a?.get(PDFName.of('P'));
+      if (a && p !== undefined && !(p instanceof PDFRef && live.has(p))) a.set(PDFName.of('P'), page.ref);
+    }
+  }
   // pages qui existaient avant l'opération et ont disparu : on ne les suit jamais, même si leur /Type manque
   const dead = new Set<PDFRef>(pagesBefore.filter((r) => !live.has(r)));
   for (const r of alsoDead) dead.add(r); // objets à ne jamais suivre (ex. champs de formulaire d'une page caviardée)

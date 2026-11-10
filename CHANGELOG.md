@@ -2,6 +2,19 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.7.0] — 2026-11-10
+
+### Ajouté
+- **Écriture à la main entièrement refaite** : le trait s'affiche instantanément et reste net à tout zoom ; plus aucun rechargement de la page, plus de clignotement, même avec des milliers de traits. Annuler et Rétablir défont un trait à la fois, immédiatement.
+- **Gomme précise** : elle coupe un trait là où elle passe et garde le reste (au lieu d'effacer le trait entier). Un geste de gomme est une seule étape Annuler.
+- **Lasso instantané** : l'écriture choisie suit le stylet en direct quand on la déplace ; dupliquer, supprimer et annuler sont immédiats.
+- Dans le fichier, l'écriture est rangée dans un calque nommé « Écriture manuscrite (Cigale) » (les autres lecteurs la voient normalement et peuvent la masquer). Les anciens fichiers sont rangés automatiquement à l'ouverture.
+
+### Corrigé
+- **Écriture floue et décalée** : une règle d'affichage écrasait chaque page de 18 pixels (page floue, annotations décalées). Les pages sont maintenant affichées à leur vraie taille.
+- **Commentaires, signatures, images et écriture perdus** quand on fusionnait, découpait ou extrayait des pages : ils disparaissaient en silence du nouveau document. Ils sont maintenant conservés (avec des tests pour chaque opération).
+- Le stylo est plus fin et plus fidèle (épaisseur presque constante, moins de lissage) ; la plume garde ses pleins et ses déliés.
+
 ## [1.6.2] — 2026-11-09
 
 ### Corrigé

@@ -35,7 +35,7 @@ export function openExportImagesDialog(s: Session, editing: Editing, overlay: (t
             const pages = scope.read();
             if (pages === null) return;
             close();
-            void editing.flushForm(s).then(() => run(s, pages ?? Array.from({ length: s.view.pageCount }, (_, i) => i), format.value as 'png' | 'jpeg', Number(dpi.value), overlay, idle));
+            void editing.settleView(s).then(() => run(s, pages ?? Array.from({ length: s.view.pageCount }, (_, i) => i), format.value as 'png' | 'jpeg', Number(dpi.value), overlay, idle));
           },
         },
         t.docTools.exportGo,

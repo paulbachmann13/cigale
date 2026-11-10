@@ -93,13 +93,24 @@ describe('historique : étapes d’écriture légères', () => {
     expect(h.canUndo).toBe(false); // aucune étape n'a été oubliée : 50 étapes ne pèsent que 1 000 octets
     expect(h.current).toBe(base);
   });
+  it('un trait écrit PENDANT l’enregistrement ne passe pas pour enregistré (octets partagés)', () => {
+    const h = new History(new Uint8Array(5), true);
+    h.pushInk([], 'écrire'); // a
+    const written = new Uint8Array(6);
+    h.replaceCurrent(written, new Map([[0, 1]])); // synchronisé : ce sont les octets qu'on écrit sur le disque
+    h.pushInk([], 'écrire'); // b : écrit pendant que le fichier s'écrit, partage `written` sans le contenir
+    h.markSaved(written);
+    expect(h.dirty).toBe(true); // l'état enregistré est « a », pas « b »
+    h.undo();
+    expect(h.dirty).toBe(false);
+  });
   it('replaceCurrent garde l’état courant avec de nouveaux octets ; markSaved reconnaît l’étape courante', () => {
     const h = new History(new Uint8Array(5), true);
     const shared = new Uint8Array(5);
     h.push(shared, 'op');
     h.pushInk([], 'écrire');
     h.pushInk([], 'écrire');
-    h.markSaved(h.current);
+    h.markSaved();
     expect(h.dirty).toBe(false);
     const written = new Uint8Array(7);
     h.replaceCurrent(written, new Map([[0, 4]]));
@@ -152,5 +163,42 @@ describe('encre ↔ PDF', () => {
   it('un fichier sans encre n’est pas modifié par le calque (aucun calque ajouté)', async () => {
     const bytes = await setInk(await makePdf(1), [], undefined, 1);
     expect(findInkLayer(await PDFDocument.load(bytes))).toBeNull();
+  });
+});
+
+describe('encre et opérations sur le document', () => {
+  it('document protégé par mot de passe : l’encre s’écrit chiffrée et se relit avec le mot de passe', async () => {
+    const { protectDocument } = await import('../../src/pdf/protect-ops');
+    const locked = (await protectDocument(await makePdf(1), { userPassword: 'secret', ownerPassword: 'owner', permissions: {} })).bytes;
+    const bytes = await setInk(locked, [{ page: 0, strokes: [stroke(0, 300)] }], 'secret', 1);
+    expect(Buffer.from(bytes).includes(Buffer.from('CigalePen'))).toBe(false); // rien de lisible : le fichier reste chiffré
+    const { annots } = await listMarks(bytes, 'secret');
+    expect(strokesFromAnnots(annots)).toHaveLength(1);
+  });
+
+  it('supprimer une page avec de l’encre : l’encre des pages suivantes se décale, celle de la page supprimée disparaît', async () => {
+    const { applyOp } = await import('../../src/pdf/page-ops');
+    const bytes = await setInk(await makePdf(3), [{ page: 0, strokes: [stroke(0, 100)] }, { page: 1, strokes: [stroke(1, 200)] }, { page: 2, strokes: [stroke(2, 300)] }], undefined, 3);
+    const r = await applyOp(bytes, { op: 'delete', pages: [1] }, undefined, 3);
+    const back = strokesFromAnnots((await listMarks(r.bytes)).annots);
+    expect(back.map((s) => s.page).sort()).toEqual([0, 1]); // l'ancienne page 3 est devenue la page 2
+    expect(Math.round(back.find((s) => s.page === 1)!.points[0][1])).toBe(Math.round(300 + Math.sin(0) * 6));
+  });
+
+  it('fusion de deux documents avec de l’encre : tout est rangé dans un seul calque', async () => {
+    const { mergeSources } = await import('../../src/pdf/doc-ops');
+    const a = await setInk(await makePdf(1), [{ page: 0, strokes: [stroke(0, 100)] }], undefined, 1);
+    const b = await setInk(await makePdf(1), [{ page: 0, strokes: [stroke(0, 200)] }], undefined, 1);
+    const merged = await mergeSources([{ bytes: a, name: 'a.pdf' }, { bytes: b, name: 'b.pdf' }], { keepBookmarks: false });
+    const doc = await PDFDocument.load(merged.bytes);
+    const layer = findInkLayer(doc);
+    expect(layer).not.toBeNull();
+    const ocgs = doc.catalog.lookup(PDFName.of('OCProperties'), PDFDict).lookup(PDFName.of('OCGs'), PDFArray);
+    expect(ocgs.size()).toBe(1); // un seul calque d'écriture déclaré
+    expect(strokesFromAnnots((await listMarks(merged.bytes)).annots)).toHaveLength(2);
+    for (const p of [0, 1]) {
+      const annots = doc.getPage(p).node.lookup(PDFName.of('Annots'), PDFArray);
+      expect(annots.lookup(0, PDFDict).get(PDFName.of('OC'))).toBe(layer);
+    }
   });
 });

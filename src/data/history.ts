@@ -108,8 +108,9 @@ export class History {
       this.saved = this.cursor;
       return;
     }
-    // plusieurs étapes d'écriture peuvent partager les mêmes octets : l'étape courante d'abord
-    const at = this.stack[this.cursor].bytes === bytes ? this.cursor : this.stack.findIndex((s) => s.bytes === bytes);
+    // Les étapes d'écriture qui suivent partagent les octets de la précédente sans les contenir : l'état enregistré est la PREMIÈRE
+    // étape qui porte ces octets (sinon un trait écrit pendant l'enregistrement passerait pour enregistré).
+    const at = this.stack.findIndex((s) => s.bytes === bytes);
     this.saved = at >= 0 ? at : null; // état oublié ou inconnu : le document reste « modifié »
   }
 
