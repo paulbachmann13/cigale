@@ -14,7 +14,7 @@ import type { RedactOptions, RedactResult, RedactedPage } from './redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from './stamp-ops';
 import type { OcrPage } from './ocr-ops';
 import type { RegionRect } from './region-ops';
-import type { MergeOptions, MergeSource, Part } from './doc-ops';
+import type { DocumentInfo, MergeOptions, MergeSource, Part } from './doc-ops';
 import type { MergeResult, WorkerRequest, WorkerResponse } from './ops.worker';
 import type { Inspection, OpResult, PageOp } from './page-ops';
 
@@ -67,6 +67,7 @@ export const applyOperation = (bytes: Uint8Array, op: PageOp, password?: string,
 export const extractOperation = (bytes: Uint8Array, pages: number[], password?: string, expectedPages?: number) => run<Uint8Array>({ kind: 'extract', bytes, pages, password, expectedPages });
 export const inspectDocument = (bytes: Uint8Array, password?: string) => run<Inspection>({ kind: 'inspect', bytes, password });
 export const normalizeOperation = (bytes: Uint8Array, password?: string) => run<Uint8Array>({ kind: 'normalize', bytes, password });
+export const setDocumentInfoOp = (bytes: Uint8Array, info: DocumentInfo, password: string | undefined, expectedPages: number) => run<Uint8Array>({ kind: 'docInfo', bytes, info, password, expectedPages });
 export const notebookOp = (options: NotebookOptions) => run<Uint8Array>({ kind: 'notebook', options });
 export const mergeOperation = (sources: MergeSource[], options: MergeOptions, onProgress?: (f: number) => void) => run<MergeResult>({ kind: 'merge', sources, options }, onProgress);
 export const splitOperation = (bytes: Uint8Array, ranges: Range[], names: string[], password?: string, expectedPages?: number, onProgress?: (f: number) => void) =>

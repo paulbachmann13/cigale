@@ -9,13 +9,14 @@ import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
 import { type InkAction, invertAction } from '../data/ink-model';
+import type { DocumentInfo } from '../pdf/doc-ops';
 import type { InsertChoice } from './notebook';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
 import type { OcrPage } from '../pdf/ocr-ops';
 import type { ProtectOptions } from '../pdf/protect-ops';
-import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp, updateAnnotationsOp, setInkOp, normalizeInkOp } from '../pdf/ops-client';
+import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp, updateAnnotationsOp, setInkOp, normalizeInkOp, setDocumentInfoOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -177,6 +178,36 @@ export class Editing {
         const info = await inspectDocument(other, password).promise;
         const ok = await this.run(s, { op: 'insertFrom', at, other, otherPassword: password }, 'insertFile');
         if (ok) toast(plural(info.pageCount, t.pages.insertedFile));
+        return ok;
+      } catch (err) {
+        const msg = (err as Error).message ?? '';
+        if (/password|encrypt/i.test(msg) || (err as Error).name === 'EncryptedPDFError') {
+          const pw = await askPassword(file.name, attempt > 0);
+          if (pw === null) return false;
+          password = pw;
+          continue;
+        }
+        await showMessage(t.editErrors.title, fmt(t.editErrors.otherFailed, { name: file.name, detail: msg }));
+        return false;
+      }
+    }
+  }
+
+  /** Remplace les pages visées (sélection, sinon page affichée) par celles d'un autre PDF choisi par l'utilisateur. */
+  async replaceFromFile(s: Session): Promise<boolean> {
+    const file = await pickOnePdf();
+    if (!file) return false;
+    const other = new Uint8Array(await file.arrayBuffer());
+    const pages = this.targetPages(s);
+    let password: string | undefined;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const info = await inspectDocument(other, password).promise;
+        const what = pages.length === 1 ? `la page ${pages[0] + 1}` : `${pages.length} pages`;
+        const incoming = info.pageCount === 1 ? '1 page' : `${info.pageCount} pages`;
+        if (!(await confirmDialog(t.pages.replaceFile.replace('…', ''), fmt(t.pages.replaceConfirm, { n: what, m: incoming, name: file.name }), t.pages.replaceGo, t.pages.cancel))) return false;
+        const ok = await this.run(s, { op: 'replace', pages, other, otherPassword: password }, 'replace');
+        if (ok) toast(fmt(t.pages.replaceDone, { n: what.charAt(0).toUpperCase() + what.slice(1) }));
         return ok;
       } catch (err) {
         const msg = (err as Error).message ?? '';
@@ -405,6 +436,11 @@ export class Editing {
       this.host.pendingSelect(s, id);
       return updateAnnotationOp(s.history.current, id, patch, s.password, s.view.pageCount).promise;
     });
+  }
+
+  /** Titre, auteur, sujet, mots-clés du document (une étape annuler/rétablir). */
+  setInfo(s: Session, info: DocumentInfo): Promise<boolean> {
+    return this.annotOp(s, t.properties.label, () => setDocumentInfoOp(s.history.current, info, s.password, s.view.pageCount).promise);
   }
 
   /** Plusieurs annotations d'un coup, en une seule étape annuler/rétablir (déplacer une sélection au lasso). */

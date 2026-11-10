@@ -45,6 +45,13 @@
 - Les récents gardent le chemin du fichier : rouverture directe.
 - Application **non signée** (pas de compte développeur Apple) : au premier lancement, clic droit sur Cigale → Ouvrir. **Mises à jour automatiques** : vérification discrète 5 s après le démarrage (réglable) et Fichier → Rechercher les mises à jour ; notes de la version, téléchargement avec progression, installation, redémarrage sans deuxième icône dans le Dock ; le travail non enregistré est sauvegardé avant le redémarrage ; refus propre si Cigale est lancée depuis le .dmg ou Téléchargements ; signature vérifiée.
 
+### Fonctions de la 1.7
+- **Propriétés** (`properties.ts`, `setDocumentInfo`) : lecture par pdf.js (`getMetadata`), écriture dans /Info par le worker (valeur vide = entrée retirée, valeur inchangée = non touchée, ModDate mise à jour) ; les métadonnées XMP ne sont pas réécrites (limite : un lecteur qui préfère XMP peut afficher l'ancien titre).
+- **Remplacer des pages** (`PageOp 'replace'`) : copies insérées avant les anciennes pages, qui sont ensuite retirées (le document n'est jamais vide), `pruneUnreachable` ; toutes les pages de l'autre PDF (pas de choix de plage pour l'instant).
+- **Convertir en texte / Word** (`text-layout.ts`, `docx.ts`, `export-text.ts`) : lignes d'après la position des morceaux de texte (tolérance 45 % de la hauteur), paragraphes d'après les sauts verticaux (> 1,65 interligne), césures recollées ; .docx minimal (4 fichiers XML zippés, paragraphes, sauts de page). **Limites** : pas de colonnes multiples (le texte de colonnes côte à côte est mélangé ligne à ligne), pas de tableaux, d'images ni de mise en forme ; un scan donne « aucun texte » (utiliser l'OCR d'abord).
+- **Écriture sans rechargement** : voir docs/PLAN.md (« Refonte de l'encre »). Tenue en charge mesurée : 3 000 traits sur une page → redessin ~30 ms, écriture dans le PDF 0,3 s (8,9 Mo : ~3 Ko par trait, à alléger plus tard).
+- **Annotations conservées à la fusion / découpe / extraction** (`pruneUnreachable` rattache le `/P` des annotations copiées à leur nouvelle page) : avant, elles disparaissaient en silence.
+
 ### Application Windows (.exe, 1.4)
 - Même code que sur Mac (Tauri 2, WebView2). Installateur `Cigale_X.Y.Z_x64-setup.exe`, installation pour l'utilisateur courant (pas de droits d'administrateur, donc mises à jour sans question de Windows). Mêmes fonctions de fichiers que sur Mac (écriture atomique, `.bak`, récents, « Ouvrir avec », fermeture avec modifications).
 - Double-clic sur un PDF alors que Cigale tourne déjà : le fichier s'ouvre dans un onglet de la fenêtre existante (instance unique).

@@ -220,3 +220,27 @@ describe('purge des pages supprimées (cas difficiles)', () => {
     expect(re.getPage(0).getSize()).toEqual({ width: 300, height: 400 });
   });
 });
+
+describe('remplacer des pages', () => {
+  it('2 pages remplacées par les 3 d’un autre document : à la place de la première, le reste décalé, rien d’orphelin', async () => {
+    const target = await makePdf(5); // pages « marque1 » … « marque5 »
+    const other = await makePdf(3);
+    const r = await applyOp(target, { op: 'replace', pages: [1, 2], other }, undefined, 5);
+    expect(r.pageCount).toBe(6);
+    expect(r.selection).toEqual([1, 2, 3]);
+    const pages = await readPages(r.bytes);
+    // le document cible a « marque1 » … « marque5 », l'autre « marque1 » … « marque3 » : les pages 2 et 3 d'origine ont disparu
+    expect(pages.map((p) => p.text)).toEqual(['marque1', 'marque1', 'marque2', 'marque3', 'marque4', 'marque5']);
+  });
+  it('toutes les pages remplacées : le document n’est jamais vide ; une seule page remplace une seule', async () => {
+    const r = await applyOp(await makePdf(2), { op: 'replace', pages: [0, 1], other: await makePdf(1) }, undefined, 2);
+    expect(r.pageCount).toBe(1);
+    const r2 = await applyOp(await makePdf(3), { op: 'replace', pages: [2], other: await makePdf(2), otherPages: [1] }, undefined, 3);
+    expect(r2.pageCount).toBe(3);
+    expect((await readPages(r2.bytes)).map((p) => p.text)).toEqual(['marque1', 'marque2', 'marque2']); // la 3ᵉ page est devenue la page 2 de l'autre document
+  });
+  it('sélection vide ou autre document sans page demandée : refusé', async () => {
+    await expect(applyOp(await makePdf(2), { op: 'replace', pages: [], other: await makePdf(1) }, undefined, 2)).rejects.toMatchObject({ name: 'noSelection' });
+    await expect(applyOp(await makePdf(2), { op: 'replace', pages: [0], other: await makePdf(1), otherPages: [] }, undefined, 2)).rejects.toMatchObject({ name: 'noSelection' });
+  });
+});

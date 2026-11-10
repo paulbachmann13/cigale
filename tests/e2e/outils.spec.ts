@@ -274,6 +274,46 @@ test('exporter les pages en images : archive .zip de PNG', async ({ page }) => {
   }
 });
 
+test('convertir en Word : un .docx dont le texte reprend celui du PDF, une page = un saut de page', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await tool(page, 'tool-export-text');
+  await expect(page.locator('#dialog-export-text')).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.click('#tool-apply');
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('simple-3p.docx');
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const files = unzipSync(new Uint8Array(readFileSync((await file.path())!)));
+  const doc = strFromU8(files['word/document.xml']);
+  expect(doc).toContain('marmotte1'); // le mot unique de la page 1
+  expect(doc).toContain('marmotte3');
+  expect((doc.match(/w:br w:type="page"/g) ?? []).length).toBe(2); // 3 pages → 2 sauts de page
+  expect(doc).toContain('accents'); // le texte accentué est repris tel quel
+});
+
+test('convertir en texte brut : un fichier .txt lisible, seulement les pages choisies', async ({ page }) => {
+  await open(page, 'simple-3p.pdf');
+  await tool(page, 'tool-export-text');
+  await page.selectOption('#text-format', 'txt');
+  await page.check('#scope-range');
+  await page.fill('#scope-range-text', '2');
+  const download = page.waitForEvent('download');
+  await page.click('#tool-apply');
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('simple-3p.txt');
+  const text = readFileSync((await file.path())!, 'utf8');
+  expect(text).toContain('marmotte2');
+  expect(text).not.toContain('marmotte1');
+});
+
+test('convertir un document sans texte : message clair, aucun fichier', async ({ page }) => {
+  await page.locator('#file-input').setInputFiles({ name: 'vide.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await (async () => { const d = await PDFDocument.create(); d.addPage([300, 300]); return d.save(); })()) });
+  await waitFirstPage(page);
+  await tool(page, 'tool-export-text');
+  await page.click('#tool-apply');
+  await expect(page.locator('#toast')).toContainText('Aucun texte');
+});
+
 test('protéger par mot de passe : le fichier enregistré demande le mot de passe', async ({ page }) => {
   await open(page, 'simple-3p.pdf');
   await tool(page, 'tool-protect');

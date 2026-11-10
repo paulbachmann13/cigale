@@ -28,6 +28,8 @@ import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, 
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
+import { openExportTextDialog } from './export-text';
+import { openPropertiesDialog } from './properties';
 import { pickImageFile, prepareImage } from './image-import';
 import { askInsertPages, openNotebookDialog } from './notebook';
 import { openOcrDialog } from './ocr';
@@ -297,6 +299,7 @@ export class App {
       { id: 'save', label: t.file.save, shortcut: `${mod}S`, disabled: !has, run: () => void this.save(), separatorBefore: true },
       { id: 'save-as', label: t.file.saveAs, shortcut: isMac ? '⇧⌘S' : 'Ctrl+Maj+S', disabled: !has, run: () => void this.saveAs() },
       { id: 'print', label: t.file.print, shortcut: `${mod}P`, disabled: !has, run: () => void this.print() },
+      { id: 'properties', label: t.file.properties, disabled: !has, run: () => s && void openPropertiesDialog(s, this.editing) },
       { id: 'close', label: t.file.close, disabled: !has, run: () => s && void this.close(s.id), separatorBefore: true },
       ...(isTauri() ? [{ id: 'update', label: t.update.check, run: () => void this.checkForUpdates(false), separatorBefore: true }] : []),
       { id: 'versions', label: t.file.versions, run: () => openVersions(), separatorBefore: true },
@@ -322,6 +325,7 @@ export class App {
       redact: () => this.startRedaction(),
       ocr: () => openOcrDialog(s, this.editing, busy, idle),
       exportimages: () => openExportImagesDialog(s, this.editing, busy, idle),
+      exporttext: () => openExportTextDialog(s, this.editing, busy, idle),
       region: () => {
         this.setAnnotTool('clip');
         toast(t.docTools.regionStart);
@@ -379,6 +383,7 @@ export class App {
         { id: 'tool-redact', label: t.docTools.redact, run: run.redact, separatorBefore: true },
         { id: 'tool-ocr', label: t.docTools.ocr, run: run.ocr, separatorBefore: true },
         { id: 'tool-export-images', label: t.docTools.exportImages, run: run.exportimages },
+        { id: 'tool-export-text', label: t.docTools.exportText, run: run.exporttext },
         { id: 'tool-region', label: t.docTools.region, run: run.region },
       ],
       anchor,
@@ -450,6 +455,7 @@ export class App {
         { id: 'insert-blank-before', label: t.pages.insertBlankBefore, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'before')), separatorBefore: true },
         { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.withActive((s) => this.editing.insertBlank(s, 'after')) },
         { id: 'insert-file', label: t.pages.insertFile, run: () => void this.withActive((s) => this.editing.insertFromFile(s, Math.max(...this.editing.targetPages(s)) + 1)), separatorBefore: true },
+        { id: 'replace-pages', label: t.pages.replaceFile, run: () => void this.withActive((s) => this.editing.replaceFromFile(s)) },
         { id: 'paste-image', label: t.annot.pasteImage, run: () => void this.pasteImageFromClipboard() },
       ],
       anchor,
@@ -470,6 +476,7 @@ export class App {
         { id: 'insert-blank-after', label: t.pages.insertBlankAfter, run: () => void this.editing.insertBlank(s, 'after') },
         { id: 'insert-pages', label: t.notebook.menu, run: () => void this.insertPages(s) },
         { id: 'insert-file', label: t.pages.insertFile, run: () => void this.editing.insertFromFile(s, Math.max(...this.editing.targetPages(s)) + 1) },
+        { id: 'replace-pages', label: t.pages.replaceFile, run: () => void this.editing.replaceFromFile(s) },
         { id: 'move-start', label: t.pages.moveStart, run: () => void this.editing.moveToStart(s), separatorBefore: true },
         { id: 'move-end', label: t.pages.moveEnd, run: () => void this.editing.moveToEnd(s) },
         { id: 'move-to', label: t.pages.moveTo, run: () => void this.editing.moveTo(s) },

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { Range } from '../data/page-ranges';
-import { type MergeOptions, type MergeSource, type Part, mergeSources, splitDocument, topLevelBookmarks, zipParts } from './doc-ops';
+import { type DocumentInfo, type MergeOptions, type MergeSource, type Part, mergeSources, setDocumentInfo, splitDocument, topLevelBookmarks, zipParts } from './doc-ops';
 import type { Annot, AnnotDraft, AnnotPatch } from '../data/annotations';
 import { type ProtectOptions, type ProtectResult, protectDocument, unprotectDocument } from './protect-ops';
 import { type CropMargins, type CropResult, cropPages } from './crop-ops';
@@ -21,6 +21,7 @@ export type WorkerRequest =
   | { kind: 'normalize'; bytes: Uint8Array; password?: string }
   | { kind: 'merge'; sources: MergeSource[]; options: MergeOptions }
   | { kind: 'notebook'; options: NotebookOptions }
+  | { kind: 'docInfo'; bytes: Uint8Array; info: DocumentInfo; password?: string; expectedPages?: number }
   | { kind: 'split'; bytes: Uint8Array; ranges: Range[]; names: string[]; password?: string; expectedPages?: number }
   | { kind: 'zip'; parts: Part[] }
   | { kind: 'bookmarks'; bytes: Uint8Array; password?: string }
@@ -68,6 +69,10 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'normalize': {
         const bytes = await normalizeDocument(req.bytes, req.password);
+        return post({ ok: true, result: bytes }, buffers(bytes));
+      }
+      case 'docInfo': {
+        const bytes = await setDocumentInfo(req.bytes, req.info, req.password, req.expectedPages);
         return post({ ok: true, result: bytes }, buffers(bytes));
       }
       case 'notebook': {

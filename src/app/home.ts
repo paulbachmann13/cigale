@@ -13,7 +13,7 @@ import { isTauri } from './tauri-files';
 import { type IconName, icon } from './icons';
 import { type DefaultZoom, type ThemeChoice, loadSettings, saveSettings } from './settings';
 
-export type DocToolId = 'split' | 'crop' | 'watermark' | 'headerfooter' | 'protect' | 'unprotect' | 'redact' | 'ocr' | 'exportimages' | 'region';
+export type DocToolId = 'split' | 'crop' | 'watermark' | 'headerfooter' | 'protect' | 'unprotect' | 'redact' | 'ocr' | 'exportimages' | 'exporttext' | 'region';
 
 const TOOL_TILES: Record<DocToolId, IconName> = {
   split: 'split',
@@ -25,6 +25,7 @@ const TOOL_TILES: Record<DocToolId, IconName> = {
   redact: 'redact',
   ocr: 'ocr',
   exportimages: 'image',
+  exporttext: 'text',
   region: 'region',
 };
 

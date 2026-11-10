@@ -98,6 +98,13 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 12. Ouvrir un PDF quelconque, cliquer « Stylet » : écrire, gommer, lasso, ajouter une page ; plus aucun clignotement après chaque trait ? Lasso : entourer un trait redressé, une image, un rectangle.
 13. Pendant l'écriture : le zoom (boutons) et le défilement (doigt) restent-ils utilisables ?
 
+## Version 1.7 — à essayer
+1. **Écriture** (iPad / Pencil) : plus aucun clignotement ni retard ; la gomme coupe un trait au milieu ; lasso : déplacer en direct ; Annuler trait par trait.
+2. Ouvrir dans **Aperçu** et **Acrobat** un PDF écrit dans Cigale : l'écriture est là ; dans Acrobat, le panneau « Calques » montre « Écriture manuscrite (Cigale) » (on peut le masquer).
+3. **Convertir en Word** un PDF de cours : ouvrir le .docx dans Word / Pages : texte lisible, un saut de page par page ?
+4. **Propriétés** : changer le titre, enregistrer, rouvrir dans Aperçu (Outils → Inspecteur) : le titre est-il bon ?
+5. **Remplacer des pages** sur un vrai document.
+
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 
 1. Télécharger `Cigale_…_x64-setup.exe` (Releases) ; l'installer ; passer l'avertissement SmartScreen (Informations complémentaires → Exécuter quand même).

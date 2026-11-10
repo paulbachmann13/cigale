@@ -10,6 +10,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Lasso instantané** : l'écriture choisie suit le stylet en direct quand on la déplace ; dupliquer, supprimer et annuler sont immédiats.
 - Dans le fichier, l'écriture est rangée dans un calque nommé « Écriture manuscrite (Cigale) » (les autres lecteurs la voient normalement et peuvent la masquer). Les anciens fichiers sont rangés automatiquement à l'ouverture.
 
+- **Propriétés du document** (Fichier → Propriétés du document…) : taille, nombre de pages, format, version du PDF, dates, protection ; on peut changer le titre, l'auteur, le sujet et les mots-clés (annulable).
+- **Remplacer des pages** par celles d'un autre PDF (menu « Insérer des pages » ou clic droit sur une page) : confirmation, puis le remplacement se fait à la place des pages choisies (annulable).
+- **Convertir en Word ou en texte** (Outils, ou tuile de l'accueil) : le texte de chaque page est repris en paragraphes dans un fichier .docx (avec un saut de page entre les pages) ou .txt, pour les pages de votre choix. Rien ne quitte votre ordinateur.
+
 ### Corrigé
 - **Écriture floue et décalée** : une règle d'affichage écrasait chaque page de 18 pixels (page floue, annotations décalées). Les pages sont maintenant affichées à leur vraie taille.
 - **Commentaires, signatures, images et écriture perdus** quand on fusionnait, découpait ou extrayait des pages : ils disparaissaient en silence du nouveau document. Ils sont maintenant conservés (avec des tests pour chaque opération).

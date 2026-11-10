@@ -142,3 +142,25 @@ describe('découpe', () => {
     expect(unzipped['Chapitre 2.pdf']).toEqual(parts[1].bytes);
   });
 });
+
+describe('propriétés du document', () => {
+  it('titre, auteur, sujet, mots-clés : écrits, relus ; le reste est conservé ; vide = retiré', async () => {
+    const { setDocumentInfo } = await import('../../src/pdf/doc-ops');
+    const { PDFDocument } = await import('@cantoo/pdf-lib');
+    const src = await PDFDocument.create({ updateMetadata: false });
+    src.addPage([200, 200]);
+    src.setCreator('Mon logiciel');
+    src.setTitle('Ancien titre');
+    const out = await setDocumentInfo(await src.save(), { title: 'Nouveau titre éàç', author: 'Paul', subject: 'Cours', keywords: 'maths, physique' });
+    const doc = await PDFDocument.load(out, { updateMetadata: false });
+    expect(doc.getTitle()).toBe('Nouveau titre éàç');
+    expect(doc.getAuthor()).toBe('Paul');
+    expect(doc.getSubject()).toBe('Cours');
+    expect(doc.getKeywords()).toBe('maths, physique');
+    expect(doc.getCreator()).toBe('Mon logiciel'); // non touché
+    expect(doc.getModificationDate()).toBeInstanceOf(Date);
+    const cleared = await PDFDocument.load(await setDocumentInfo(out, { title: '', author: undefined }), { updateMetadata: false });
+    expect(cleared.getTitle()).toBeUndefined();
+    expect(cleared.getAuthor()).toBe('Paul'); // valeur absente : inchangée
+  });
+});

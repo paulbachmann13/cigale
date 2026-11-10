@@ -42,7 +42,7 @@ test('accueil : un clic sur « Version » ouvre les Nouveautés', async ({ page 
 test('accueil : « Tous les outils » — on choisit un PDF, puis l’outil s’ouvre dessus', async ({ page }) => {
   await withoutFilePickers(page);
   await gotoHome(page);
-  const ids = ['split', 'crop', 'watermark', 'headerfooter', 'protect', 'unprotect', 'redact', 'ocr', 'exportimages', 'region'];
+  const ids = ['split', 'crop', 'watermark', 'headerfooter', 'protect', 'unprotect', 'redact', 'ocr', 'exportimages', 'exporttext', 'region'];
   for (const id of ids) await expect(page.locator(`#home-tool-${id}`)).toBeVisible();
   const chooser = page.waitForEvent('filechooser');
   await page.click('#home-tool-crop');

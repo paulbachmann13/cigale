@@ -5,6 +5,7 @@
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, type PDFObject, type PDFPage, PDFRef, PDFString, degrees } from '@cantoo/pdf-lib';
 import { zipSync } from 'fflate';
 import { type Range, rangesToIndices } from '../data/page-ranges';
+import { toPdfDate } from '../data/annotations';
 import { loadForEdit, pruneUnreachable } from './page-ops';
 import { inheritProtection, saveDoc } from './protection';
 
@@ -322,4 +323,34 @@ export function zipParts(parts: Part[]): Uint8Array {
   const files: Record<string, Uint8Array> = {};
   for (const p of parts) files[p.name] = p.bytes;
   return zipSync(files, { level: 0 });
+}
+
+// ───────────── propriétés du document ─────────────
+
+export interface DocumentInfo {
+  title?: string;
+  author?: string;
+  subject?: string;
+  keywords?: string;
+}
+
+const INFO_KEYS: Record<keyof DocumentInfo, string> = { title: 'Title', author: 'Author', subject: 'Subject', keywords: 'Keywords' };
+
+/**
+ * Change le titre, l'auteur, le sujet et les mots-clés (une valeur vide retire l'entrée ; une valeur absente n'y touche pas).
+ * Les autres propriétés (créateur, producteur, date de création…) et les métadonnées XMP sont conservées ; la date de modification est mise à jour.
+ */
+export async function setDocumentInfo(bytes: Uint8Array, info: DocumentInfo, password?: string, expectedPages?: number): Promise<Uint8Array> {
+  const doc = await loadForEdit(bytes, password);
+  if (expectedPages !== undefined && doc.getPageCount() !== expectedPages) throw new DocOpError('structure');
+  // `getInfoDict` n'est pas dans les types de pdf-lib (méthode privée) mais crée le dictionnaire /Info au besoin
+  const dict = (doc as unknown as { getInfoDict(): PDFDict }).getInfoDict();
+  for (const [field, key] of Object.entries(INFO_KEYS) as [keyof DocumentInfo, string][]) {
+    const value = info[field];
+    if (value === undefined) continue;
+    if (value === '') dict.delete(PDFName.of(key));
+    else dict.set(PDFName.of(key), PDFHexString.fromText(value));
+  }
+  dict.set(PDFName.of('ModDate'), PDFString.of(toPdfDate(new Date())));
+  return saveDoc(doc);
 }

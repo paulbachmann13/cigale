@@ -31,7 +31,9 @@ export type PageOp =
   | { op: 'insertBlank'; at: number; /** Papier des nouvelles pages (vierge si absent), sa couleur et leur nombre (1 si absent). */ template?: PaperTemplate; color?: PaperColor; count?: number }
   /** Insère `count` copies de la page `from` (du même document) à la position `at`. */
   | { op: 'insertCopy'; at: number; from: number; count?: number }
-  | { op: 'insertFrom'; at: number; other: Uint8Array; otherPassword?: string; otherPages?: number[] };
+  | { op: 'insertFrom'; at: number; other: Uint8Array; otherPassword?: string; otherPages?: number[] }
+  /** Remplace les pages `pages` par celles d'un autre document (toutes, ou `otherPages`) : elles prennent la place de la première page remplacée. */
+  | { op: 'replace'; pages: number[]; other: Uint8Array; otherPassword?: string; otherPages?: number[] };
 
 export interface OpResult {
   bytes: Uint8Array;
@@ -236,6 +238,20 @@ export async function applyOp(bytes: Uint8Array, op: PageOp, password?: string, 
         doc.insertPage(at + k, copy);
         selection.push(at + k);
       }
+      break;
+    }
+    case 'replace': {
+      const pages = normalizeSelection(op.pages, count);
+      if (pages.length === 0) throw new PageOpError('noSelection');
+      const other = await loadForEdit(op.other, op.otherPassword);
+      const wanted = op.otherPages ?? Array.from({ length: other.getPageCount() }, (_, i) => i);
+      if (wanted.length === 0) throw new PageOpError('noSelection');
+      const copies = await doc.copyPages(other, wanted);
+      const at = pages[0];
+      copies.forEach((p, k) => doc.insertPage(at + k, p)); // d'abord les nouvelles pages (le document n'est jamais vide)
+      for (const i of [...pages].reverse()) doc.removePage(i + copies.length); // puis les anciennes, décalées d'autant
+      pruneUnreachable(doc, before);
+      selection = copies.map((_, k) => at + k);
       break;
     }
     case 'insertFrom': {
