@@ -50,6 +50,12 @@ export function ensureInkLayer(doc: PDFDocument): PDFRef {
   let order = config.lookupMaybe(N('Order'), PDFArray);
   if (!order) config.set(N('Order'), (order = ctx.obj([]) as PDFArray));
   order.push(ref);
+  // Document dont les calques sont tous masqués par défaut (/BaseState /OFF) : le nôtre doit rester visible, sinon l'écriture disparaîtrait
+  if (config.get(N('BaseState')) === N('OFF')) {
+    let on = config.lookupMaybe(N('ON'), PDFArray);
+    if (!on) config.set(N('ON'), (on = ctx.obj([]) as PDFArray));
+    on.push(ref);
+  }
   return ref;
 }
 

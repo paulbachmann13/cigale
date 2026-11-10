@@ -68,7 +68,7 @@ Légende : **Oui** = disponible · **Partiel** = avec des limites (voir la note)
 | Caviarder (marques + appliquer) | Oui | Pages rasterisées ; purge des métadonnées/signets/pièces jointes |
 | Reconnaissance de texte (OCR) | Oui (1.2) | Français et anglais ; pas de redressement des pages de travers |
 | Compresser | Non | 1.x |
-| Comparer deux fichiers | Non | 1.x |
+| Comparer deux fichiers | Oui (1.7) | Texte mot à mot, page par page (pages en plus ou en moins signalées) ; pas de comparaison visuelle |
 | Modifier le texte | Non | 1.x (limité) |
 | Liens internes et signets cliquables | Oui | |
 
@@ -88,8 +88,8 @@ Sources : page de comparaison d'Adobe (Reader gratuit ; Standard 7,19 $/mois ; P
 | Protéger par mot de passe | Standard, Pro | Oui | AES-256, restrictions |
 | OCR : scans en PDF modifiables et cherchables | Pro | Oui (1.2) | tesseract.js local, français et anglais |
 | Caviarder (expurger) | Pro | Oui (1.1) | Réel : pages rasterisées, métadonnées purgées |
-| Comparer deux PDF | Pro | Non | Prochaine étape : comparaison du texte page par page |
-| Numérotation Bates | Pro | Non | Prochaine étape : préfixe + numéro dans les en-têtes/pieds de page |
+| Comparer deux PDF | Pro | Oui (1.7) | Texte mot à mot, page par page, avec contexte ; pas de comparaison des images/mise en page |
+| Numérotation Bates | Pro | Oui (1.7) | Jeton {bates} : préfixe + numéro complété de zéros, de page en page, dans les en-têtes et pieds de page |
 | Action Wizard, traitement par lots | Pro | Non | Prochaine étape : appliquer une suite d'outils à plusieurs fichiers |
 | Compresser / optimiser | Standard, Pro | Non | Prochaine étape : recompression des images (JPEG) et flux |
 | PDF/A, accessibilité, vérification préalable | Pro | Non | Hors périmètre |

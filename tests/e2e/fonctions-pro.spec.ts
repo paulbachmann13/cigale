@@ -68,3 +68,30 @@ test('remplacer : annuler la confirmation ne change rien', async ({ page }) => {
   await page.waitForTimeout(300);
   await expectPages(page, 3);
 });
+
+test('comparer un PDF avec lui-même : aucune différence', async ({ page }) => {
+  await page.click('#btn-tools');
+  const chooser = page.waitForEvent('filechooser');
+  await page.click('[data-id="tool-compare"]');
+  await (await chooser).setFiles(new URL('../fixtures/out/simple-3p.pdf', import.meta.url).pathname);
+  await expect(page.locator('#dialog-compare')).toBeVisible();
+  await expect(page.locator('#cmp-summary')).toHaveText('Aucune différence de texte.');
+  await expect(page.locator('#cmp-names')).toContainText('3 pages');
+});
+
+test('comparer deux PDF différents : pages différentes, mots ajoutés et supprimés, lien vers la page', async ({ page }) => {
+  await page.click('#btn-tools');
+  const chooser = page.waitForEvent('filechooser');
+  await page.click('[data-id="tool-compare"]');
+  await (await chooser).setFiles(new URL('../fixtures/out/signets.pdf', import.meta.url).pathname);
+  await expect(page.locator('#dialog-compare')).toBeVisible();
+  await expect(page.locator('#cmp-summary')).toContainText('différente');
+  await expect(page.locator('#cmp-summary')).toContainText('mots ajoutés');
+  await page.locator('.cmp-page[data-page="1"] summary').click(); // le détail d'une page s'ouvre au clic
+  await expect(page.locator('.cmp-page[data-page="1"] .cmp-add, .cmp-page[data-page="1"] .cmp-del').first()).toBeVisible();
+  await expect(page.locator('#cmp-names')).toContainText('6 pages'); // signets.pdf
+  await page.locator('.cmp-page[data-page="2"] summary').click();
+  await page.locator('.cmp-page[data-page="2"] button.link').click(); // « Voir cette page »
+  await page.click('#cmp-close');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { cigale: { app: { sessions: { view: { page: number } }[] } } }).cigale.app.sessions[0].view.page)).toBe(2);
+});

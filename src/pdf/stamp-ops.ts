@@ -29,6 +29,8 @@ export interface HeaderFooterOptions {
   firstNumber: number; // numéro affiché sur la première page traitée, ex. 1
   pages?: number[];    // indices à partir de 0 ; toutes si absent. Les numéros se suivent dans l'ordre des pages traitées.
   date?: Date;         // pour {date} (défaut : maintenant), format JJ/MM/AAAA
+  /** Numérotation Bates (dossiers juridiques) : {bates} = préfixe + numéro sur `digits` chiffres, à partir de `start`, de page en page. */
+  bates?: { prefix: string; digits: number; start: number };
 }
 
 /** Remplace les caractères absents de WinAnsi par « ? ». */
@@ -109,12 +111,20 @@ function resolvePages(total: number, selected?: number[]): number[] {
   return out;
 }
 
+/** Numéro Bates de la n-ième page traitée : préfixe + numéro complété de zéros (« DOSSIER-000042 »). */
+export function batesNumber(b: { prefix: string; digits: number; start: number }, sequence: number): string {
+  const digits = Math.min(12, Math.max(1, Math.floor(b.digits) || 1));
+  return `${b.prefix}${String(Math.max(0, Math.floor(b.start) + sequence)).padStart(digits, '0')}`;
+}
+
 export function expandTokens(
   template: string,
-  vars: { page: number; pages: number; date: string; title: string }
+  vars: { page: number; pages: number; date: string; title: string; bates?: string }
 ): string {
-  return template.replace(/\{(page|pages|date|title)\}/g, (_, key) => {
+  return template.replace(/\{(page|pages|date|title|bates)\}/g, (_, key) => {
     switch (key) {
+      case 'bates':
+        return vars.bates ?? '';
       case 'page':
         return String(vars.page);
       case 'pages':
@@ -219,6 +229,7 @@ export async function addHeaderFooter(
       pages: totalPages,
       date: dateStr,
       title: docTitle,
+      bates: opts.bates ? batesNumber(opts.bates, sequenceIdx) : undefined,
     };
 
     const headerV = viewHeight - opts.margin - opts.fontSize;

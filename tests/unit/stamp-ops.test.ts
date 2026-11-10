@@ -230,3 +230,33 @@ describe('stamp-ops', () => {
     ).rejects.toThrow(PageOpError);
   });
 });
+
+describe('numérotation Bates', () => {
+  it('préfixe + numéro complété de zéros, de page en page, à partir du numéro choisi', async () => {
+    const { batesNumber, expandTokens } = await import('../../src/pdf/stamp-ops');
+    expect(batesNumber({ prefix: 'DOSSIER-', digits: 6, start: 1 }, 0)).toBe('DOSSIER-000001');
+    expect(batesNumber({ prefix: 'DOSSIER-', digits: 6, start: 1 }, 41)).toBe('DOSSIER-000042');
+    expect(batesNumber({ prefix: '', digits: 3, start: 998 }, 3)).toBe('1001'); // déborde sans couper
+    expect(batesNumber({ prefix: 'X', digits: 0, start: 5 }, 0)).toBe('X5');
+    expect(expandTokens('Pièce {bates} — {page}', { page: 2, pages: 9, date: '', title: '', bates: 'A-02' })).toBe('Pièce A-02 — 2');
+    expect(expandTokens('{bates}', { page: 1, pages: 1, date: '', title: '' })).toBe('');
+  });
+  it('écrit un numéro différent sur chaque page traitée, seulement les pages choisies', async () => {
+    const { addHeaderFooter } = await import('../../src/pdf/stamp-ops');
+    const out = await addHeaderFooter(await makePdf(4), {
+      header: { left: '', center: '', right: '' },
+      footer: { left: '{bates}', center: '', right: '' },
+      fontSize: 10,
+      color: [0, 0, 0],
+      margin: 28,
+      firstNumber: 1,
+      pages: [1, 3],
+      bates: { prefix: 'PIECE-', digits: 4, start: 17 },
+    });
+    const pages = await readPages(out);
+    expect(pages[0].text).not.toContain('PIECE');
+    expect(pages[1].text).toContain('PIECE-0017');
+    expect(pages[2].text).not.toContain('PIECE');
+    expect(pages[3].text).toContain('PIECE-0018');
+  });
+});

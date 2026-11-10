@@ -28,6 +28,7 @@ import { destroyWindow, isTauri, onCloseRequested, onFinderOpen, onQuitRequest, 
 import { PageList } from './pagelist';
 import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
+import { compareWithOther } from './compare';
 import { openExportTextDialog } from './export-text';
 import { openPropertiesDialog } from './properties';
 import { pickImageFile, prepareImage } from './image-import';
@@ -326,6 +327,7 @@ export class App {
       ocr: () => openOcrDialog(s, this.editing, busy, idle),
       exportimages: () => openExportImagesDialog(s, this.editing, busy, idle),
       exporttext: () => openExportTextDialog(s, this.editing, busy, idle),
+      compare: () => void compareWithOther(s, busy, idle),
       region: () => {
         this.setAnnotTool('clip');
         toast(t.docTools.regionStart);
@@ -384,6 +386,7 @@ export class App {
         { id: 'tool-ocr', label: t.docTools.ocr, run: run.ocr, separatorBefore: true },
         { id: 'tool-export-images', label: t.docTools.exportImages, run: run.exportimages },
         { id: 'tool-export-text', label: t.docTools.exportText, run: run.exporttext },
+        { id: 'tool-compare', label: t.docTools.compare, run: run.compare, separatorBefore: true },
         { id: 'tool-region', label: t.docTools.region, run: run.region },
       ],
       anchor,
@@ -1521,7 +1524,12 @@ export class App {
         this.setBadge(list);
         this.syncStyleUi();
       },
-      () => undefined,
+      () => {
+        if (s.view !== view) return;
+        // lecture impossible (fichier très abîmé) : on laisse écrire quand même ; si le document ne peut pas être réécrit, l'enregistrement le dira
+        s.ink.model.reset([]);
+        annotator.setAnnots([]);
+      },
     );
   }
 

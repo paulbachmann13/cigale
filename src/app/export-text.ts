@@ -1,4 +1,5 @@
 /** Convertir en texte ou en Word : le texte de chaque page est remis en lignes et en paragraphes (tout reste sur l'ordinateur). */
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { buildDocx } from '../data/docx';
 import { sanitizeFileName } from '../data/page-ranges';
 import { type TextPiece, pageText, toParagraphs } from '../data/text-layout';
@@ -46,8 +47,8 @@ export function openExportTextDialog(s: Session, editing: Editing, overlay: (tex
 }
 
 /** Les morceaux de texte d'une page, avec leur position. */
-async function piecesOf(s: Session, index: number): Promise<TextPiece[]> {
-  const page = await s.view.pdf.getPage(index + 1);
+export async function piecesOf(pdf: PDFDocumentProxy, index: number): Promise<TextPiece[]> {
+  const page = await pdf.getPage(index + 1);
   try {
     const content = await page.getTextContent();
     const out: TextPiece[] = [];
@@ -68,7 +69,7 @@ async function run(s: Session, pages: number[], format: TextFormat, overlay: (te
     const perPage: TextPiece[][] = [];
     for (const [k, index] of [...new Set(pages)].sort((a, b) => a - b).entries()) {
       if (cancelled) return void idle();
-      perPage.push(await piecesOf(s, index));
+      perPage.push(await piecesOf(s.view.pdf, index));
       progress((k + 1) / pages.length);
     }
     idle();

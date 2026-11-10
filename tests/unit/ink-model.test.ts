@@ -202,3 +202,21 @@ describe('encre et opérations sur le document', () => {
     }
   });
 });
+
+describe('calque d’encre et documents d’autres logiciels', () => {
+  it('document dont tous les calques sont masqués par défaut : celui de l’écriture reste visible', async () => {
+    const { PDFArray, PDFDict, PDFDocument, PDFName, PDFHexString } = await import('@cantoo/pdf-lib');
+    const src = await PDFDocument.create();
+    src.addPage([200, 200]);
+    const ctx = src.context;
+    const other = ctx.register(ctx.obj({ Type: 'OCG', Name: PDFHexString.fromText('Plan') }));
+    src.catalog.set(PDFName.of('OCProperties'), ctx.obj({ OCGs: [other], D: { BaseState: 'OFF', Order: [other] } }));
+    const bytes = await setInk(await src.save(), [{ page: 0, strokes: [stroke(0, 100)] }], undefined, 1);
+    const doc = await PDFDocument.load(bytes);
+    const config = doc.catalog.lookup(PDFName.of('OCProperties'), PDFDict).lookup(PDFName.of('D'), PDFDict);
+    const layer = findInkLayer(doc)!;
+    const on = config.lookup(PDFName.of('ON'), PDFArray);
+    expect([...Array(on.size()).keys()].map((i) => on.get(i))).toContain(layer);
+    expect(doc.catalog.lookup(PDFName.of('OCProperties'), PDFDict).lookup(PDFName.of('OCGs'), PDFArray).size()).toBe(2); // leur calque est conservé
+  });
+});

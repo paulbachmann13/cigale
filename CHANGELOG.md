@@ -10,6 +10,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **Lasso instantané** : l'écriture choisie suit le stylet en direct quand on la déplace ; dupliquer, supprimer et annuler sont immédiats.
 - Dans le fichier, l'écriture est rangée dans un calque nommé « Écriture manuscrite (Cigale) » (les autres lecteurs la voient normalement et peuvent la masquer). Les anciens fichiers sont rangés automatiquement à l'ouverture.
 
+- **Comparer deux PDF** (Outils → Comparer avec un autre PDF…, ou tuile de l'accueil) : les différences de texte, mot à mot et page par page, avec les mots ajoutés en vert et supprimés en rouge, les pages en plus ou en moins, et un lien pour aller à la page.
+- **Numérotation Bates** (En-têtes et pieds de page) : un numéro unique par page, avec un préfixe et un nombre de chiffres au choix (ex. DOSSIER-000001), à placer où l'on veut avec {bates}.
 - **Propriétés du document** (Fichier → Propriétés du document…) : taille, nombre de pages, format, version du PDF, dates, protection ; on peut changer le titre, l'auteur, le sujet et les mots-clés (annulable).
 - **Remplacer des pages** par celles d'un autre PDF (menu « Insérer des pages » ou clic droit sur une page) : confirmation, puis le remplacement se fait à la place des pages choisies (annulable).
 - **Convertir en Word ou en texte** (Outils, ou tuile de l'accueil) : le texte de chaque page est repris en paragraphes dans un fichier .docx (avec un saut de page entre les pages) ou .txt, pour les pages de votre choix. Rien ne quitte votre ordinateur.

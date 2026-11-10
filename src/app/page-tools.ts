@@ -116,6 +116,10 @@ export function openHeaderFooterDialog(s: Session, editing: Editing): void {
   const size = h('select', { id: 'hf-size' }, ...[8, 9, 10, 11, 12, 14].map((n) => h('option', { value: String(n), selected: n === 10 }, `${n} pt`)));
   const margin = num('hf-margin', 10, 5, 50);
   const first = num('hf-first', 1, 0, 9999);
+  const batesOn = h('input', { type: 'checkbox', id: 'hf-bates' }) as HTMLInputElement;
+  const batesPrefix = h('input', { type: 'text', id: 'hf-bates-prefix', placeholder: 'DOSSIER-', maxlength: '30', 'aria-label': t.docTools.batesPrefix }) as HTMLInputElement;
+  const batesDigits = num('hf-bates-digits', 6, 1, 12);
+  const batesStart = num('hf-bates-start', 1, 0, 999999999);
   const error = h('p', { class: 'dialog-error', id: 'hf-error', role: 'alert' });
   const scope = scopeControls(s, error);
   const row = (label: string, a: HTMLElement, b: HTMLElement, c: HTMLElement) =>
@@ -126,6 +130,7 @@ export function openHeaderFooterDialog(s: Session, editing: Editing): void {
     row(t.docTools.hfHeader, hl, hc, hr),
     row(t.docTools.hfFooter, fl, fc, fr),
     h('div', { class: 'form-grid' }, field(t.docTools.hfSize, size), field(t.docTools.hfMargin, margin), field(t.docTools.hfFirst, first)),
+    h('fieldset', { class: 'scope' }, h('legend', {}, t.docTools.batesTitle), h('label', { class: 'check' }, batesOn, t.docTools.batesUse), h('div', { class: 'form-grid' }, field(t.docTools.batesPrefix, batesPrefix), field(t.docTools.batesDigits, batesDigits), field(t.docTools.batesStart, batesStart)), h('p', { class: 'hint' }, t.docTools.batesHint)),
     scope.el,
     error,
     h(
@@ -141,6 +146,10 @@ export function openHeaderFooterDialog(s: Session, editing: Editing): void {
           onclick: () => {
             const pages = scope.read();
             if (pages === null) return;
+            if (batesOn.checked && ![hl, hc, hr, fl, fc, fr].some((i) => i.value.includes('{bates}'))) {
+              error.textContent = t.docTools.batesMissing; // la numérotation Bates n'apparaît que si un champ contient {bates}
+              return;
+            }
             close();
             void editing.headerFooter(s, {
               header: { left: hl.value, center: hc.value, right: hr.value },
@@ -150,6 +159,7 @@ export function openHeaderFooterDialog(s: Session, editing: Editing): void {
               margin: Number(margin.value) * MM,
               firstNumber: Number(first.value),
               pages,
+              ...(batesOn.checked ? { bates: { prefix: batesPrefix.value, digits: Number(batesDigits.value), start: Number(batesStart.value) } } : {}),
             });
           },
         },
