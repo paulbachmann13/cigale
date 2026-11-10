@@ -48,5 +48,5 @@ export interface Session {
   encryptedAck?: boolean;
 }
 
-/** Modifié = historique modifié OU saisie de formulaire OU traits en attente. */
-export const isDirty = (s: Pick<Session, 'history' | 'formModified' | 'ink'>): boolean => s.history.dirty || s.formModified || s.ink.hasPending;
+/** Modifié = historique modifié (l'écriture à la main y entre étape par étape) OU saisie de formulaire en attente. */
+export const isDirty = (s: Pick<Session, 'history' | 'formModified'>): boolean => s.history.dirty || s.formModified;

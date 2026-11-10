@@ -1,12 +1,21 @@
 import { type Page, expect, test } from '@playwright/test';
-import { PDFArray, PDFDocument, PDFName } from '@cantoo/pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName } from '@cantoo/pdf-lib';
 import { readFileSync } from 'node:fs';
-import { gotoHome, openPdf, waitFirstPage, withoutFilePickers } from './helpers';
+import { docRotations, gotoHome, openPdf, waitFirstPage, withoutFilePickers } from './helpers';
 
-type A = { id: string; kind: string; pen?: string; opacity: number; width: number; color: number[]; strokes?: number[][][]; pressures?: number[][] };
-type Cig = { cigale: { app: { sessions: { annots: A[]; ink: { hasPending: boolean; forPage(n: number): unknown[] }; history: { dirty: boolean } }[] } } };
+type S = { id: string; pen: string; width: number; color: number[]; points: number[][]; pressures?: number[] };
+type A = { id: string; kind: string; rect: number[]; strokes?: number[][][] };
+type Cig = { cigale: { app: { sessions: { annots: A[]; ink: { model: { strokes(p: number): S[]; strokeCount: number; changedSince(m: Map<number, number>): number[] } }; history: { canUndo: boolean; canRedo: boolean; undoLabel: string; dirty: boolean; inkVersions: Map<number, number> } }[] } } };
+
+/** Les traits d'écriture de la page 1 (modèle d'encre, source de vérité). */
+const strokes = (page: Page) => page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[0].ink.model.strokes(0).map((s) => ({ id: s.id, pen: s.pen, width: s.width, color: s.color, points: s.points, pressures: s.pressures })));
+/** Les autres annotations (formes, notes…) : l'écriture n'en fait plus partie. */
 const annots = (page: Page) => page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[0].annots);
-const pending = (page: Page) => page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[0].ink.forPage(0).length);
+const count = async (page: Page) => (await strokes(page)).length;
+const history = (page: Page) => page.evaluate(() => { const h = (window as unknown as Cig).cigale.app.sessions[0].history; return { canUndo: h.canUndo, canRedo: h.canRedo, label: h.undoLabel, dirty: h.dirty }; });
+/** Marque l'affichage pour vérifier plus tard qu'il n'a PAS été rechargé (même élément = aucun rechargement). */
+const markView = (page: Page) => page.evaluate(() => { (document.querySelector('.doc-view:not([hidden])') as HTMLElement & { __mark?: number }).__mark = 42; });
+const sameView = (page: Page) => page.evaluate(() => (document.querySelector('.doc-view:not([hidden])') as HTMLElement & { __mark?: number }).__mark === 42);
 
 test.skip(({ browserName }) => browserName !== 'chromium', 'tracé : Chromium (WebKit : mêmes événements, vérifiés à la main sur iPad)');
 
@@ -44,57 +53,101 @@ async function penStroke(page: Page, x: number, y: number, pressures: number[]) 
   );
 }
 
-test('stylo à la souris : le trait apparaît tout de suite, puis entre dans le PDF (une seule étape Annuler)', async ({ page }) => {
+/** Pixels d'encre dessinés par Cigale sur la page 1. */
+const inked = (page: Page, which: 'normal' | 'multiply' = 'normal') =>
+  page.evaluate((which) => {
+    const c = document.querySelector(`.doc-view:not([hidden]) .page[data-page-number="1"] .ink-canvas.${which}`) as HTMLCanvasElement | null;
+    if (!c) return 0;
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 100) n++;
+    return n;
+  }, which);
+
+/** Geste de gomme : un passage vertical à x. */
+async function eraseAt(page: Page, x: number, y1: number, y2: number) {
+  await page.mouse.move(x, y1);
+  await page.mouse.down();
+  await page.mouse.move(x, y2, { steps: 8 });
+  await page.mouse.up();
+}
+
+test('stylo à la souris : le trait apparaît tout de suite, sans aucun rechargement, en une étape Annuler par trait', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');
-  await expect(page.locator('#annot-pen')).toBeVisible();
+  await markView(page);
   await wave(page, pb.x + 100, pb.y + 300);
   await wave(page, pb.x + 100, pb.y + 340);
-  expect(await pending(page)).toBe(2); // à l'écran, pas encore dans le fichier
-  const inked = () =>
-    page.evaluate(() => {
-      const c = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .ink-canvas.normal') as HTMLCanvasElement | null;
-      if (!c) return 0;
-      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
-      let n = 0;
-      for (let i = 3; i < d.length; i += 4) if (d[i] > 100) n++;
-      return n;
-    });
-  expect(await inked()).toBeGreaterThan(200);
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(2);
-  const list = await annots(page);
-  expect(list.every((a) => a.kind === 'ink' && a.pen === 'pen')).toBe(true);
-  expect(await pending(page)).toBe(0);
-  // les traits sont dans la page pdf.js (rendu du fichier) : pixels sombres près du trait
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const c = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] canvas:not(.ink-canvas)') as HTMLCanvasElement;
-        const k = c.width / c.getBoundingClientRect().width;
-        const d = c.getContext('2d')!.getImageData(Math.round(100 * k), Math.round(290 * k), Math.round(170 * k), Math.round(30 * k)).data;
-        let n = 0;
-        for (let i = 0; i < d.length; i += 4) if (d[i] < 90 && d[i + 1] < 90) n++;
-        return n;
-      }),
-    )
-    .toBeGreaterThan(100);
-  // une seule étape pour les deux traits
+  expect(await count(page)).toBe(2);
+  expect(await inked(page)).toBeGreaterThan(200);
+  expect(await sameView(page)).toBe(true); // l'affichage n'a jamais été rechargé : rien à attendre, rien qui clignote
+  expect(await history(page)).toMatchObject({ canUndo: true, dirty: true, label: 'écrire à la main' });
+  await page.keyboard.press('Meta+z'); // un trait à la fois
+  await expect.poll(() => count(page)).toBe(1);
   await page.keyboard.press('Meta+z');
-  await expect.poll(async () => (await annots(page)).length).toBe(0);
+  await expect.poll(() => count(page)).toBe(0);
+  await page.keyboard.press('Meta+Shift+z');
+  await expect.poll(() => count(page)).toBe(1);
+  await page.keyboard.press('Meta+Shift+z');
+  await expect.poll(() => count(page)).toBe(2);
+  expect(await sameView(page)).toBe(true); // annuler / rétablir non plus
+  expect(await inked(page)).toBeGreaterThan(200);
 });
 
-test('Annuler défait les traits un par un tant qu’ils ne sont pas dans le PDF, Rétablir les rend', async ({ page }) => {
+test('le trait est net : dessiné en courbes aux coordonnées PDF, identique à tout zoom', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');
   await wave(page, pb.x + 100, pb.y + 300);
-  await wave(page, pb.x + 100, pb.y + 340);
+  const before = await inked(page);
+  await page.click('#btn-zoom-in'); // le zoom redessine l'encre à la nouvelle échelle (sans recalculer les contours)
+  await expect.poll(() => inked(page)).toBeGreaterThan(before * 1.2);
+  await page.waitForTimeout(300);
+  const pts = (await strokes(page))[0].points;
+  expect(pts.length).toBeGreaterThan(10); // les points d'origine sont inchangés
+});
+
+test('écrire puis agir sur le document (pivoter) : rien n’est perdu, l’encre suit', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await wave(page, pb.x + 100, pb.y + 300);
+  await page.click('#btn-rot-right'); // l'opération écrit d'abord l'encre dans le document
+  await expect.poll(() => docRotations(page)).toEqual([90, 0, 0]);
+  await expect.poll(() => count(page)).toBe(1);
+  expect(await inked(page)).toBeGreaterThan(100);
+  // annuler la rotation : l'encre est toujours là ; annuler encore : le trait disparaît
   await page.keyboard.press('Meta+z');
-  await expect.poll(() => pending(page)).toBe(1);
+  await expect.poll(() => docRotations(page)).toEqual([0, 0, 0]);
+  await expect.poll(() => count(page)).toBe(1);
   await page.keyboard.press('Meta+z');
-  await expect.poll(() => pending(page)).toBe(0);
-  await page.keyboard.press('Meta+Shift+z');
-  await expect.poll(() => pending(page)).toBe(1);
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
+  await expect.poll(() => count(page)).toBe(0);
+});
+
+test('stylet : la pression est gardée ; la plume s’épaissit avec la pression', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await page.selectOption('#annot-pen', 'fountain');
+  const ramp = Array.from({ length: 30 }, (_, i) => 0.1 + (i / 29) * 0.85);
+  await penStroke(page, pb.x + 100, pb.y + 300, ramp);
+  await expect.poll(() => count(page)).toBe(1);
+  const [s] = await strokes(page);
+  expect(s.pen).toBe('fountain');
+  expect(s.pressures).toHaveLength(s.points.length);
+  expect(Math.max(...s.pressures!)).toBeGreaterThan(0.8);
+  expect(Math.min(...s.pressures!)).toBeLessThan(0.2);
+});
+
+test('surligneur : large, translucide, par-dessus le texte (calque multiplié)', async ({ page }) => {
+  const pb = await pageBox(page);
+  await page.click('#tool-ink');
+  await page.selectOption('#annot-pen', 'highlighter');
+  await expect(page.locator('#annot-width option')).toHaveText(['8 pt', '14 pt', '20 pt', '28 pt']);
+  await wave(page, pb.x + 100, pb.y + 200, 200);
+  await expect.poll(() => count(page)).toBe(1);
+  const [s] = await strokes(page);
+  expect(s).toMatchObject({ pen: 'highlighter', width: 14 });
+  expect(s.color[0]).toBeGreaterThan(0.9); // jaune par défaut
+  expect(await inked(page, 'multiply')).toBeGreaterThan(500);
+  expect(await inked(page, 'normal')).toBe(0);
 });
 
 test('chaque stylo retrouve sa couleur et son épaisseur', async ({ page }) => {
@@ -110,118 +163,108 @@ test('chaque stylo retrouve sa couleur et son épaisseur', async ({ page }) => {
   expect((await color()).color[2]).toBeGreaterThan(0.9); // le bleu choisi est retenu pour le surligneur
 });
 
-test('un trait lent (plus de 1,5 s) n’est pas coupé par l’envoi du précédent au document', async ({ page }) => {
+test.describe('gomme précise', () => {
+  test('elle coupe un trait là où elle passe : deux morceaux, en une seule étape Annuler', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await wave(page, pb.x + 100, pb.y + 300, 240);
+    const original = (await strokes(page))[0];
+    await page.click('#tool-eraser');
+    await markView(page);
+    await eraseAt(page, pb.x + 220, pb.y + 270, pb.y + 330);
+    const pieces = await strokes(page);
+    expect(pieces).toHaveLength(2);
+    expect(pieces.every((p) => p.id !== original.id && p.pen === original.pen && p.width === original.width)).toBe(true);
+    expect(pieces[0].points.length + pieces[1].points.length).toBeGreaterThan(original.points.length * 0.8); // le reste du trait est gardé
+    expect(await sameView(page)).toBe(true); // instantané : aucun rechargement
+    await page.keyboard.press('Meta+z');
+    await expect.poll(async () => (await strokes(page)).map((s) => s.id)).toEqual([original.id]);
+  });
+
+  test('un trait touché est coupé, les autres restent ; un geste annulé par le système ne supprime rien', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await wave(page, pb.x + 100, pb.y + 300, 60);
+    await wave(page, pb.x + 100, pb.y + 400, 60);
+    const [a, b] = await strokes(page);
+    await page.click('#tool-eraser');
+    await page.evaluate(
+      ({ x, y }) => {
+        const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
+        const mk = (type: string, dy: number) => new PointerEvent(type, { pointerId: 5, pointerType: 'pen', isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y + dy, pressure: 0.5, button: 0, buttons: 1 });
+        layer.dispatchEvent(mk('pointerdown', -20));
+        layer.dispatchEvent(mk('pointermove', 0));
+        layer.dispatchEvent(mk('pointercancel', 0));
+      },
+      { x: pb.x + 130, y: pb.y + 300 },
+    );
+    expect((await strokes(page)).map((s) => s.id)).toEqual([a.id, b.id]); // geste annulé : rien n'est supprimé
+    await eraseAt(page, pb.x + 130, pb.y + 270, pb.y + 330);
+    const ids = (await strokes(page)).map((s) => s.id);
+    expect(ids).not.toContain(a.id); // le premier a été coupé (remplacé par ses morceaux)
+    expect(ids).toContain(b.id); // le second n'a pas été touché
+    await eraseAt(page, pb.x + 130, pb.y + 370, pb.y + 430);
+    expect((await strokes(page)).map((s) => s.id)).not.toContain(b.id);
+  });
+
+  test('elle efface aussi les formes (rectangle) touchées, en un geste', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-rect');
+    await page.mouse.move(pb.x + 120, pb.y + 340);
+    await page.mouse.down();
+    await page.mouse.move(pb.x + 220, pb.y + 400, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).map((a) => a.kind)).toEqual(['rect']);
+    await page.click('#tool-eraser');
+    await eraseAt(page, pb.x + 120, pb.y + 320, pb.y + 360); // traverse le bord gauche du rectangle
+    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(0);
+  });
+});
+
+test('enregistrer tout de suite après avoir écrit : le trait est dans le fichier, dans son calque', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');
   await wave(page, pb.x + 100, pb.y + 300);
-  await page.mouse.move(pb.x + 100, pb.y + 400);
-  await page.mouse.down();
-  await page.mouse.move(pb.x + 140, pb.y + 410, { steps: 5 });
-  await page.waitForTimeout(2200); // le délai d'envoi du 1er trait est passé : il doit attendre la fin de celui-ci
-  await page.mouse.move(pb.x + 260, pb.y + 420, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(2);
-  const last = (await annots(page)).map((a) => a.strokes![0].length);
-  expect(Math.max(...last)).toBeGreaterThan(10); // le trait lent est entier
+  expect(await page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[0].ink.model.changedSince((window as unknown as Cig).cigale.app.sessions[0].history.inkVersions))).toEqual([0]); // pas encore dans les octets
+  const [download] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Meta+s')]);
+  const doc = await PDFDocument.load(readFileSync((await download.path())!));
+  const annotsArr = doc.getPage(0).node.lookupMaybe(PDFName.of('Annots'), PDFArray)!;
+  expect(annotsArr.size()).toBe(1);
+  const d = annotsArr.lookup(0, PDFDict);
+  expect(d.get(PDFName.of('Subtype'))).toBe(PDFName.of('Ink'));
+  expect(d.has(PDFName.of('CigalePen'))).toBe(true);
+  expect(d.has(PDFName.of('OC'))).toBe(true); // rangé dans le calque « Écriture manuscrite (Cigale) »
+  expect(await count(page)).toBe(1);
+  expect(await history(page)).toMatchObject({ dirty: false });
 });
 
-test('Rétablir reste possible même si l’envoi différé passe entre-temps', async ({ page }) => {
-  const pb = await pageBox(page);
-  await page.click('#tool-ink');
-  await wave(page, pb.x + 100, pb.y + 300);
-  await wave(page, pb.x + 100, pb.y + 340);
-  await page.keyboard.press('Meta+z');
-  await expect.poll(() => pending(page)).toBe(1);
-  await page.waitForTimeout(2200); // envoi du trait restant
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-});
-
-test('la gomme ne supprime rien si le geste est annulé par le système', async ({ page }) => {
-  const pb = await pageBox(page);
-  await page.click('#tool-ink');
-  await wave(page, pb.x + 100, pb.y + 300);
-  await page.click('#tool-eraser');
-  await page.evaluate(
-    ({ x, y }) => {
-      const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
-      const mk = (type: string, dy: number) => new PointerEvent(type, { pointerId: 5, pointerType: 'pen', isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y + dy, pressure: 0.5, button: 0, buttons: 1 });
-      layer.dispatchEvent(mk('pointerdown', -20));
-      layer.dispatchEvent(mk('pointermove', 0));
-      layer.dispatchEvent(mk('pointercancel', 0));
-    },
-    { x: pb.x + 160, y: pb.y + 300 },
-  );
-  expect(await pending(page)).toBe(1); // le trait est toujours là
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-});
-
-test('stylet : la pression est gardée dans le fichier ; la plume s’épaissit avec la pression', async ({ page }) => {
+test('un trait enregistré se retrouve à la réouverture : mêmes traits, même pression, gommable', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');
   await page.selectOption('#annot-pen', 'fountain');
-  const ramp = Array.from({ length: 30 }, (_, i) => 0.1 + (i / 29) * 0.85);
-  await penStroke(page, pb.x + 100, pb.y + 300, ramp);
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-  const [a] = await annots(page);
-  expect(a.pen).toBe('fountain');
-  expect(a.pressures![0]).toHaveLength(a.strokes![0].length);
-  expect(Math.max(...a.pressures![0])).toBeGreaterThan(0.8);
-  expect(Math.min(...a.pressures![0])).toBeLessThan(0.2);
-});
-
-test('surligneur : translucide, large, par-dessus le texte', async ({ page }) => {
-  const pb = await pageBox(page);
-  await page.click('#tool-ink');
-  await page.selectOption('#annot-pen', 'highlighter');
-  await expect(page.locator('#annot-width option')).toHaveText(['8 pt', '14 pt', '20 pt', '28 pt']);
-  await wave(page, pb.x + 100, pb.y + 200, 200);
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-  const [a] = await annots(page);
-  expect(a).toMatchObject({ pen: 'highlighter', opacity: 0.4, width: 14 });
-  expect(a.color[0]).toBeGreaterThan(0.9); // jaune par défaut
-});
-
-test('gomme : efface le trait touché (en attente ou déjà enregistré), pas les autres', async ({ page }) => {
-  const pb = await pageBox(page);
-  await page.click('#tool-ink');
-  await wave(page, pb.x + 100, pb.y + 300);
-  await wave(page, pb.x + 100, pb.y + 400);
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(2);
-  await wave(page, pb.x + 100, pb.y + 500); // en attente
-  await page.click('#tool-eraser');
-  const [{ id: topId }, { id: midId }] = await annots(page);
-  // deux gestes de gomme : sur le trait du haut (enregistré), puis sur celui du bas (en attente) ; celui du milieu reste
-  for (const y of [300, 500]) {
-    await page.mouse.move(pb.x + 160, pb.y + y - 25);
-    await page.mouse.down();
-    await page.mouse.move(pb.x + 160, pb.y + y + 25, { steps: 8 });
-    await page.mouse.up();
-    // le 1er geste envoie d'abord le trait en attente au document puis supprime le haut : on attend la relecture
-    if (y === 300) await expect.poll(async () => (await annots(page)).map((a) => a.id).includes(topId) || (await annots(page)).length, { timeout: 8000 }).toBe(2);
-  }
-  await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-  expect(await pending(page)).toBe(0);
-  const [left] = await annots(page);
-  expect(left.id).toBe(midId); // c'est bien celui du milieu
-});
-
-test('enregistrer tout de suite après avoir écrit : le trait est dans le fichier', async ({ page }) => {
-  const pb = await pageBox(page);
-  await page.click('#tool-ink');
-  await wave(page, pb.x + 100, pb.y + 300);
-  expect(await pending(page)).toBe(1); // pas encore envoyé au document
+  await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 24 }, (_, i) => 0.2 + i / 40));
+  const written = (await strokes(page))[0];
   const [download] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Meta+s')]);
-  const doc = await PDFDocument.load(readFileSync((await download.path())!));
-  const annotsArr = doc.getPage(0).node.lookupMaybe(PDFName.of('Annots'), PDFArray);
-  expect(annotsArr?.size()).toBe(1);
-  expect(await pending(page)).toBe(0);
+  const bytes = readFileSync((await download.path())!);
+  await page.click('#tab-home');
+  await page.locator('#file-input').setInputFiles({ name: 'ecrit.pdf', mimeType: 'application/pdf', buffer: bytes });
+  await expect(page.locator('.tab.doc-tab')).toHaveCount(2);
+  await page.waitForSelector('.doc-view:not([hidden]) .page[data-page-number="1"] canvas');
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[1].ink.model.strokeCount))
+    .toBe(1);
+  const back = await page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[1].ink.model.strokes(0).map((s) => ({ id: s.id, pen: s.pen, n: s.points.length, p: s.pressures?.length })));
+  expect(back[0]).toMatchObject({ id: written.id, pen: 'fountain', n: written.points.length, p: written.points.length });
+  // à la réouverture le document n'est pas « modifié », et l'encre est dessinée par Cigale (le calque PDF est masqué)
+  expect(await page.evaluate(() => (window as unknown as Cig).cigale.app.sessions[1].history.dirty)).toBe(false);
+  await expect.poll(() => inked(page)).toBeGreaterThan(100);
 });
 
 test('un doigt fait défiler au lieu d’écrire dès qu’un stylet a servi', async ({ page }) => {
   const pb = await pageBox(page);
   await page.click('#tool-ink');
   await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 10 }, () => 0.5));
-  expect(await pending(page)).toBe(1);
+  expect(await count(page)).toBe(1);
   await page.evaluate(
     ({ x, y }) => {
       const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
@@ -232,11 +275,11 @@ test('un doigt fait défiler au lieu d’écrire dès qu’un stylet a servi', a
     },
     { x: pb.x + 300, y: pb.y + 200 },
   );
-  expect(await pending(page)).toBe(1); // aucun trait de plus
+  expect(await count(page)).toBe(1); // aucun trait de plus
 });
 
 test.describe('trait redressé en maintenant le stylet (formes parfaites)', () => {
-  const pdfPoints = async (page: Page) => (await annots(page))[0].strokes![0];
+  const first = async (page: Page) => (await strokes(page))[0].points;
 
   test('une ligne tremblée devient droite ; on règle encore sa longueur avant de relâcher', async ({ page }) => {
     const pb = await pageBox(page);
@@ -247,11 +290,11 @@ test.describe('trait redressé en maintenant le stylet (formes parfaites)', () =
     await page.waitForTimeout(900); // maintenu : redressé
     await page.mouse.move(pb.x + 330, pb.y + 330); // on règle la fin
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    const pts = await pdfPoints(page);
+    await expect.poll(() => count(page)).toBe(1);
+    const pts = await first(page);
     expect(pts).toHaveLength(2);
     expect(Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])).toBeGreaterThan(120);
-    expect(Math.abs(pts[1][1] - pts[0][1])).toBeGreaterThan(10); // la fin a bien été réglée après le redressement (30 px plus bas)
+    expect(Math.abs(pts[1][1] - pts[0][1])).toBeGreaterThan(10);
   });
 
   test('un cercle approximatif devient un cercle', async ({ page }) => {
@@ -267,43 +310,36 @@ test.describe('trait redressé en maintenant le stylet (formes parfaites)', () =
     }
     await page.waitForTimeout(900);
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    const pts = await pdfPoints(page);
+    await expect.poll(() => count(page)).toBe(1);
+    const pts = await first(page);
     expect(pts).toHaveLength(73);
     const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
     const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
     const rs = pts.map((p) => Math.hypot(p[0] - mx, p[1] - my));
-    expect(Math.max(...rs) - Math.min(...rs)).toBeLessThan(2); // rond à moins de 2 points près (le tracé à main levée variait de ±3 px)
+    expect(Math.max(...rs) - Math.min(...rs)).toBeLessThan(2);
   });
 
-  test('sans maintenir, rien n’est transformé (l’écriture reste libre)', async ({ page }) => {
+  test('sans maintenir, rien n’est transformé ; l’écriture maintenue immobile non plus', async ({ page }) => {
     const pb = await pageBox(page);
     await page.click('#tool-ink');
     await page.mouse.move(pb.x + 100, pb.y + 300);
     await page.mouse.down();
     for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
     await page.mouse.up(); // relâché tout de suite
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    expect((await pdfPoints(page)).length).toBeGreaterThan(10);
-  });
-
-  test('de l’écriture maintenue immobile n’est pas transformée', async ({ page }) => {
-    const pb = await pageBox(page);
-    await page.click('#tool-ink');
-    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await expect.poll(() => count(page)).toBe(1);
+    expect((await first(page)).length).toBeGreaterThan(10);
+    await page.mouse.move(pb.x + 100, pb.y + 400);
     await page.mouse.down();
-    for (let i = 1; i <= 30; i++) await page.mouse.move(pb.x + 100 + Math.sin(i / 5) * 25, pb.y + 300 + i * 2.2);
+    for (let i = 1; i <= 30; i++) await page.mouse.move(pb.x + 100 + Math.sin(i / 5) * 25, pb.y + 400 + i * 2.2);
     await page.waitForTimeout(900);
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    expect((await pdfPoints(page)).length).toBeGreaterThan(10);
+    await expect.poll(() => count(page)).toBe(2);
+    expect((await strokes(page))[1].points.length).toBeGreaterThan(10); // une lettre « S » n'est pas une forme
   });
 });
 
 test.describe('règle', () => {
   test('un trait au bord de la règle est parfaitement droit, même si la main tremble', async ({ page }) => {
-    const pb = await pageBox(page);
-    void pb;
     await page.click('#tool-ink');
     await page.click('#tool-ruler');
     const ruler = page.locator('.ink-ruler');
@@ -313,8 +349,8 @@ test.describe('règle', () => {
     await page.mouse.down();
     for (let i = 1; i <= 20; i++) await page.mouse.move(box.x + 100 + i * 10, box.y + 6 + Math.sin(i) * 9);
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    const pts = (await annots(page))[0].strokes![0];
+    await expect.poll(() => count(page)).toBe(1);
+    const pts = (await strokes(page))[0].points;
     expect(pts).toHaveLength(2);
     expect(Math.abs(pts[1][1] - pts[0][1])).toBeLessThan(0.01); // horizontale
     expect(Math.abs(pts[1][0] - pts[0][0])).toBeGreaterThan(80);
@@ -323,17 +359,14 @@ test.describe('règle', () => {
   test('on tourne la règle à 45° : le trait suit l’inclinaison', async ({ page }) => {
     await page.click('#tool-ink');
     await page.click('#tool-ruler');
-    const rot = page.locator('.ink-ruler .ruler-rot');
-    const rb = (await rot.boundingBox())!;
-    const ruler = page.locator('.ink-ruler');
-    const b0 = (await ruler.boundingBox())!;
+    const rb = (await page.locator('.ink-ruler .ruler-rot').boundingBox())!;
+    const b0 = (await page.locator('.ink-ruler').boundingBox())!;
     const cx = b0.x + b0.width / 2;
     const cy = b0.y + b0.height / 2;
     await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
     await page.mouse.down();
     await page.mouse.move(cx + 200, cy + 200, { steps: 6 }); // 45° exactement
     await page.mouse.up();
-    // le bord supérieur de la règle inclinée : on le retrouve par calcul à partir du centre
     const a = Math.PI / 4;
     const nx = -Math.sin(a), ny = Math.cos(a);
     const edgeCenter = { x: cx + (nx * -44) / 2, y: cy + (ny * -44) / 2 };
@@ -341,23 +374,21 @@ test.describe('règle', () => {
     await page.mouse.down();
     await page.mouse.move(edgeCenter.x + 90 * Math.cos(a), edgeCenter.y + 90 * Math.sin(a), { steps: 10 });
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    const pts = (await annots(page))[0].strokes![0];
-    const dx = pts[1][0] - pts[0][0];
-    const dy = pts[1][1] - pts[0][1];
-    expect(Math.abs(Math.abs(dy / dx) - 1)).toBeLessThan(0.03); // 45° (le repère PDF a l'axe y inversé : on compare la valeur absolue)
+    await expect.poll(() => count(page)).toBe(1);
+    const pts = (await strokes(page))[0].points;
+    expect(Math.abs(Math.abs((pts[1][1] - pts[0][1]) / (pts[1][0] - pts[0][0])) - 1)).toBeLessThan(0.03);
   });
 
   test('loin de la règle, on écrit normalement ; la règle disparaît avec le stylo', async ({ page }) => {
     const pb = await pageBox(page);
     await page.click('#tool-ink');
     await page.click('#tool-ruler');
-    await page.mouse.move(pb.x + 80, pb.y + 100); // loin de la règle (au centre de l'écran)
+    await page.mouse.move(pb.x + 80, pb.y + 100);
     await page.mouse.down();
     for (let i = 1; i <= 15; i++) await page.mouse.move(pb.x + 80 + i * 8, pb.y + 100 + Math.sin(i) * 8);
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    expect((await annots(page))[0].strokes![0].length).toBeGreaterThan(5);
+    await expect.poll(() => count(page)).toBe(1);
+    expect((await strokes(page))[0].points.length).toBeGreaterThan(5);
     await page.click('#tool-eraser');
     await expect(page.locator('.ink-ruler')).toHaveCount(0);
     await page.click('#tool-ink');
@@ -372,7 +403,7 @@ test.describe('lasso', () => {
     await wave(page, pb.x + 100, pb.y + 300);
     await wave(page, pb.x + 100, pb.y + 360);
     await wave(page, pb.x + 100, pb.y + 520);
-    await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(3);
+    expect(await count(page)).toBe(3);
     return pb;
   }
   async function loop(page: Page, x1: number, y1: number, x2: number, y2: number) {
@@ -381,13 +412,14 @@ test.describe('lasso', () => {
     for (const [x, y] of [[x2, y1], [x2, y2], [x1, y2], [x1, y1 + 2]]) await page.mouse.move(x, y, { steps: 6 });
     await page.mouse.up();
   }
-  const firstYs = async (page: Page) => (await annots(page)).map((a) => Math.round(a.strokes![0][0][1]));
+  const firstYs = async (page: Page) => (await strokes(page)).map((s) => Math.round(s.points[0][1]));
 
-  test('on entoure deux traits sur trois ; on les déplace en une seule étape ; Annuler les remet', async ({ page }) => {
+  test('on entoure deux traits sur trois, tout de suite ; on les déplace en direct, en une étape, sans rechargement', async ({ page }) => {
     const pb = await threeStrokes(page);
     const before = await firstYs(page);
-    const x0 = (await annots(page))[0].strokes![0][0][0];
-    await page.click('#tool-lasso');
+    const x0 = (await strokes(page))[0].points[0][0];
+    await page.click('#tool-lasso'); // aucun délai à attendre : l'écriture est déjà dans le modèle
+    await markView(page);
     await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 410);
     const box = page.locator('.lasso-box');
     await expect(box).toHaveAttribute('data-count', '2');
@@ -396,14 +428,17 @@ test.describe('lasso', () => {
     await page.mouse.down();
     await page.mouse.move(bb.x + bb.width / 2 + 80, bb.y + bb.height / 2 + 40, { steps: 8 });
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page))[0].strokes![0][0][0] > x0 + 20, { timeout: 8000 }).toBe(true);
+    await expect.poll(async () => (await strokes(page))[0].points[0][0] > x0 + 20).toBe(true);
     const after = await firstYs(page);
-    expect(after[0]).toBeLessThan(before[0] - 10); // déplacé vers le bas de la page (y PDF plus petit)
+    expect(after[0]).toBeLessThan(before[0] - 10);
     expect(after[1]).toBeLessThan(before[1] - 10);
     expect(after[2]).toBe(before[2]); // le troisième n'a pas bougé
-    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2'); // la sélection reste après le rechargement
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2'); // la sélection reste
+    expect(await sameView(page)).toBe(true);
     await page.keyboard.press('Meta+z'); // une seule étape
     await expect.poll(async () => firstYs(page)).toEqual(before);
+    await page.keyboard.press('Meta+Shift+z');
+    await expect.poll(async () => (await firstYs(page))[0]).toBe(after[0]);
   });
 
   test('supprimer et dupliquer la sélection', async ({ page }) => {
@@ -411,16 +446,12 @@ test.describe('lasso', () => {
     await page.click('#tool-lasso');
     await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 410);
     await page.click('.lasso-dup');
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(5);
-    await page.click('#tool-lasso'); // (re)choisir l'outil ne change rien ; on entoure la copie et l'original du haut
-    await loop(page, pb.x + 70, pb.y + 260, pb.x + 300, pb.y + 330);
-    await expect(page.locator('.lasso-box')).toBeVisible();
-    await page.click('.lasso-del');
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBeLessThan(5);
-  });
-
-  test('un seul bouton par outil dans la barre', async ({ page }) => {
-    for (const id of ['ink', 'eraser', 'lasso']) await expect(page.locator(`#tool-${id}`)).toHaveCount(1);
+    await expect.poll(() => count(page)).toBe(5);
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2'); // les copies sont la nouvelle sélection
+    await page.click('.lasso-del'); // supprime les copies
+    await expect.poll(() => count(page)).toBe(3);
+    await page.keyboard.press('Meta+z');
+    await expect.poll(() => count(page)).toBe(5);
   });
 
   test('une boucle vide désélectionne ; Suppr efface la sélection', async ({ page }) => {
@@ -432,7 +463,86 @@ test.describe('lasso', () => {
     await expect(page.locator('.lasso-box')).toHaveCount(0);
     await loop(page, pb.x + 70, pb.y + 480, pb.x + 300, pb.y + 560);
     await page.keyboard.press('Delete');
+    await expect.poll(() => count(page)).toBe(2);
+  });
+
+  test('un seul bouton par outil dans la barre', async ({ page }) => {
+    for (const id of ['ink', 'eraser', 'lasso']) await expect(page.locator(`#tool-${id}`)).toHaveCount(1);
+  });
+
+  test('un trait redressé (2 points seulement) et une forme sont choisis ensemble ; dupliquer les copie tous les deux', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await page.mouse.move(pb.x + 100, pb.y + 300);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
+    await page.waitForTimeout(800);
+    await page.mouse.up();
+    await page.click('#tool-rect');
+    await page.mouse.move(pb.x + 120, pb.y + 340);
+    await page.mouse.down();
+    await page.mouse.move(pb.x + 220, pb.y + 400, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(1);
+    await page.click('#tool-lasso');
+    await page.mouse.move(pb.x + 70, pb.y + 270);
+    await page.mouse.down();
+    for (const [x, y] of [[300, 270], [300, 430], [70, 430], [70, 272]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2');
+    await page.click('.lasso-dup');
+    await expect.poll(() => count(page)).toBe(2);
     await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(2);
+    await page.click('#tool-lasso');
+    // un lasso trop petit pour entourer la moitié d'un objet : rien
+    await page.mouse.move(pb.x + 400, pb.y + 600);
+    await page.mouse.down();
+    for (const [x, y] of [[440, 600], [440, 640], [400, 640], [400, 602]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 3 });
+    await page.mouse.up();
+    await expect(page.locator('.lasso-box')).toHaveCount(0);
+  });
+});
+
+test.describe('mode stylet en un clic, sans clignotement', () => {
+  test('bouton Stylet : ouvre d’un clic la barre d’écriture sur le document ouvert, un 2ᵉ clic la ferme', async ({ page }) => {
+    await page.click('#btn-comment');
+    await expect(page.locator('.annot-toolbar')).toBeHidden();
+    await page.click('#btn-pen');
+    await expect(page.locator('.annot-toolbar')).toBeVisible();
+    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#btn-pen')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#pen-favs')).toBeVisible();
+    await page.click('#btn-pen');
+    await expect(page.locator('.annot-toolbar')).toBeHidden();
+  });
+
+  test('réglage « ouvrir en mode stylet » : le stylo est prêt dès l’ouverture d’un PDF', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ penOnOpen: true })));
+    await page.reload();
+    await openPdf(page, 'simple-3p.pdf');
+    await waitFirstPage(page);
+    await expect(page.locator('.annot-toolbar')).toBeVisible();
+    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('écrire des dizaines de traits ne recharge jamais la page et reste fluide', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#tool-ink');
+    await markView(page);
+    const t0 = Date.now();
+    for (let i = 0; i < 40; i++) await wave(page, pb.x + 60 + Math.floor(i / 20) * 200, pb.y + 150 + (i % 20) * 14, 90); // (la fenêtre de test fait 720 px de haut)
+    expect(await count(page)).toBe(40);
+    expect(await sameView(page)).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(30_000);
+    // la page n'a jamais été blanche
+    const dark = await page.evaluate(() => {
+      const c = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] canvas:not(.ink-canvas)') as HTMLCanvasElement;
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, Math.min(c.height, 400)).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 16) if (d[i] < 100) n++;
+      return n;
+    });
+    expect(dark).toBeGreaterThan(0);
   });
 });
 
@@ -446,14 +556,12 @@ test.describe('finition : favoris, réglages, tablette', () => {
     await page.locator('.pen-fav').nth(1).click(); // la plume bleue
     expect(await style()).toMatchObject({ pen: 'fountain', width: 2.5 });
     await expect(page.locator('#annot-pen')).toHaveValue('fountain');
-    // mémoriser un nouveau stylo : stylo rouge de 5 pt
     await page.selectOption('#annot-pen', 'pen');
     await page.click('.swatch[data-color="Rouge"]');
     await page.selectOption('#annot-width', '4');
     await page.click('#pen-fav-add');
     await page.click('[data-id="fav-save"]');
     await expect(page.locator('.pen-fav')).toHaveCount(4);
-    // déjà présent : pas de doublon
     await page.click('#pen-fav-add');
     await page.click('[data-id="fav-save"]');
     await expect(page.locator('.pen-fav')).toHaveCount(4);
@@ -480,8 +588,8 @@ test.describe('finition : favoris, réglages, tablette', () => {
     for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
     await page.waitForTimeout(900);
     await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    expect((await annots(page))[0].strokes![0].length).toBeGreaterThan(10);
+    await expect.poll(() => count(page)).toBe(1);
+    expect((await strokes(page))[0].points.length).toBeGreaterThan(10);
   });
 
   test('réglage « le doigt peut aussi écrire » : un doigt écrit même après un stylet', async ({ page }) => {
@@ -489,7 +597,7 @@ test.describe('finition : favoris, réglages, tablette', () => {
     const pb = await pageBox(page);
     await page.click('#tool-ink');
     await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 10 }, () => 0.5));
-    expect(await pending(page)).toBe(1);
+    expect(await count(page)).toBe(1);
     await page.evaluate(
       ({ x, y }) => {
         const layer = document.querySelector('.doc-view:not([hidden]) .page[data-page-number="1"] .annot-layer') as HTMLElement;
@@ -500,13 +608,13 @@ test.describe('finition : favoris, réglages, tablette', () => {
       },
       { x: pb.x + 300, y: pb.y + 400 },
     );
-    expect(await pending(page)).toBe(2);
+    expect(await count(page)).toBe(2);
   });
 
   test('deux doigts : pas de défilement en plus du zoom (le pincement est géré par la visionneuse)', async ({ page }) => {
     const pb = await pageBox(page);
     await page.click('#tool-ink');
-    await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 6 }, () => 0.5)); // un stylet a servi : les doigts font défiler
+    await penStroke(page, pb.x + 100, pb.y + 300, Array.from({ length: 6 }, () => 0.5));
     const top = () => page.evaluate(() => (document.querySelector('.doc-view:not([hidden]) .viewer-container') as HTMLElement).scrollTop);
     const before = await top();
     await page.evaluate(
@@ -525,108 +633,5 @@ test.describe('finition : favoris, réglages, tablette', () => {
       { x: pb.x + 300, y: pb.y + 300 },
     );
     expect(await top()).toBe(before);
-  });
-});
-
-test.describe('mode stylet en un clic, sans clignotement, lasso fiable', () => {
-  test('bouton Stylet : ouvre d’un clic la barre d’écriture sur le document ouvert, un 2ᵉ clic la ferme', async ({ page }) => {
-    await page.click('#btn-comment'); // (beforeEach l'a ouvert) : on le referme pour partir de zéro
-    await expect(page.locator('.annot-toolbar')).toBeHidden();
-    await page.click('#btn-pen');
-    await expect(page.locator('.annot-toolbar')).toBeVisible();
-    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#btn-pen')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#pen-favs')).toBeVisible();
-    await page.click('#btn-pen');
-    await expect(page.locator('.annot-toolbar')).toBeHidden();
-  });
-
-  test('réglage « ouvrir en mode stylet » : le stylo est prêt dès l’ouverture d’un PDF', async ({ page }) => {
-    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ penOnOpen: true })));
-    await page.reload();
-    await openPdf(page, 'simple-3p.pdf');
-    await waitFirstPage(page);
-    await expect(page.locator('.annot-toolbar')).toBeVisible();
-    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  test('après un trait, la page ne clignote pas (jamais de page blanche entre deux affichages)', async ({ page }) => {
-    const pb = await pageBox(page);
-    await page.click('#tool-ink');
-    // on observe, image par image, l'affichage visible : la page 1 doit toujours avoir son texte dessiné
-    const recording = page.evaluate(
-      () =>
-        new Promise<{ frames: number; blank: number }>((resolve) => {
-          let frames = 0;
-          let blank = 0;
-          const end = performance.now() + 4500;
-          const tick = () => {
-            const views = [...document.querySelectorAll<HTMLElement>('.doc-view')].filter((v) => !v.hidden && getComputedStyle(v).visibility !== 'hidden');
-            const top = views[views.length - 1];
-            const c = top?.querySelector('.page[data-page-number="1"] canvas:not(.ink-canvas)') as HTMLCanvasElement | null;
-            frames++;
-            let dark = 0;
-            if (c && c.width > 0) {
-              const d = c.getContext('2d')!.getImageData(0, 0, c.width, Math.min(c.height, 400)).data;
-              for (let i = 0; i < d.length; i += 16) if (d[i] < 100) dark++;
-            }
-            if (dark === 0) blank++;
-            if (performance.now() < end) requestAnimationFrame(tick);
-            else resolve({ frames, blank });
-          };
-          requestAnimationFrame(tick);
-        }),
-    );
-    await wave(page, pb.x + 100, pb.y + 300);
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(1);
-    const r = await recording;
-    expect(r.frames).toBeGreaterThan(30);
-    expect(r.blank).toBe(0);
-  });
-
-  test('lasso juste après avoir écrit (traits pas encore dans le document) : tout ce qui est dedans est choisi', async ({ page }) => {
-    const pb = await pageBox(page);
-    await page.click('#tool-ink');
-    await wave(page, pb.x + 100, pb.y + 300);
-    await wave(page, pb.x + 100, pb.y + 360);
-    await page.click('#tool-lasso'); // tout de suite : les 2 traits ne sont pas encore enregistrés
-    await page.mouse.move(pb.x + 70, pb.y + 260);
-    await page.mouse.down();
-    for (const [x, y] of [[300, 260], [300, 410], [70, 410], [70, 262]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
-    await page.mouse.up();
-    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2', { timeout: 10_000 });
-  });
-
-  test('lasso : un trait redressé (2 points seulement), une forme et une image sont choisis s’ils sont dedans', async ({ page }) => {
-    const pb = await pageBox(page);
-    // une ligne redressée (2 points) au stylo
-    await page.click('#tool-ink');
-    await page.mouse.move(pb.x + 100, pb.y + 300);
-    await page.mouse.down();
-    for (let i = 1; i <= 20; i++) await page.mouse.move(pb.x + 100 + i * 8, pb.y + 300 + (i % 2 ? 2 : -2));
-    await page.waitForTimeout(800);
-    await page.mouse.up();
-    // un rectangle (outil Rectangle)
-    await page.click('#tool-rect');
-    await page.mouse.move(pb.x + 120, pb.y + 340);
-    await page.mouse.down();
-    await page.mouse.move(pb.x + 220, pb.y + 400, { steps: 6 });
-    await page.mouse.up();
-    await expect.poll(async () => (await annots(page)).length, { timeout: 9000 }).toBe(2);
-    await page.click('#tool-lasso');
-    await page.mouse.move(pb.x + 70, pb.y + 270);
-    await page.mouse.down();
-    for (const [x, y] of [[300, 270], [300, 430], [70, 430], [70, 272]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 5 });
-    await page.mouse.up();
-    await expect(page.locator('.lasso-box')).toHaveAttribute('data-count', '2');
-    await page.click('.lasso-dup'); // dupliquer une ligne et un rectangle
-    await expect.poll(async () => (await annots(page)).length, { timeout: 8000 }).toBe(4);
-    await page.click('#tool-lasso');
-    // un lasso trop petit pour entourer la moitié d'une forme : rien
-    await page.mouse.move(pb.x + 400, pb.y + 600);
-    await page.mouse.down();
-    for (const [x, y] of [[440, 600], [440, 640], [400, 640], [400, 602]]) await page.mouse.move(pb.x + x, pb.y + y, { steps: 3 });
-    await page.mouse.up();
-    await expect(page.locator('.lasso-box')).toHaveCount(0);
   });
 });

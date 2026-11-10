@@ -6,6 +6,7 @@
  * Toute modification est une « action » explicite et réversible (ce qu'on retire, ce qu'on ajoute, à quelles positions) :
  * l'historique garde ces petites actions au lieu d'une copie du PDF par trait. Logique pure.
  */
+import type { Annot } from './annotations';
 import type { InkStroke } from './ink';
 
 export interface InkEdit {
@@ -121,3 +122,25 @@ export class InkModel {
 }
 
 const EMPTY: readonly InkStroke[] = Object.freeze([]);
+
+/** Les traits d'écriture de Cigale lus dans la liste des annotations d'un document, dans l'ordre du PDF (donc de superposition). */
+export function strokesFromAnnots(annots: readonly Annot[]): InkStroke[] {
+  const out: InkStroke[] = [];
+  for (const a of annots) {
+    if (a.kind !== 'ink' || !a.pen || !a.strokes) continue;
+    a.strokes.forEach((points, k) => {
+      const pressures = a.pressures?.[k];
+      out.push({
+        // fichier d'une ancienne version (pas d'identifiant écrit) : un identifiant stable, tiré de la référence de l'annotation
+        id: a.strokeIds?.[k] || `l${a.id.replace(' ', '-')}-${k}`,
+        page: a.page,
+        points,
+        ...(pressures && pressures.length === points.length ? { pressures } : {}),
+        color: a.color,
+        width: a.width,
+        pen: a.pen!,
+      });
+    });
+  }
+  return out;
+}

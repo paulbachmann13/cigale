@@ -102,8 +102,11 @@ describe('historique : étapes d’écriture légères', () => {
     h.markSaved(h.current);
     expect(h.dirty).toBe(false);
     const written = new Uint8Array(7);
-    h.replaceCurrent(written);
+    h.replaceCurrent(written, new Map([[0, 4]]));
     expect(h.current).toBe(written);
+    expect(h.inkVersions.get(0)).toBe(4);
+    h.pushInk([], 'écrire');
+    expect(h.inkVersions.get(0)).toBe(4); // une étape d'écriture partage les octets et leurs versions
   });
 });
 

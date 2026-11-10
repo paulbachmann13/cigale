@@ -1,7 +1,14 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { EventBus, PDFFindController, PDFLinkService, PDFViewer, ScrollMode, SpreadMode } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import 'pdfjs-dist/web/pdf_viewer.css';
+import { INK_LAYER_NAME } from '../data/ink';
 import { clampZoom } from '../data/zoom';
+
+/** Partie de l'API des calques (contenu optionnel) de pdf.js que l'on utilise. */
+interface OptionalContent {
+  [Symbol.iterator](): Iterator<[string, { name: string | null }]>;
+  setVisibility(id: string, visible: boolean): void;
+}
 
 export type ViewMode = 'continuous' | 'single' | 'two-pages';
 
@@ -57,6 +64,25 @@ export class DocView {
     });
     this.viewer.setDocument(pdf);
     this.linkService.setDocument(pdf, null);
+  }
+
+  /**
+   * Masque dans pdf.js le calque de l'écriture manuscrite : Cigale dessine elle-même l'encre (gomme, lasso et annulation
+   * instantanés). Les autres lecteurs, eux, l'affichent normalement. Renvoie faux si le document n'a pas ce calque.
+   */
+  async hideInkLayer(): Promise<boolean> {
+    const viewer = this.viewer as unknown as { optionalContentConfigPromise: Promise<OptionalContent> | null };
+    const config = await viewer.optionalContentConfigPromise;
+    if (!config) return false;
+    let found = false;
+    for (const [id, group] of config) {
+      if (group.name === INK_LAYER_NAME) {
+        config.setVisibility(id, false);
+        found = true;
+      }
+    }
+    if (found) viewer.optionalContentConfigPromise = Promise.resolve(config);
+    return found;
   }
 
   get pageCount(): number {

@@ -12,7 +12,11 @@ export interface Snapshot {
   label: string;
   /** Étape d'écriture : les actions sur l'encre qui mènent à cet état (les octets sont ceux de l'étape d'avant, ou une version où l'encre a été écrite). */
   ink?: InkAction[];
+  /** Version de l'encre de chaque page DANS ces octets (page absente : version 0). Sert à savoir quelles pages réécrire. */
+  inkVersions?: ReadonlyMap<number, number>;
 }
+
+const EMPTY_VERSIONS: ReadonlyMap<number, number> = new Map();
 
 export class History {
   private stack: Snapshot[];
@@ -53,11 +57,16 @@ export class History {
     return this.canRedo ? this.stack[this.cursor + 1].ink : undefined;
   }
 
+  /** Versions de l'encre contenue dans les octets de l'étape courante. */
+  get inkVersions(): ReadonlyMap<number, number> {
+    return this.stack[this.cursor].inkVersions ?? EMPTY_VERSIONS;
+  }
+
   /** Étape d'écriture à la main : aucune copie du PDF, seulement l'action. */
   pushInk(ink: InkAction[], label: string): void {
     this.stack.length = this.cursor + 1;
     if (this.saved !== null && this.saved > this.cursor) this.saved = null;
-    this.stack.push({ bytes: this.current, label, ink });
+    this.stack.push({ bytes: this.current, label, ink, inkVersions: this.inkVersions });
     this.cursor++;
     this.trim();
   }
@@ -66,8 +75,8 @@ export class History {
    * L'encre vient d'être écrite dans le PDF : l'étape courante garde ces nouveaux octets (même état pour l'utilisateur, autre
    * représentation). Les étapes voisines gardent les leurs : annuler un trait revient à leur encre, pas à ces octets.
    */
-  replaceCurrent(bytes: Uint8Array): void {
-    this.stack[this.cursor] = { ...this.stack[this.cursor], bytes };
+  replaceCurrent(bytes: Uint8Array, inkVersions: ReadonlyMap<number, number>): void {
+    this.stack[this.cursor] = { ...this.stack[this.cursor], bytes, inkVersions };
   }
 
   push(bytes: Uint8Array, label: string): void {

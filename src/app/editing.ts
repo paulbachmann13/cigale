@@ -8,13 +8,14 @@
 import { moveOrder } from '../data/page-order';
 import { fmt, plural, t } from '../i18n/fr';
 import type { AnnotDraft, AnnotPatch } from '../data/annotations';
+import { type InkAction, invertAction } from '../data/ink-model';
 import type { InsertChoice } from './notebook';
 import type { CropMargins } from '../pdf/crop-ops';
 import type { RedactOptions, RedactedPage } from '../pdf/redact-ops';
 import type { HeaderFooterOptions, WatermarkOptions } from '../pdf/stamp-ops';
 import type { OcrPage } from '../pdf/ocr-ops';
 import type { ProtectOptions } from '../pdf/protect-ops';
-import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp, updateAnnotationsOp } from '../pdf/ops-client';
+import { Cancelled, ocrLayerOp, addAnnotationsOp, protectOp, unprotectOp, cropOp, headerFooterOp, redactOp, watermarkOp, fillFormOp, applyOperation, deleteAnnotationsOp, extractOperation, inspectDocument, updateAnnotationOp, updateAnnotationsOp, setInkOp, normalizeInkOp } from '../pdf/ops-client';
 import { type PageOp, PageOpError } from '../pdf/page-ops';
 import { addBackup } from '../storage/backups';
 import { askPassword, confirmDialog, askNumber, showMessage } from './dialogs';
@@ -23,7 +24,6 @@ import { collectFormValues } from './forms';
 import { loadSettings } from './settings';
 import { backupPathFor, baseName, pathOfHandle, writeBackupCopy } from './tauri-files';
 import { pickOnePdf } from './files';
-import { strokeToDraft } from './ink-store';
 import { downloadBytes, ensureWritable, pickSaveHandle, withPdfExtension, writeVerified } from './save';
 import type { Session } from './session';
 
@@ -294,33 +294,78 @@ export class Editing {
     return this.serial(() => this.flushFormInner(s));
   }
 
-  /** Écrit dans le document les traits en attente (une seule étape annuler/rétablir). Appelée avant toute autre opération. */
-  private async flushInkInner(s: Session): Promise<boolean> {
-    const strokes = s.ink.take();
-    if (strokes.length === 0) return true;
-    s.ink.flushing = true;
+  /**
+   * L'encre est-elle en retard sur le PDF ? (pages dont les traits ont changé depuis les octets de l'étape courante.)
+   */
+  inkUnsynced(s: Session): boolean {
+    return s.ink.model.changedSince(s.history.inkVersions).length > 0;
+  }
+
+  /**
+   * Écrit dans les octets du document l'encre qui a changé. Aucun rechargement de la vue, aucune nouvelle étape d'historique :
+   * les octets de l'étape courante sont simplement mis à jour. Appelée avant toute opération qui lit ou écrit le PDF.
+   */
+  private async syncInkInner(s: Session): Promise<boolean> {
+    const pages = s.ink.model.changedSince(s.history.inkVersions);
+    if (pages.length === 0) return true;
     try {
-      if (!(await this.confirmRisks(s))) {
-        s.ink.restore(strokes);
-        return false;
-      }
-      const r = await addAnnotationsOp(s.history.current, strokes.map(strokeToDraft), s.password, s.view.pageCount, this.host.author()).promise;
-      await this.host.reload(s, r.bytes, s.selection, s.view.pageCount);
-      s.history.push(r.bytes, t.annot.labels.draw);
-      this.host.refresh(s);
+      if (!(await this.confirmRisks(s))) return false;
+      const model = s.ink.model;
+      const versions = model.snapshot();
+      const written = pages.map((page) => ({ page, strokes: [...model.strokes(page)] }));
+      const bytes = await setInkOp(s.history.current, written, s.password, s.view.pageCount, this.host.author()).promise;
+      s.history.replaceCurrent(bytes, versions);
+      s.ink.viewStale = true;
       return true;
     } catch (err) {
-      s.ink.restore(strokes); // rien ne se perd : les traits restent à l'écran
-      this.host.refresh(s);
       await showMessage(t.editErrors.title, fmt(t.annot.failed, { name: s.name, detail: describe(err) }));
       return false;
-    } finally {
-      s.ink.flushing = false;
     }
   }
 
+  /** Les octets à garder comme copie de secours : l'encre est d'abord écrite dedans. `null` si ce n'est pas possible maintenant. */
+  bytesForDraft(s: Session): Promise<Uint8Array | null> {
+    return this.serial(async () => ((await this.syncInkInner(s)) ? s.history.current : null));
+  }
+
+  /** Fichier dont l'encre n'est pas dans son calque : on la range (une réécriture), puis la vue est rechargée. */
+  migrateInk(s: Session): Promise<void> {
+    return this.serial(async () => {
+      try {
+        const bytes = await normalizeInkOp(s.history.current, s.password).promise;
+        s.history.replaceCurrent(bytes, new Map());
+        await this.host.reload(s, bytes, s.selection, s.view.pageCount);
+      } catch {
+        /* le document reste affiché tel quel : l'encre s'affichera en double jusqu'à la prochaine opération, rien n'est perdu */
+      }
+    });
+  }
+
+  /** Une action d'écriture vient d'être appliquée au modèle d'encre : une étape d'historique légère, sans rechargement. */
+  recordInk(s: Session, action: InkAction, label: keyof typeof t.annot.labels = 'draw'): void {
+    s.history.pushInk([action], t.annot.labels[label]);
+    this.host.refresh(s);
+  }
+
+  /**
+   * Comme `flushForm`, mais la vue pdf.js contient aussi l'encre à jour (rechargée si besoin) : pour tout ce qui dessine les pages
+   * avec pdf.js (imprimer, exporter en images, extraire une zone).
+   */
+  settleView(s: Session): Promise<boolean> {
+    return this.serial(async () => {
+      if (!(await this.flushFormInner(s))) return false;
+      if (s.ink.viewStale) await this.host.reload(s, s.history.current, s.selection, s.view.pageCount);
+      return true;
+    });
+  }
+
+  /** Avant toute opération : les champs de formulaire remplis, puis l'encre, entrent dans le document. */
   private async flushFormInner(s: Session): Promise<boolean> {
-    if (!(await this.flushInkInner(s))) return false;
+    if (!(await this.flushFormOnly(s))) return false;
+    return this.syncInkInner(s);
+  }
+
+  private async flushFormOnly(s: Session): Promise<boolean> {
     if (!s.formModified) return true;
     try {
       const values = await collectFormValues(s.view.pdf);
@@ -330,6 +375,7 @@ export class Editing {
         return true;
       }
       if (!(await this.confirmRisks(s))) return false;
+      if (!(await this.syncInkInner(s))) return false; // l'encre d'abord : l'opération lit les octets du document
       const r = await fillFormOp(s.history.current, values, s.password, s.view.pageCount).promise;
       await this.host.reload(s, r.bytes, s.selection, s.view.pageCount);
       s.history.push(r.bytes, t.annot.labels.fillForm);
@@ -400,13 +446,23 @@ export class Editing {
   }
 
   private async step(s: Session, dir: 'undo' | 'redo'): Promise<void> {
-    // Traits pas encore envoyés au document : on les défait un par un, sans toucher au document.
-    if (dir === 'undo' ? s.ink.undoOne() : s.ink.canRedo && s.ink.redoOne()) {
+    if (!(await this.flushFormOnly(s))) return;
+    const inkActions = dir === 'undo' ? s.history.undoInk : s.history.redoInk;
+    if (inkActions) {
+      // Étape d'écriture : on rejoue (ou on défait) l'action sur le modèle d'encre, sans toucher au PDF ni recharger la vue.
+      const model = s.ink.model;
+      if (dir === 'undo') {
+        for (const a of [...inkActions].reverse()) model.apply(invertAction(a));
+        s.history.undo();
+      } else {
+        for (const a of inkActions) model.apply(a);
+        s.history.redo();
+      }
       s.annotator.refreshInk();
       this.host.refresh(s);
       return;
     }
-    if (!(await this.flushFormInner(s))) return;
+    if (!(await this.syncInkInner(s))) return;
     const bytes = dir === 'undo' ? s.history.undo() : s.history.redo();
     if (!bytes) return;
     try {

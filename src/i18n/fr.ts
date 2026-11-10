@@ -340,6 +340,10 @@ export const fr = {
     labels: {
       add: 'ajouter un commentaire',
       draw: 'écrire à la main',
+      erase: 'gommer',
+      moveInk: 'déplacer l’écriture',
+      deleteInk: 'supprimer l’écriture',
+      duplicateInk: 'dupliquer l’écriture',
       edit: 'modifier un commentaire',
       move: 'déplacer un commentaire',
       delete: 'supprimer un commentaire',

@@ -4,7 +4,8 @@ import { classifyPdfError, hasPdfHeader } from '../data/pdf-files';
 import { formatZoom, stepZoom } from '../data/zoom';
 import { fmt, plural, t } from '../i18n/fr';
 import { loadPdf } from '../pdf/engine';
-import { listAnnotationsOp } from '../pdf/ops-client';
+import { listMarksOp } from '../pdf/ops-client';
+import { strokesFromAnnots } from '../data/ink-model';
 import { DocView, type ViewMode } from '../pdf/viewer';
 import { deleteBackupsNamed } from '../storage/backups';
 import { deleteDraft, listDrafts, newDraftId, readDraft, saveDraft } from '../storage/autosave';
@@ -42,7 +43,8 @@ const ZOOM_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8];
 const PANEL_THUMB = 132;
 const GRID_THUMB_DEFAULT = 170;
 
-const isDirtyForm = (s: Session) => s.formModified || s.ink.hasPending;
+/** Des champs de formulaire ou de l'encre ne sont pas encore dans les octets du document : à écrire avant de les lire. */
+const isDirtyForm = (s: Session) => s.formModified || s.ink.model.changedSince(s.history.inkVersions).length > 0;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform) || /Mac OS/.test(navigator.userAgent);
 const mod = isMac ? '⌘' : 'Ctrl+';
 
@@ -827,6 +829,7 @@ export class App {
     this.workspace.hidden = false;
     this.sessions.forEach((x) => (x.view.root.hidden = true));
     const view = new DocView(pdf, settings.defaultZoom, startedAt, this.docsEl);
+    void view.ready.then(() => view.hideInkLayer()); // l'encre est dessinée par Cigale : on la masque dans pdf.js
     const id = this.nextId++;
     const outline = await buildOutline(pdf, view.linkService);
     const tab = h(
@@ -883,6 +886,7 @@ export class App {
     view.root.hidden = this.active !== s;
     if (this.active === s) view.root.style.visibility = 'hidden';
     await view.ready;
+    await view.hideInkLayer();
     if (state.mode !== 'continuous') view.setViewMode(state.mode);
     if (state.rotation) view.setRotation(state.rotation);
     view.page = Math.min(state.page, view.pageCount);
@@ -901,6 +905,7 @@ export class App {
     // Montré (ou caché si on a changé d'onglet entre-temps) selon l'onglet actif à l'instant de l'échange
     view.root.style.visibility = '';
     view.root.hidden = this.active !== s;
+    s.ink.viewStale = false;
     s.view = view;
     s.selection = selection.filter((i) => i < view.pageCount);
     s.thumbs = this.makeList(s, 'list', pdf, PANEL_THUMB);
@@ -1436,8 +1441,7 @@ export class App {
         this.syncStyleUi();
       },
       notify: (m) => toast(m),
-      flushInk: () => this.editing.flushForm(s).then(() => undefined),
-      inkChanged: () => this.refreshState(s),
+      inkAction: (action, label) => this.editing.recordInk(s, action, label),
       region: (page, rect) => {
         this.setAnnotTool('select');
         openRegionDialog(this.toolsHost(), s, page, rect);
@@ -1488,11 +1492,22 @@ export class App {
       s.hasForm = has;
       this.updateFormBanner(s);
     });
-    void listAnnotationsOp(bytes, s.password, view.pageCount).promise.then(
-      (list) => {
+    void listMarksOp(bytes, s.password, view.pageCount).promise.then(
+      (marks) => {
         if (s.view !== view) return; // un rechargement plus récent a pris le relais
+        // L'écriture manuscrite (annotations d'encre de Cigale) vit dans le modèle d'encre, pas dans la liste des commentaires.
+        s.ink.model.reset(strokesFromAnnots(marks.annots));
+        // le modèle vient d'être relu de ces octets : ils contiennent exactement cette encre (versions de référence remises à zéro)
+        if (s.history.current === bytes) s.history.replaceCurrent(bytes, new Map());
+        const list = marks.annots.filter((a) => !(a.kind === 'ink' && a.pen));
+        if (marks.inkLegacy && !s.ink.migrated) {
+          // fichier d'une ancienne version (ou passé par un autre logiciel) : l'encre n'est pas dans son calque → on la range puis on recharge
+          s.ink.migrated = true;
+          void this.editing.migrateInk(s);
+        }
         s.annots = list;
         annotator.setAnnots(list);
+        annotator.refreshInk();
         if (s.pendingSelect && list.some((a) => a.id === s.pendingSelect)) annotator.select(s.pendingSelect, false);
         s.pendingSelect = null;
         s.comments.update(list, annotator.selection?.id ?? null);
@@ -1516,7 +1531,7 @@ export class App {
     if (this.active) await this.editing.redo(this.active);
   }
   private async print() {
-    if (this.active) await this.editing.flushForm(this.active);
+    if (this.active) await this.editing.settleView(this.active);
     if (this.active) await printDocument(this.active, (text, onCancel) => this.showOverlay(text, onCancel), () => this.hideLoading());
   }
   private async save() {
@@ -1546,7 +1561,8 @@ export class App {
       return;
     }
     if (!loadSettings().autosave) return;
-    const write = () => void saveDraft(s.draftId, s.name, s.history.current);
+    // l'encre écrite à la main entre d'abord dans les octets (sans recharger l'affichage), puis la copie de secours est gardée
+    const write = () => void this.editing.bytesForDraft(s).then((bytes) => bytes && saveDraft(s.draftId, s.name, bytes));
     if (now) write();
     else s.draftTimer = window.setTimeout(write, 2000);
   }

@@ -92,14 +92,17 @@ test('souligner et barrer', async ({ page }) => {
   await waitKinds(page, ['underline', 'strikeout']);
 });
 
-test('rectangle, ellipse, ligne, flèche, dessin : tous écrits dans le PDF', async ({ page }) => {
+test('rectangle, ellipse, ligne, flèche : écrits dans le PDF ; le dessin à main levée vit dans le modèle d’encre', async ({ page }) => {
   const pb = await pageBox(page);
-  for (const [tool, k] of [['rect', 0], ['ellipse', 1], ['line', 2], ['arrow', 3], ['ink', 4]] as const) {
+  for (const [tool, k] of [['rect', 0], ['ellipse', 1], ['line', 2], ['arrow', 3]] as const) {
     await page.click(`#tool-${tool}`);
     await drag(page, pb.x + 100, pb.y + 300 + k * 70, pb.x + 220, pb.y + 340 + k * 70);
     await expect.poll(async () => (await annots(page)).length).toBe(k + 1);
   }
-  expect((await annots(page)).map((a) => a.kind)).toEqual(['rect', 'ellipse', 'line', 'arrow', 'ink']);
+  expect((await annots(page)).map((a) => a.kind)).toEqual(['rect', 'ellipse', 'line', 'arrow']);
+  await page.click('#tool-ink');
+  await drag(page, pb.x + 100, pb.y + 580, pb.x + 220, pb.y + 620);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { cigale: { app: { sessions: { ink: { model: { strokeCount: number } } }[] } } }).cigale.app.sessions[0].ink.model.strokeCount)).toBe(1);
   // rendu : le bord gauche du rectangle est rouge (couleur par défaut)
   await settledPixel(page, 10, 10);
   expect(await countPixels(page, { x: 80, y: 280, w: 150, h: 80 }, 'r > 180 && g < 90 && b < 90')).toBeGreaterThan(100);

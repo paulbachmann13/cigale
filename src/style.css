@@ -317,3 +317,4 @@ fieldset.scope { border: 1px solid var(--border); border-radius: 8px; margin: 10
 .paper-options { display: flex; flex-wrap: wrap; gap: 12px; }
 .ip-sources { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
 @media (pointer: coarse) { .paper-card { padding: 10px 8px; } .paper-color { width: 36px; height: 36px; } }
+.ink-canvas.live { z-index: 5; }

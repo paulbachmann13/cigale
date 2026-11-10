@@ -5,8 +5,9 @@
 import { type Annot, type AnnotDraft, type AnnotPatch, type Pt, type Rect, type Rgb, mergeLines, normalizeRect, resize, rgbToCss, translate, unionRect } from '../data/annotations';
 import { t } from '../i18n/fr';
 import type { DocView } from '../pdf/viewer';
-import { type Shape, eraseOutline, eraseTouched, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
-import { type InkStroke, type PenKind, PENS, inkOutline, newStrokeId, strokeTouched } from '../data/ink';
+import { type Shape, densify, eraseOutline, eraseTouched, insideFraction, lassoSelects, magnetAngle, nearestRulerEdge, projectOnSegment, recognizeShape, rulerEdges } from '../data/shapes';
+import { type InkStroke, type PenKind, PENS, boxesMeet, eraseFromStroke, inkOutline, moveStroke, newStrokeId, smoothOutline, strokeBox, strokeOutline } from '../data/ink';
+import type { InkAction } from '../data/ink-model';
 import { h } from './dom';
 import { loadSettings } from './settings';
 import type { InkStore } from './ink-store';
@@ -33,10 +34,8 @@ export interface AnnotHost {
   notify(message: string): void;
   /** Outil « Extraire une zone » : une zone (repère PDF de la page, x0 y0 x1 y1) a été tracée. */
   region(page: number, rect: [number, number, number, number]): void;
-  /** Écrit dans le document les traits en attente (et retient l'état « modifié » en attendant). */
-  flushInk(): Promise<void>;
-  /** Des traits viennent d'apparaître ou de disparaître (état « modifié »). */
-  inkChanged(): void;
+  /** Une modification de l'écriture manuscrite vient d'être appliquée au modèle d'encre : l'historique la garde (étape légère). */
+  inkAction(action: InkAction, label: 'draw' | 'erase' | 'moveInk' | 'deleteInk' | 'duplicateInk'): void;
   /** Modifie plusieurs annotations en une seule étape (déplacement d'une sélection au lasso). */
   /** Change d'outil (après avoir posé une image, on repasse à « Sélectionner »). */
   switchTool(tool: Tool): void;
@@ -46,6 +45,8 @@ export interface AnnotHost {
 /** Même partie de l'API de PageViewport que pdf.js expose : on n'en utilise que ces deux conversions. */
 interface Viewport {
   scale: number;
+  /** Matrice PDF → pixels CSS de la page (échelle, rotation, décalage). */
+  transform: number[];
   convertToViewportPoint(x: number, y: number): [number, number];
   convertToPdfPoint(x: number, y: number): [number, number];
 }
@@ -63,6 +64,16 @@ const RESIZABLE = new Set(['rect', 'ellipse', 'freetext', 'stamp', 'redact', 'si
 function coalesced(ev: PointerEvent): PointerEvent[] {
   const list = ev.getCoalescedEvents?.();
   return list && list.length ? list : [ev];
+}
+
+/** Chemin 2D fermé d'un contour de trait : des courbes lissées passant par les milieux des sommets (même géométrie que dans le PDF). */
+function pathFromOutline(poly: Pt[]): Path2D {
+  const { start, quads } = smoothOutline(poly);
+  const p = new Path2D();
+  p.moveTo(start[0], start[1]);
+  for (const [c, e] of quads) p.quadraticCurveTo(c[0], c[1], e[0], e[1]);
+  p.closePath();
+  return p;
 }
 
 /** Le calque garde le stylet même s'il sort de la page (sans erreur si le système a déjà lâché ce pointeur). */
@@ -85,18 +96,22 @@ export class Annotator {
   private penSeen = false;
   /** Doigts posés pour faire défiler (le pincement à deux doigts est géré par la visionneuse). */
   private fingers = new Set<number>();
-  private inkCanvases = new Map<number, { normal: HTMLCanvasElement; multiply: HTMLCanvasElement }>();
+  /** Trois calques par page : l'encre déjà écrite (normal et multiplication, pour le surligneur) et le trait en cours. */
+  private inkCanvases = new Map<number, { normal: HTMLCanvasElement; multiply: HTMLCanvasElement; live: HTMLCanvasElement }>();
   /** Trait en cours d'écriture. */
   private live: { page: number; points: Pt[]; pressures: number[]; usesPressure: boolean; predicted: Pt[] } | null = null;
-  /** Traits déjà enregistrés que la gomme vient de toucher (supprimés au relâchement). */
+  /** Annotations (formes…) que la gomme vient de toucher : supprimées au relâchement. L'écriture manuscrite, elle, s'efface en direct. */
   private erasing = new Map<string, Annot>();
-  private inkTimer: number | undefined;
-  private paintQueued = false;
+  /** Traits d'une page pendant un geste de gomme (la page affiche cette liste ; le modèle n'est modifié qu'au relâchement : un seul pas Annuler). */
+  private work = new Map<number, InkStroke[]>();
+  /** Déplacement en cours de la sélection du lasso, en unités PDF : les traits choisis s'affichent décalés. */
+  private drag: { dx: number; dy: number } | null = null;
+  private paintQueued = new Set<number>();
   private paintFrame = 0;
   /** Gestes en cours qui ne doivent pas être coupés par un changement d'affichage (boucle du lasso, déplacement de la sélection). */
   private gestures = 0;
-  /** Traits en attente que la gomme vient de toucher (supprimés au relâchement seulement : un geste annulé ne supprime rien). */
-  private erasingPending = new Set<InkStroke>();
+  /** Chemins (courbes) des traits : calculés une fois, redessinés à tout zoom sans recalcul ni flou. */
+  private paths = new WeakMap<InkStroke, Path2D>();
   private annots: Annot[] = [];
   /** La liste des commentaires est relue après chaque rechargement : tant qu'elle n'est pas là, la sélection au lasso est gardée telle quelle. */
   private annotsLoaded = false;
@@ -108,17 +123,15 @@ export class Annotator {
 
   constructor(private view: DocView, private host: AnnotHost, private ink: InkStore) {
     view.eventBus.on('pagerendered', this.onPageRendered);
-    if (ink.hasPending) this.scheduleInkFlush(1500); // des traits attendaient pendant un rechargement
     // sur le document : la sélection peut se terminer hors de la zone de lecture
     document.addEventListener('mouseup', this.onMouseUp);
   }
 
   destroy() {
-    window.clearTimeout(this.inkTimer);
     cancelAnimationFrame(this.paintFrame);
     this.gestures = 0; // un geste coupé par la destruction du calque ne doit pas laisser l'affichage « occupé »
     this.rulerEl?.remove();
-    this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove()));
+    this.inkCanvases.forEach((c) => (c.normal.remove(), c.multiply.remove(), c.live.remove()));
     this.inkCanvases.clear();
     this.closeEditor();
     document.removeEventListener('mouseup', this.onMouseUp);
@@ -139,8 +152,7 @@ export class Annotator {
   /** `null` : mode commentaire désactivé (aucun calque). */
   setTool(tool: Tool | null) {
     this.tool = tool;
-    if (tool !== 'lasso') this.ink.lasso = this.ink.lassoPoly = null;
-    if (tool !== 'ink' && tool !== 'eraser') this.scheduleInkFlush(0); // on quitte l'écriture : tout part dans le document
+    if (tool !== 'lasso') this.ink.lasso = null;
     if (tool !== 'select') this.select(null);
     this.syncRuler();
     this.view.container.classList.toggle('annotating', tool !== null);
@@ -151,11 +163,6 @@ export class Annotator {
   setAnnots(list: Annot[]) {
     this.annots = list;
     this.annotsLoaded = true;
-    if (this.ink.lassoPoly && !this.ink.hasPending && !this.ink.flushing) {
-      const { page, poly } = this.ink.lassoPoly;
-      this.ink.lassoPoly = null;
-      this.lassoBy(page, poly);
-    }
     if (this.selectedId && !list.some((a) => a.id === this.selectedId)) this.selectedId = null;
     this.renderAll();
   }
@@ -393,68 +400,75 @@ export class Annotator {
     }
   }
 
-  // ───────────── écriture manuscrite (stylo, plume, surligneur, gomme) ─────────────
-
-  /** Envoie les traits en attente au document, après `ms` millisecondes sans nouveau trait. */
-  private scheduleInkFlush(ms: number) {
-    window.clearTimeout(this.inkTimer);
-    if (!this.ink.hasPending) return;
-    this.inkTimer = window.setTimeout(() => {
-      // jamais en plein tracé : le rechargement du document ferait perdre le trait en cours
-      if (this.live || this.erasing.size || this.erasingPending.size) this.scheduleInkFlush(500);
-      else void this.host.flushInk();
-    }, ms);
-  }
-
-  // ───────────── lasso : choisir des traits, les déplacer, les dupliquer, les supprimer ─────────────
+  // ───────────── lasso : choisir de l'écriture et des objets, les déplacer, les dupliquer, les supprimer ─────────────
 
   /** Un trait, un geste de gomme ou un déplacement est en cours : on ne doit pas changer d'affichage maintenant. */
   get isBusy(): boolean {
-    return !!this.live || this.erasing.size > 0 || this.erasingPending.size > 0 || this.gestures > 0;
+    return !!this.live || this.work.size > 0 || this.erasing.size > 0 || this.gestures > 0;
   }
 
   get hasLasso(): boolean {
-    return !!this.ink.lasso && this.ink.lasso.ids.length > 0;
+    return this.ink.hasLasso;
   }
 
-  private lassoItems(): Annot[] {
+  private lassoAnnots(): Annot[] {
     const sel = this.ink.lasso;
-    return sel ? this.annots.filter((a) => sel.ids.includes(a.id)) : [];
+    return sel ? this.annots.filter((a) => sel.annotIds.includes(a.id)) : [];
+  }
+
+  private lassoStrokes(): InkStroke[] {
+    const sel = this.ink.lasso;
+    if (!sel) return [];
+    const ids = new Set(sel.strokeIds);
+    return this.ink.model.strokes(sel.page).filter((s) => ids.has(s.id));
   }
 
   deleteLasso() {
-    const ids = this.lassoItems().map((a) => a.id);
+    const sel = this.ink.lasso;
+    if (!sel) return;
+    const ids = new Set(sel.strokeIds);
+    const annotIds = this.lassoAnnots().map((a) => a.id);
     this.ink.lasso = null;
-    if (ids.length) void this.host.remove(ids);
+    const action = this.ink.model.change(sel.page, this.ink.model.strokes(sel.page).filter((s) => !ids.has(s.id)));
+    if (action) this.host.inkAction(action, 'deleteInk'); // instantané : une étape d'historique, aucun rechargement
+    this.renderAll();
+    if (annotIds.length) void this.host.remove(annotIds);
   }
 
   duplicateLasso() {
-    const items = this.lassoItems();
+    const sel = this.ink.lasso;
+    if (!sel) return;
+    const strokes = this.lassoStrokes();
+    const annots = this.lassoAnnots();
     this.ink.lasso = null;
-    if (!items.length) return;
-    // la copie est décalée pour qu'on la voie, et devient un objet indépendant. Les images, tampons et signatures n'ont pas de
-    // description à recopier : ils ne sont pas dupliqués (on le dit).
+    // la copie est décalée pour qu'on la voie, et devient un objet indépendant (et la nouvelle sélection)
+    if (strokes.length) {
+      const copies = strokes.map((s) => ({ ...moveStroke(s, 14, -14), id: newStrokeId() }));
+      const action = this.ink.model.change(sel.page, [...this.ink.model.strokes(sel.page), ...copies]);
+      if (action) this.host.inkAction(action, 'duplicateInk');
+      this.ink.lasso = { page: sel.page, strokeIds: copies.map((c) => c.id), annotIds: [] };
+    }
+    // Les images, tampons et signatures n'ont pas de description à recopier : ils ne sont pas dupliqués (on le dit).
     const copyable = new Set(['ink', 'rect', 'ellipse', 'line', 'arrow', 'freetext']);
-    const drafts: AnnotDraft[] = items
+    const drafts: AnnotDraft[] = annots
       .filter((a) => copyable.has(a.kind))
       .map((a) => {
         const m = translate(a, 14, -14);
         return { kind: a.kind, page: a.page, color: a.color, fill: a.fill, opacity: a.opacity, width: a.width, contents: a.contents, fontSize: a.fontSize, rect: m.rect, strokes: m.strokes, line: m.line, pen: a.pen, pressures: a.pressures };
       });
-    if (drafts.length < items.length) this.host.notify(t.annot.lasso.noCopy);
+    if (drafts.length < annots.length) this.host.notify(t.annot.lasso.noCopy);
+    this.renderAll();
     if (drafts.length) void this.host.add(drafts);
-    else this.renderAll(); // rien à copier : le cadre de sélection disparaît
   }
 
-  /** Choisit ce qu'entoure la boucle `poly` (repère PDF) sur la page `page`. Si des traits viennent d'être écrits, on attend qu'ils soient dans le document. */
+  /** Choisit ce qu'entoure la boucle `poly` (repère PDF) sur la page `page` : au moins la moitié de l'objet doit être dedans. */
   private lassoBy(page: number, poly: Pt[]) {
-    if (this.ink.hasPending || this.ink.flushing || !this.annotsLoaded) {
-      this.ink.lassoPoly = { page, poly };
-      this.scheduleInkFlush(0);
-      return;
-    }
-    const ids = this.annots.filter((a) => a.page === page && !a.replyTo && lassoSelects(a, poly)).map((a) => a.id);
-    this.ink.lasso = ids.length ? { page, ids } : null;
+    const strokeIds = this.ink.model
+      .strokes(page)
+      .filter((s) => insideFraction(densify(s.points, 3), poly) >= 0.5)
+      .map((s) => s.id);
+    const annotIds = this.annotsLoaded ? this.annots.filter((a) => a.page === page && !a.replyTo && lassoSelects(a, poly)).map((a) => a.id) : [];
+    this.ink.lasso = strokeIds.length + annotIds.length ? { page, strokeIds, annotIds } : null;
   }
 
   private beginLasso(e: PointerEvent, layer: HTMLElement, n: number) {
@@ -485,7 +499,7 @@ export class Annotator {
       if (cancelled) return;
       const poly = pts.map((p) => vp.convertToPdfPoint(p[0], p[1]) as Pt);
       if (pts.length >= 6) this.lassoBy(n - 1, poly);
-      else this.ink.lasso = this.ink.lassoPoly = null;
+      else this.ink.lasso = null;
       this.renderAll();
     };
     const up = () => finish(false);
@@ -497,17 +511,18 @@ export class Annotator {
 
   private layoutLasso(layer: HTMLElement, pv: PageViewLike, n: number) {
     const sel = this.ink.lasso;
-    if (!sel || sel.page !== n - 1 || !this.annotsLoaded) return;
-    const items = this.lassoItems();
-    if (items.length === 0) {
-      this.ink.lasso = null;
+    if (!sel || sel.page !== n - 1) return;
+    const strokes = this.lassoStrokes();
+    const annots = this.annotsLoaded ? this.lassoAnnots() : [];
+    if (strokes.length + annots.length === 0) {
+      if (this.annotsLoaded) this.ink.lasso = null; // plus rien de choisi (effacé, annulé…)
       return;
     }
     const vp = pv.viewport;
-    const r = unionRect(items.map((a) => a.rect));
+    const r = unionRect([...strokes.map((s) => strokeBox(s)), ...annots.map((a) => a.rect)]);
     const [x1, y1] = vp.convertToViewportPoint(r[0], r[1]);
     const [x2, y2] = vp.convertToViewportPoint(r[2], r[3]);
-    const box = h('div', { class: 'lasso-box', 'data-count': String(items.length) });
+    const box = h('div', { class: 'lasso-box', 'data-count': String(strokes.length + annots.length) });
     Object.assign(box.style, { left: `${Math.min(x1, x2) - 4}px`, top: `${Math.min(y1, y2) - 4}px`, width: `${Math.abs(x2 - x1) + 8}px`, height: `${Math.abs(y2 - y1) + 8}px` });
     const actions = h(
       'div',
@@ -525,14 +540,24 @@ export class Annotator {
       capture(box, e.pointerId);
       this.gestures++;
       const start = this.local(layer, e);
+      const [ax, ay] = vp.convertToPdfPoint(start[0], start[1]);
       let moved = false;
-      const move = (ev: PointerEvent) => {
+      const delta = (ev: PointerEvent) => {
         const p = this.local(layer, ev);
+        const [bx, by] = vp.convertToPdfPoint(p[0], p[1]);
+        return { p, dx: bx - ax, dy: by - ay };
+      };
+      const move = (ev: PointerEvent) => {
+        const { p, dx, dy } = delta(ev);
         if (Math.hypot(p[0] - start[0], p[1] - start[1]) > 3) moved = true;
-        if (moved) box.style.transform = `translate(${p[0] - start[0]}px, ${p[1] - start[1]}px)`;
+        if (!moved) return;
+        box.style.transform = `translate(${p[0] - start[0]}px, ${p[1] - start[1]}px)`;
+        this.drag = { dx, dy }; // l'écriture choisie suit le stylet en direct
+        this.queuePaint(n, true);
       };
       const stop = () => {
         this.gestures--;
+        this.drag = null;
         box.removeEventListener('pointermove', move);
         box.removeEventListener('pointerup', end);
         box.removeEventListener('pointercancel', cancel);
@@ -540,14 +565,19 @@ export class Annotator {
       const cancel = () => {
         stop();
         box.style.transform = ''; // geste annulé par le système : rien ne bouge
+        this.paintInk(n);
       };
       const end = (ev: PointerEvent) => {
+        const { dx, dy } = delta(ev);
         stop();
         if (!moved) return;
-        const p = this.local(layer, ev);
-        const [ax, ay] = vp.convertToPdfPoint(start[0], start[1]);
-        const [bx, by] = vp.convertToPdfPoint(p[0], p[1]);
-        void this.host.updateMany(items.map((a) => ({ id: a.id, patch: translate(a, bx - ax, by - ay) })));
+        const ids = new Set(sel.strokeIds);
+        if (strokes.length) {
+          const action = this.ink.model.change(sel.page, this.ink.model.strokes(sel.page).map((s) => (ids.has(s.id) ? moveStroke(s, dx, dy) : s)));
+          if (action) this.host.inkAction(action, 'moveInk'); // instantané : aucun rechargement
+        }
+        this.renderAll();
+        if (annots.length) void this.host.updateMany(annots.map((a) => ({ id: a.id, patch: translate(a, dx, dy) })));
       };
       box.addEventListener('pointermove', move);
       box.addEventListener('pointerup', end);
@@ -649,8 +679,9 @@ export class Annotator {
     return nearestRulerEdge([clientX, clientY], edges, 22);
   }
 
+  /** Redessine toute l'écriture (après annuler / rétablir, un rechargement, un changement de zoom). */
   refreshInk() {
-    for (const n of this.layers.keys()) this.paintInk(n);
+    this.renderAll();
   }
 
   private inkCanvasesFor(n: number) {
@@ -659,92 +690,124 @@ export class Annotator {
     let c = this.inkCanvases.get(n);
     if (!c || !pv.div.contains(c.normal)) {
       const mk = (cls: string) => h('canvas', { class: `ink-canvas ${cls}`, 'aria-hidden': 'true' });
-      c = { normal: mk('normal'), multiply: mk('multiply') };
-      pv.div.append(c.normal, c.multiply);
+      c = { normal: mk('normal'), multiply: mk('multiply'), live: mk('live') };
+      pv.div.append(c.normal, c.multiply, c.live);
       this.inkCanvases.set(n, c);
     }
     return c;
   }
 
-  /** Dessine, sur le calque de la page, les traits en attente et celui qu'on écrit. Même contour que dans le PDF. */
+  /** Chemin (courbes) d'un trait fini, en coordonnées PDF : calculé une fois, redessiné à tout zoom net et sans recalcul. */
+  private pathOf(s: InkStroke): Path2D {
+    let p = this.paths.get(s);
+    if (!p) {
+      p = pathFromOutline(strokeOutline(s));
+      this.paths.set(s, p);
+    }
+    return p;
+  }
+
+  /** Dimensionne un canevas d'encre sur sa page et règle sa transformation : on dessine directement en coordonnées PDF. */
+  private prepareCanvas(cv: HTMLCanvasElement, layer: HTMLElement, vp: Viewport, desynchronized = false): CanvasRenderingContext2D {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(layer.clientWidth * dpr);
+    const hgt = Math.round(layer.clientHeight * dpr);
+    if (cv.width !== w || cv.height !== hgt) {
+      cv.width = w;
+      cv.height = hgt;
+    }
+    const g = cv.getContext('2d', desynchronized ? { desynchronized: true } : undefined)!; // « desynchronized » : faible latence quand le navigateur le permet
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, cv.width, cv.height);
+    const [a, b, c, d, e, f] = vp.transform;
+    g.setTransform(dpr * a, dpr * b, dpr * c, dpr * d, dpr * e, dpr * f);
+    return g;
+  }
+
+  /** Dessine l'écriture déjà écrite d'une page (le trait en cours a son propre calque, bien plus léger à redessiner). */
   private paintInk(n: number) {
     const pv = this.pageView(n);
     const layer = this.layers.get(n);
     if (!pv || !layer) return;
-    const strokes: InkStroke[] = this.ink.forPage(n - 1);
-    const liveHere = this.live && this.live.page === n - 1 ? this.live : null;
-    const erasedHere = [...this.erasing.values()].filter((a) => a.page === n - 1);
-    if (strokes.length === 0 && !liveHere && erasedHere.length === 0 && !this.inkCanvases.has(n)) return;
-    // (un trait que la gomme a touché reste affiché, en rouge, jusqu'au relâchement)
+    const page = n - 1;
+    const strokes = this.work.get(page) ?? this.ink.model.strokes(page);
+    const erased = [...this.erasing.values()].filter((a) => a.page === page);
+    if (strokes.length === 0 && erased.length === 0 && !this.inkCanvases.has(n)) return;
     const c = this.inkCanvasesFor(n);
     if (!c) return;
-    const w = layer.clientWidth;
-    const hgt = layer.clientHeight;
-    const dpr = window.devicePixelRatio || 1;
     const vp = pv.viewport;
-    const toScreen = (poly: Pt[]) => poly.map((p) => vp.convertToViewportPoint(p[0], p[1]));
+    const sel = this.ink.lasso && this.ink.lasso.page === page ? new Set(this.ink.lasso.strokeIds) : null;
     for (const [cv, multiply] of [[c.normal, false], [c.multiply, true]] as const) {
-      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hgt * dpr)) {
-        cv.width = Math.round(w * dpr);
-        cv.height = Math.round(hgt * dpr);
-      }
-      const g = cv.getContext('2d', multiply ? undefined : { desynchronized: true })!; // « desynchronized » : affichage à faible latence quand le navigateur le permet
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, w, hgt);
-      const all: { s: Pick<InkStroke, 'points' | 'pressures' | 'width' | 'pen' | 'color'> }[] = strokes.map((s) => ({ s }));
-      if (liveHere) all.push({ s: { points: [...liveHere.points, ...liveHere.predicted], pressures: liveHere.usesPressure ? [...liveHere.pressures, ...liveHere.predicted.map(() => liveHere.pressures[liveHere.pressures.length - 1] ?? 0.5)] : undefined, width: this.style.width, pen: this.style.pen, color: this.style.color } });
-      for (const { s } of all) {
+      const g = this.prepareCanvas(cv, layer, vp);
+      for (const s of strokes) {
         if ((PENS[s.pen].blend === 'Multiply') !== multiply) continue;
-        if (this.erasingPending.has(s as InkStroke)) continue; // dessiné en rouge plus bas
-        const poly = toScreen(inkOutline(s.points, s.pressures, s.width, s.pen));
         g.globalAlpha = PENS[s.pen].opacity;
         g.fillStyle = rgbToCss(s.color);
-        g.beginPath();
-        poly.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-        g.closePath();
-        g.fill();
+        if (this.drag && sel?.has(s.id)) {
+          g.save();
+          g.translate(this.drag.dx, this.drag.dy);
+          g.fill(this.pathOf(s));
+          g.restore();
+        } else g.fill(this.pathOf(s));
       }
-      if (!multiply) {
-        g.globalAlpha = 0.55;
-        g.fillStyle = '#d9231a';
-        for (const s of strokes) {
-          if (!this.erasingPending.has(s)) continue;
-          g.beginPath();
-          toScreen(inkOutline(s.points, s.pressures, s.width, s.pen)).forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-          g.closePath();
-          g.fill();
-        }
-        // gomme : les traits déjà enregistrés qu'elle va supprimer apparaissent barrés en rouge
+      g.globalAlpha = 1;
+      if (!multiply && erased.length) {
+        // gomme : les formes qu'elle va supprimer apparaissent barrées en rouge
         g.globalAlpha = 0.55;
         g.strokeStyle = '#d9231a';
         g.lineCap = 'round';
-        for (const a of erasedHere) {
-          g.lineWidth = Math.max(3, a.width * vp.scale) + 2;
+        g.lineJoin = 'round';
+        for (const a of erased) {
+          g.lineWidth = Math.max(3 / vp.scale, a.width) + 2 / vp.scale;
           for (const st of eraseOutline(a)) {
-            const pts = toScreen(st);
             g.beginPath();
-            pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-            if (pts.length === 1) g.lineTo(pts[0][0] + 0.1, pts[0][1]);
+            st.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+            if (st.length === 1) g.lineTo(st[0][0] + 0.1, st[0][1]);
             g.stroke();
           }
         }
+        g.globalAlpha = 1;
       }
-      g.globalAlpha = 1;
     }
+    this.paintLive(n);
   }
 
-  private queuePaint(n: number) {
-    if (this.paintQueued) return;
-    this.paintQueued = true;
+  /** Dessine le trait en cours d'écriture (et seulement lui) : c'est ce qui donne la fluidité, même sur une page très chargée. */
+  private paintLive(n: number) {
+    const pv = this.pageView(n);
+    const layer = this.layers.get(n);
+    const c = this.inkCanvases.get(n);
+    if (!pv || !layer || !c) return;
+    const live = this.live && this.live.page === n - 1 ? this.live : null;
+    const g = this.prepareCanvas(c.live, layer, pv.viewport, true);
+    if (!live) return;
+    const preset = PENS[this.style.pen];
+    c.live.classList.toggle('multiply', preset.blend === 'Multiply');
+    const pts = [...live.points, ...live.predicted];
+    const prs = live.usesPressure ? [...live.pressures, ...live.predicted.map(() => live.pressures[live.pressures.length - 1] ?? 0.5)] : undefined;
+    g.globalAlpha = preset.opacity;
+    g.fillStyle = rgbToCss(this.style.color);
+    g.fill(pathFromOutline(inkOutline(pts, prs, this.style.width, this.style.pen, false)));
+    g.globalAlpha = 1;
+  }
+
+  /** Redessine une page à la prochaine image : `base` = toute l'écriture de la page, sinon seulement le trait en cours. */
+  private queuePaint(n: number, base = false) {
+    this.paintQueued.add(base ? n : -n);
+    if (this.paintFrame) return;
     this.paintFrame = requestAnimationFrame(() => {
-      this.paintQueued = false;
-      this.paintInk(n);
+      this.paintFrame = 0;
+      const todo = [...this.paintQueued];
+      this.paintQueued.clear();
+      for (const k of todo) {
+        if (k > 0) this.paintInk(k);
+        else if (!todo.includes(-k)) this.paintLive(-k);
+      }
     });
   }
 
   private beginInk(e: PointerEvent, layer: HTMLElement, n: number) {
     if (!e.isPrimary) return; // un 2ᵉ doigt pendant un tracé ne doit rien casser
-    window.clearTimeout(this.inkTimer); // pas d'envoi au document pendant qu'on écrit
     if (e.pointerType === 'pen') this.penSeen = true;
     const prefs = loadSettings();
     if (e.pointerType === 'touch' && this.penSeen && !prefs.fingerWrites) return this.panWithFinger(e, layer); // doigt = défiler, stylet = écrire
@@ -758,10 +821,11 @@ export class Annotator {
     };
     const toPdf = (ev: PointerEvent): Pt => toPdfXY(ev.clientX, ev.clientY);
     if (this.tool === 'eraser') return this.beginErase(e, layer, n, toPdf, vp.scale);
+    if (!this.annotsLoaded) return; // l'encre du document n'est pas encore relue (quelques dixièmes de seconde après un rechargement)
     const usesPressure = e.pointerType === 'pen';
     const live = { page: n - 1, points: [] as Pt[], pressures: [] as number[], usesPressure, predicted: [] as Pt[] };
     this.live = live;
-    const minGap = 0.8 / vp.scale; // moins d'un pixel d'écran : inutile
+    const minGap = 0.6 / vp.scale; // moins d'un demi-pixel d'écran : inutile
     const add = (ev: PointerEvent, force = false) => {
       const p = toPdf(ev);
       const last = live.points[live.points.length - 1];
@@ -780,7 +844,7 @@ export class Annotator {
       live.points = [p0, p0];
       live.pressures = [e.pressure > 0 ? e.pressure : 0.5, e.pressure > 0 ? e.pressure : 0.5];
     } else add(e, true);
-    this.paintInk(n);
+    this.paintLive(n);
     // Maintenir le stylet immobile en fin de trait : le trait devient parfait (ligne droite, cercle, rectangle, angle…).
     let snapped: Shape | null = null;
     let holdTimer = 0;
@@ -794,7 +858,7 @@ export class Annotator {
       const avg = live.pressures.reduce((a, v) => a + v, 0) / live.pressures.length;
       live.points = shape.points.slice();
       live.pressures = live.points.map(() => avg);
-      this.paintInk(n);
+      this.paintLive(n);
     };
     const arm = () => {
       window.clearTimeout(holdTimer);
@@ -835,9 +899,9 @@ export class Annotator {
       else if (!cancelled && snapped && (snapped as Shape).kind === 'line') live.points = [live.points[0], toPdf(ev)];
       this.live = null;
       if (!cancelled && live.points.length > 0) {
-        this.ink.add({ id: newStrokeId(), page: n - 1, points: live.points, pressures: usesPressure ? live.pressures : undefined, color: this.style.color, width: this.style.width, pen: this.style.pen });
-        this.scheduleInkFlush(1500);
-        this.host.inkChanged();
+        const stroke: InkStroke = { id: newStrokeId(), page: n - 1, points: live.points, ...(usesPressure ? { pressures: live.pressures } : {}), color: [...this.style.color] as Rgb, width: this.style.width, pen: this.style.pen };
+        const action = this.ink.model.change(n - 1, [...this.ink.model.strokes(n - 1), stroke]);
+        if (action) this.host.inkAction(action, 'draw'); // une étape d'historique légère : ni écriture du PDF, ni rechargement
       }
       this.paintInk(n);
     };
@@ -875,42 +939,62 @@ export class Annotator {
     layer.addEventListener('pointercancel', end);
   }
 
+  /**
+   * Gomme précise : elle coupe les traits là où elle passe (le reste du trait est gardé) et se voit tout de suite.
+   * Pendant le geste on travaille sur une copie de la page ; au relâchement, une seule action d'historique.
+   * Les formes (rectangles, lignes…) touchées sont, elles, supprimées entières au relâchement.
+   */
   private beginErase(e: PointerEvent, layer: HTMLElement, n: number, toPdf: (ev: PointerEvent) => Pt, scale: number) {
     const radius = 9 / scale; // 9 pixels d'écran
-    const hit = (ev: PointerEvent) => {
-      const at = toPdf(ev);
-      let changed = false;
-      for (const s of this.ink.forPage(n - 1)) {
-        if (!this.erasingPending.has(s) && strokeTouched(s.points, s.width, at, radius)) {
-          this.erasingPending.add(s);
-          changed = true;
+    const page = n - 1;
+    let work = [...this.ink.model.strokes(page)];
+    this.work.set(page, work);
+    let prev = toPdf(e);
+    let changed = false;
+    const hit = (at: Pt) => {
+      const sweep: Rect = [Math.min(prev[0], at[0]) - radius, Math.min(prev[1], at[1]) - radius, Math.max(prev[0], at[0]) + radius, Math.max(prev[1], at[1]) + radius];
+      const next: InkStroke[] = [];
+      let touched = false;
+      for (const s of work) {
+        const pieces = boxesMeet(strokeBox(s), sweep) ? eraseFromStroke(s, prev, at, radius) : null;
+        if (pieces === null) next.push(s);
+        else {
+          touched = true;
+          next.push(...pieces);
         }
       }
+      if (touched) {
+        work = next;
+        this.work.set(page, work);
+        changed = true;
+      }
       for (const a of this.annots) {
-        if (!ERASABLE.has(a.kind) || a.page !== n - 1 || a.replyTo || this.erasing.has(a.id)) continue;
+        if (!ERASABLE.has(a.kind) || a.page !== page || a.replyTo || this.erasing.has(a.id)) continue;
         if (eraseTouched(a, at, radius)) {
           this.erasing.set(a.id, a);
           changed = true;
         }
       }
-      if (changed) this.queuePaint(n);
+      if (changed) this.queuePaint(n, true);
+      prev = at;
     };
-    hit(e);
+    hit(prev);
     const move = (ev: PointerEvent) => {
-      for (const c of coalesced(ev)) hit(c);
+      for (const c of coalesced(ev)) hit(toPdf(c));
     };
     const finish = (cancelled: boolean) => {
       layer.removeEventListener('pointermove', move);
       layer.removeEventListener('pointerup', up);
       layer.removeEventListener('pointercancel', cancel);
       const ids = cancelled ? [] : [...this.erasing.keys()];
-      if (!cancelled) this.ink.removeWhere((s) => this.erasingPending.has(s));
+      this.work.delete(page);
       this.erasing.clear();
-      this.erasingPending.clear();
+      if (!cancelled) {
+        const action = this.ink.model.change(page, work);
+        if (action) this.host.inkAction(action, 'erase');
+      }
       this.paintInk(n);
-      this.host.inkChanged();
       if (ids.length) void this.host.remove(ids);
-      else this.scheduleInkFlush(1500);
     };
     const up = () => finish(false);
     const cancel = () => finish(true);
