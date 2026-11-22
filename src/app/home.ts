@@ -186,6 +186,8 @@ export function openSettings(app: App) {
   };
   const autoUp = h('input', { type: 'checkbox', id: 'setting-autoupdate', checked: s.autoUpdate });
   autoUp.onchange = () => saveSettings({ ...loadSettings(), autoUpdate: autoUp.checked });
+  const floating = h('input', { type: 'checkbox', id: 'setting-floatingbar', checked: s.floatingBar });
+  floating.onchange = () => saveSettings({ ...loadSettings(), floatingBar: floating.checked });
   const penOpen = h('input', { type: 'checkbox', id: 'setting-penonopen', checked: s.penOnOpen });
   penOpen.onchange = () => saveSettings({ ...loadSettings(), penOnOpen: penOpen.checked });
   const snap = h('input', { type: 'checkbox', id: 'setting-shapesnap', checked: s.shapeSnap });
@@ -206,6 +208,8 @@ export function openSettings(app: App) {
       h('label', { class: 'check' }, auto, t.settings.autosave),
       h('p', { class: 'hint' }, t.settings.autosaveHint),
       h('h3', {}, t.settings.writing),
+      h('label', { class: 'check' }, floating, t.settings.floatingBar),
+      h('p', { class: 'hint' }, t.settings.floatingBarHint),
       h('label', { class: 'check' }, penOpen, t.settings.penOnOpen),
       h('p', { class: 'hint' }, t.settings.penOnOpenHint),
       h('label', { class: 'check' }, snap, t.settings.shapeSnap),

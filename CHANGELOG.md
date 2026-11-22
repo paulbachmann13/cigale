@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [1.8.0] — 2026-11-22
+
+### Ajouté
+- **Barre d'outils d'écriture flottante**, comme dans GoodNotes : dès qu'on choisit le stylet, une petite barre apparaît avec les trois stylos (stylo, plume, surligneur), sept couleurs, les épaisseurs du stylo choisi, la gomme, le lasso, la règle, les favoris, Annuler et Rétablir. Attrapez-la par sa poignée et déposez-la près d'un bord de l'écran (en bas, en haut, à gauche ou à droite) : elle s'y colle, se met à la verticale sur les côtés, et retient sa place. Au clavier, Entrée sur la poignée la fait passer au bord suivant.
+- Réglage « Barre d'outils d'écriture flottante » (Paramètres) : décochez-le pour garder ces boutons dans la barre du haut.
+
 ## [1.7.0] — 2026-11-10
 
 ### Ajouté

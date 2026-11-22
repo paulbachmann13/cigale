@@ -30,6 +30,7 @@ import { openCombineDialog, openSplitDialog } from './tools';
 import { openExportImagesDialog } from './export-images';
 import { compareWithOther } from './compare';
 import { openExportTextDialog } from './export-text';
+import { PenDock } from './pen-dock';
 import { openPropertiesDialog } from './properties';
 import { pickImageFile, prepareImage } from './image-import';
 import { askInsertPages, openNotebookDialog } from './notebook';
@@ -61,13 +62,8 @@ export class App {
   /** Couleur et épaisseur retenues pour chaque stylo. */
   private penColors: Record<PenKind, Rgb> = { pen: PENS.pen.color, fountain: PENS.fountain.color, highlighter: PENS.highlighter.color };
   private penWidths: Record<PenKind, number> = { pen: PENS.pen.width, fountain: PENS.fountain.width, highlighter: PENS.highlighter.width };
-  private rulerBtn = this.iconButton('tool-ruler', t.annot.ruler, 'ruler', () => {
-    const s = this.active;
-    if (!s) return;
-    s.ink.ruler.visible = !s.ink.ruler.visible;
-    s.annotator.syncRuler();
-    this.syncStyleUi();
-  });
+  private rulerBtn = this.iconButton('tool-ruler', t.annot.ruler, 'ruler', () => this.toggleRuler());
+  private penDock!: PenDock;
   private favBox = h('span', { class: 'pen-favs', id: 'pen-favs' });
   private favAdd = this.iconButton('pen-fav-add', t.annot.favAdd, 'star', () => this.openFavoritesMenu());
   private penSelect = h('select', { id: 'annot-pen', 'aria-label': t.annot.pen });
@@ -241,6 +237,22 @@ export class App {
     );
     this.editButtons['btn-organize'] = toolbar.querySelector<HTMLButtonElement>('#btn-organize')!;
     this.buildAnnotBar();
+    this.penDock = new PenDock(this.docsEl, {
+      state: () => ({ tool: this.annotTool, pen: this.annotStyle.pen, color: this.annotStyle.color, width: this.annotStyle.width, rulerOn: !!this.active?.ink.ruler.visible, canUndo: !!this.active?.history.canUndo, canRedo: !!this.active?.history.canRedo }),
+      setTool: (tool) => this.setAnnotTool(tool),
+      setPen: (pen) => this.choosePen(pen),
+      setColor: (rgb) => this.setColor(rgb),
+      setWidth: (w) => {
+        this.annotStyle.width = w;
+        this.rememberPen();
+        this.pushStyle({ width: w });
+      },
+      toggleRuler: () => this.toggleRuler(),
+      undo: () => void this.undo(),
+      redo: () => void this.redo(),
+      openFavorites: (anchor) => this.openFavoritesMenu(anchor),
+      close: () => this.setAnnotTool(null),
+    });
     this.thumbSize.hidden = true;
 
     // volet gauche : miniatures / signets
@@ -1149,13 +1161,7 @@ export class App {
     this.sizeSelect.value = String(this.annotStyle.fontSize);
     for (const k of Object.keys(PENS) as PenKind[]) this.penSelect.append(h('option', { value: k }, t.annot.pens[k]));
     this.penSelect.value = this.annotStyle.pen;
-    this.penSelect.onchange = () => {
-      this.rememberPen();
-      this.annotStyle.pen = this.penSelect.value as PenKind;
-      this.annotStyle.color = this.penColors[this.annotStyle.pen];
-      this.annotStyle.width = this.penWidths[this.annotStyle.pen];
-      this.pushStyle();
-    };
+    this.penSelect.onchange = () => this.choosePen(this.penSelect.value as PenKind);
     this.widthSelect.onchange = () => {
       this.annotStyle.width = Number(this.widthSelect.value);
       this.pushStyle({ width: this.annotStyle.width });
@@ -1360,7 +1366,25 @@ export class App {
     this.pushStyle();
   }
 
-  private openFavoritesMenu() {
+  /** Choisit un stylo (liste de la barre du haut ou barre flottante) : il retrouve sa couleur et son épaisseur ; l'outil d'écriture s'active. */
+  private choosePen(kind: PenKind) {
+    this.rememberPen();
+    this.annotStyle.pen = kind;
+    this.annotStyle.color = this.penColors[kind];
+    this.annotStyle.width = this.penWidths[kind];
+    if (this.annotTool !== 'ink') this.setAnnotTool('ink');
+    else this.pushStyle();
+  }
+
+  private toggleRuler() {
+    const s = this.active;
+    if (!s) return;
+    s.ink.ruler.visible = !s.ink.ruler.visible;
+    s.annotator.syncRuler();
+    this.syncStyleUi();
+  }
+
+  private openFavoritesMenu(anchor: HTMLElement = this.favAdd) {
     const prefs = loadSettings();
     const same = (a: PenFavorite, b: PenFavorite) => a.pen === b.pen && a.width === b.width && a.color.every((c, i) => Math.abs(c - b.color[i]) < 0.01);
     const current: PenFavorite = { pen: this.annotStyle.pen, color: [...this.annotStyle.color] as Rgb, width: this.annotStyle.width };
@@ -1390,7 +1414,7 @@ export class App {
           },
         })),
       ],
-      this.favAdd,
+      anchor,
     );
   }
 
@@ -1437,6 +1461,13 @@ export class App {
     this.widthSelect.value = String(sel && sel.width ? Math.round(sel.width) : this.annotStyle.width);
     this.sizeSelect.value = String(sel?.fontSize ?? this.annotStyle.fontSize);
     this.sizeSelect.hidden = !(tool === 'freetext' || sel?.kind === 'freetext');
+    // Barre flottante : elle remplace les commandes d'écriture de la barre du haut
+    const dockOn = !!this.active && loadSettings().floatingBar && (tool === 'ink' || tool === 'eraser' || tool === 'lasso');
+    if (dockOn) {
+      for (const el of [this.penSelect, this.favBox, this.favAdd, this.rulerBtn, this.widthSelect, ...this.swatches]) el.hidden = true;
+    }
+    this.penDock?.show(dockOn);
+    if (dockOn) this.penDock.sync();
   }
 
   private annotHost(s: Session): AnnotHost {
@@ -1614,6 +1645,7 @@ export class App {
   }
 
   private updateEditUi(s: Session | null) {
+    if (this.penDock?.visible) this.penDock.sync(); // annuler / rétablir grisés ou non
     const n = s?.selection.length ?? 0;
     // pivoter, dupliquer, extraire : s'appliquent à la sélection, sinon à la page affichée ; supprimer exige une sélection
     for (const id of ['btn-rot-left', 'btn-rot-right', 'btn-duplicate', 'btn-extract']) this.editButtons[id].disabled = !s;

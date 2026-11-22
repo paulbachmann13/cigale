@@ -159,6 +159,8 @@ export const fr = {
     autosaveHint: 'Une copie du travail en cours est gardée sur cet ordinateur (jamais envoyée ailleurs) et supprimée dès que vous enregistrez ou fermez. Décochez pour ne rien garder.',
     autoUpdate: 'Rechercher les mises à jour au démarrage (application Mac)',
     writing: 'Écriture à la main',
+    floatingBar: 'Barre d’outils d’écriture flottante',
+    floatingBarHint: 'Stylos, couleurs, épaisseurs, gomme, lasso et règle dans une barre que vous posez où vous voulez (en bas, en haut, à gauche ou à droite). Décochez pour garder ces boutons dans la barre du haut.',
     penOnOpen: 'Ouvrir les PDF directement en mode stylet',
     penOnOpenHint: 'La barre d’écriture (stylos, gomme, règle, lasso) est affichée dès l’ouverture. Vous pouvez aussi l’ouvrir d’un clic avec le bouton Stylet.',
     shapeSnap: 'Redresser les traits quand je maintiens le stylet',
@@ -401,6 +403,13 @@ export const fr = {
     empty: 'Rien n’est dessiné ou saisi.',
     badImage: 'Cette image ne peut pas être lue.',
     placeHint: 'Cliquez sur la page à l’endroit de la signature.',
+  },
+  dock: {
+    title: 'Outils d’écriture',
+    move: 'Déplacer la barre (glisser vers un bord de l’écran)',
+    undo: 'Annuler',
+    redo: 'Rétablir',
+    close: 'Fermer les outils d’écriture',
   },
   compare: {
     title: 'Comparer deux PDF',

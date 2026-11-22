@@ -22,6 +22,8 @@ test.skip(({ browserName }) => browserName !== 'chromium', 'tracé : Chromium (W
 test.beforeEach(async ({ page }) => {
   await withoutFilePickers(page);
   await gotoHome(page);
+  // ces tests pilotent les commandes de la barre du haut ; la barre flottante a ses propres tests plus bas
+  await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ floatingBar: false })));
   await openPdf(page, 'simple-3p.pdf');
   await waitFirstPage(page);
   await page.waitForSelector('.textLayer span');
@@ -633,5 +635,119 @@ test.describe('finition : favoris, réglages, tablette', () => {
       { x: pb.x + 300, y: pb.y + 300 },
     );
     expect(await top()).toBe(before);
+  });
+});
+
+test.describe('barre d’outils d’écriture flottante', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.evaluate(() => localStorage.removeItem('cigale-settings')); // réglage par défaut : barre flottante
+  });
+  const style = (page: Page) => page.evaluate(() => (window as unknown as { cigale: { app: { annotStyle: { pen: string; width: number; color: number[] } } } }).cigale.app.annotStyle);
+
+  test('« Stylet » ouvre la barre flottante, qui remplace les commandes d’écriture de la barre du haut', async ({ page }) => {
+    await page.click('#btn-comment'); // (beforeEach l'avait ouvert)
+    await page.click('#btn-pen');
+    await expect(page.locator('#pen-dock')).toBeVisible();
+    await expect(page.locator('#dock-pen-pen')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#annot-pen')).toBeHidden(); // plus de doublon dans la barre du haut
+    await expect(page.locator('.annot-toolbar .swatch').first()).toBeHidden();
+    await page.click('#btn-pen'); // un 2ᵉ clic referme tout
+    await expect(page.locator('#pen-dock')).toBeHidden();
+  });
+
+  test('stylos, couleurs, épaisseurs, gomme, lasso, règle : tout se règle depuis la barre', async ({ page }) => {
+    await page.click('#btn-pen');
+    await page.click('#dock-pen-fountain');
+    expect(await style(page)).toMatchObject({ pen: 'fountain', width: 2.5 });
+    await expect(page.locator('#dock-pen-fountain')).toHaveAttribute('aria-pressed', 'true');
+    await page.click('[data-dock-color="Rouge"]');
+    expect((await style(page)).color[0]).toBeGreaterThan(0.8);
+    await expect(page.locator('[data-dock-color="Rouge"]')).toHaveClass(/on/);
+    await page.click('[data-dock-width="5"]');
+    expect((await style(page)).width).toBe(5);
+    await page.click('#dock-pen-highlighter'); // le surligneur retrouve son jaune et ses épaisseurs
+    expect(await style(page)).toMatchObject({ pen: 'highlighter', width: 14 });
+    await expect(page.locator('[data-dock-width="28"]')).toBeVisible();
+    await page.click('#dock-eraser');
+    await expect(page.locator('#tool-eraser')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#dock-eraser')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-dock-color="Rouge"]')).toBeDisabled(); // sans effet pour la gomme
+    await page.click('#dock-lasso');
+    await expect(page.locator('#tool-lasso')).toHaveAttribute('aria-pressed', 'true');
+    await page.click('#dock-pen-pen'); // choisir un stylo revient à l'écriture
+    await expect(page.locator('#tool-ink')).toHaveAttribute('aria-pressed', 'true');
+    await page.click('#dock-ruler');
+    await expect(page.locator('.ink-ruler')).toBeVisible();
+    await page.click('#dock-ruler');
+    await expect(page.locator('.ink-ruler')).toHaveCount(0);
+  });
+
+  test('annuler et rétablir depuis la barre', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#btn-pen');
+    await expect(page.locator('#dock-undo')).toBeDisabled();
+    await wave(page, pb.x + 100, pb.y + 300);
+    await expect(page.locator('#dock-undo')).toBeEnabled();
+    expect(await count(page)).toBe(1);
+    await page.click('#dock-undo');
+    await expect.poll(() => count(page)).toBe(0);
+    await expect(page.locator('#dock-redo')).toBeEnabled();
+    await page.click('#dock-redo');
+    await expect.poll(() => count(page)).toBe(1);
+  });
+
+  test('on déplace la barre vers un bord de l’écran : elle s’y colle, se met à la verticale sur les côtés, et sa place est retenue', async ({ page }) => {
+    await page.click('#btn-pen');
+    const dock = page.locator('#pen-dock');
+    await expect(dock).toHaveAttribute('data-edge', 'bottom');
+    const area = (await page.locator('.docs').boundingBox())!;
+    const drag = async (toX: number, toY: number) => {
+      const g = (await page.locator('#dock-grip').boundingBox())!;
+      await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(toX, toY, { steps: 10 });
+      await page.mouse.up();
+    };
+    await drag(area.x + area.width - 20, area.y + area.height / 2);
+    await expect(dock).toHaveAttribute('data-edge', 'right');
+    const box = (await dock.boundingBox())!;
+    expect(box.height).toBeGreaterThan(box.width); // à la verticale
+    expect(Math.abs(box.x + box.width - (area.x + area.width))).toBeLessThan(30); // collée au bord droit
+    await drag(area.x + 15, area.y + area.height / 2);
+    await expect(dock).toHaveAttribute('data-edge', 'left');
+    await drag(area.x + area.width / 2, area.y + 10);
+    await expect(dock).toHaveAttribute('data-edge', 'top');
+    await drag(area.x + area.width / 2, area.y + area.height - 10);
+    await expect(dock).toHaveAttribute('data-edge', 'bottom');
+    // la place est retenue : après un rechargement de la page, la barre revient là où on l'avait posée
+    await drag(area.x + area.width - 20, area.y + area.height / 3);
+    await expect(dock).toHaveAttribute('data-edge', 'right');
+    await page.reload();
+    await openPdf(page, 'simple-3p.pdf');
+    await waitFirstPage(page);
+    await page.click('#btn-pen');
+    await expect(page.locator('#pen-dock')).toHaveAttribute('data-edge', 'right');
+  });
+
+  test('au clavier : Entrée sur la poignée fait passer la barre au bord suivant', async ({ page }) => {
+    await page.click('#btn-pen');
+    await page.locator('#dock-grip').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#pen-dock')).toHaveAttribute('data-edge', 'left');
+  });
+
+  test('on peut écrire pendant que la barre est ouverte : elle ne gêne pas les traits et ne se ferme pas', async ({ page }) => {
+    const pb = await pageBox(page);
+    await page.click('#btn-pen');
+    await wave(page, pb.x + 100, pb.y + 300);
+    expect(await count(page)).toBe(1);
+    await expect(page.locator('#pen-dock')).toBeVisible();
+  });
+
+  test('réglage « barre flottante » décoché : les commandes restent dans la barre du haut', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('cigale-settings', JSON.stringify({ floatingBar: false })));
+    await page.click('#btn-pen');
+    await expect(page.locator('#pen-dock')).toBeHidden();
+    await expect(page.locator('#annot-pen')).toBeVisible();
   });
 });

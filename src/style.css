@@ -328,3 +328,27 @@ fieldset.scope { border: 1px solid var(--border); border-radius: 8px; margin: 10
 .props-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 13px; }
 .props-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 3px 12px 3px 0; white-space: nowrap; }
 .props-table td { padding: 3px 0; word-break: break-word; }
+
+/* barre d'outils d'écriture flottante (façon GoodNotes) */
+.pen-dock { position: absolute; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 6px 24px rgb(0 0 0 / .28); touch-action: none; max-width: calc(100% - 28px); max-height: calc(100% - 28px); overflow: auto; }
+.pen-dock[hidden] { display: none; }
+.pen-dock[data-edge='left'], .pen-dock[data-edge='right'] { flex-direction: column; padding: 10px 6px; }
+.pen-dock.dragging { opacity: .85; box-shadow: 0 10px 34px rgb(0 0 0 / .4); transition: none; }
+.dock-grip { cursor: grab; display: grid; place-items: center; width: 22px; height: 28px; color: var(--muted); border-radius: 8px; flex: none; }
+.dock-grip:active { cursor: grabbing; }
+.dock-group { display: inline-flex; align-items: center; gap: 4px; }
+/* sur les côtés, les groupes se rangent sur deux colonnes : la barre reste courte même sur un petit écran */
+.pen-dock[data-edge='left'] .dock-group, .pen-dock[data-edge='right'] .dock-group { display: grid; grid-template-columns: repeat(2, auto); justify-items: center; gap: 4px; }
+.dock-widths { display: inline-flex; align-items: center; gap: 2px; }
+.pen-dock[data-edge='left'] .dock-widths, .pen-dock[data-edge='right'] .dock-widths { display: grid; grid-template-columns: repeat(2, auto); }
+.pen-dock[data-edge='left'] .dock-close, .pen-dock[data-edge='right'] .dock-close { align-self: center; }
+.dock-btn { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-radius: 10px; flex: none; }
+.dock-btn.on { background: var(--accent); color: #fff; }
+.dock-btn:disabled { opacity: .4; }
+.dock-color { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid rgb(128 128 128 / .45); background: var(--c); flex: none; cursor: pointer; }
+.dock-color.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgb(194 86 47 / .4); }
+.dock-color:disabled { opacity: .35; }
+.dock-width { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: 8px; flex: none; background: transparent; }
+.dock-width.on { background: rgb(128 128 128 / .25); }
+.dock-dot { display: block; border-radius: 50%; background: currentColor; }
+@media (pointer: coarse) { .dock-btn { width: 44px; height: 44px; } .dock-color { width: 32px; height: 32px; } .dock-width { width: 36px; height: 36px; } .dock-grip { width: 30px; height: 36px; } }

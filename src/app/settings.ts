@@ -4,6 +4,12 @@ export interface PenFavorite {
   width: number;
 }
 
+/** Place de la barre d'écriture flottante : bord de l'écran et position (0 à 1) le long de ce bord. */
+export interface DockPlace {
+  edge: 'top' | 'bottom' | 'left' | 'right';
+  pos: number;
+}
+
 export type ThemeChoice = 'auto' | 'light' | 'dark';
 export type DefaultZoom = 'page-width' | 'page-fit' | 'page-actual';
 
@@ -20,6 +26,10 @@ export interface Settings {
   autoUpdate: boolean;
   /** Écriture : maintenir le stylet immobile en fin de trait le redresse (ligne, cercle, rectangle…). */
   shapeSnap: boolean;
+  /** Barre d'outils flottante de l'écriture (stylos, couleurs, gomme…) au lieu de la barre du haut. */
+  floatingBar: boolean;
+  /** Où la barre flottante est posée. */
+  dock: DockPlace;
   /** Ouvrir chaque PDF directement avec le stylo prêt (barre d'écriture visible). */
   penOnOpen: boolean;
   /** Écriture : le doigt écrit aussi, même après l'usage d'un stylet (sinon il fait défiler la page). */
@@ -29,7 +39,7 @@ export interface Settings {
 }
 
 const KEY = 'cigale-settings';
-const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true, shapeSnap: true, fingerWrites: false, penOnOpen: false, penFavorites: [
+const DEFAULTS: Settings = { theme: 'auto', defaultZoom: 'page-width', keepVersions: true, author: '', autosave: true, autoUpdate: true, shapeSnap: true, fingerWrites: false, penOnOpen: false, floatingBar: true, dock: { edge: 'bottom', pos: 0.5 }, penFavorites: [
   { pen: 'pen', color: [0.1, 0.1, 0.15], width: 1.5 },
   { pen: 'fountain', color: [0.1, 0.25, 0.6], width: 2.5 },
   { pen: 'highlighter', color: [1, 0.9, 0.1], width: 14 },

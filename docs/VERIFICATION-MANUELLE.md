@@ -105,6 +105,10 @@ Dans Cigale, sur `simple-3p.pdf` : un surlignage jaune sur une ligne, un soulign
 4. **Propriétés** : changer le titre, enregistrer, rouvrir dans Aperçu (Outils → Inspecteur) : le titre est-il bon ?
 5. **Remplacer des pages** sur un vrai document.
 
+## Barre d'écriture flottante (1.8) — à essayer sur l'iPad
+1. Bouton Stylet : la barre apparaît ; la glisser au doigt/Pencil vers chaque bord : elle se colle bien, la place est retenue après fermeture de Cigale ?
+2. Boutons assez grands au doigt ? La barre ne gêne pas l'écriture ni le défilement ? Sur un petit écran (iPad mini, iPhone) elle reste utilisable ?
+
 ## Application Windows (.exe) — à faire sur un vrai PC (jamais testée avant la 1.4.0)
 
 1. Télécharger `Cigale_…_x64-setup.exe` (Releases) ; l'installer ; passer l'avertissement SmartScreen (Informations complémentaires → Exécuter quand même).
